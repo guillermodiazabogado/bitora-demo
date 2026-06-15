@@ -110,6 +110,14 @@
     </section>
 
     <div id="portalNotice" class="result"></div>
+    <dialog id="printModeDialog" class="reservation-dialog">
+      <form method="dialog" class="stack">
+        <h2>Elegir impresion</h2>
+        <button id="printCardModeBtn" type="button">Tarjeta QR</button>
+        <button id="printWristbandModeBtn" type="button" class="ghost">Pulsera QR termica</button>
+        <button id="printModeCancelBtn" type="button" class="ghost">Cancelar</button>
+      </form>
+    </dialog>
     <dialog id="reservationDialog" class="reservation-dialog">
       <form method="dialog" id="reservationConfirmForm" class="stack">
         <h2>Confirmar reserva</h2>
@@ -297,6 +305,86 @@
           <\/script>
         </main>
       `);
+    }
+
+    function openPrintModeDialog() {
+      if (!portal) return;
+      $("#printModeDialog").showModal();
+    }
+
+    function closePrintModeDialog() {
+      $("#printModeDialog").close();
+    }
+
+    function printCredentialCard() {
+      closePrintModeDialog();
+      printCredential();
+    }
+
+    function printWristband() {
+      if (!portal) return;
+      closePrintModeDialog();
+      const qrUrl = new URL(`/api/qr.svg?token=${encodeURIComponent(portal.qr_payload)}`, location.origin).href;
+      const fullName = `${portal.first_name || ""} ${portal.last_name || ""}`.trim();
+      const company = portal.company || portal.type || "";
+      const tokenText = portal.token || portal.qr_payload || "";
+      const win = window.open("", "_blank", "width=1000,height=260");
+      if (!win) {
+        $("#portalNotice").innerHTML = `<div class="panel danger">El navegador bloqueo la ventana de impresion.</div>`;
+        return;
+      }
+      win.document.write(`
+        <!doctype html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8">
+          <title>Pulsera QR</title>
+          <style>
+            * { box-sizing: border-box; }
+            @page { size: 250mm 25mm; margin: 0; }
+            html, body { background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; height: 25mm; margin: 0; width: 250mm; }
+            .wristband-page { align-items: center; display: flex; height: 25mm; padding: 1.2mm 3mm; width: 250mm; }
+            .wristband-strip { align-items: center; border: 0.35mm solid #111; display: grid; gap: 3mm; grid-template-columns: 21mm 1fr 34mm; height: 22.5mm; padding: 1mm 2.4mm; width: 244mm; }
+            .wristband-qr { align-items: center; display: flex; height: 19mm; justify-content: center; width: 19mm; }
+            .wristband-qr img { display: block; height: 19mm; image-rendering: pixelated; width: 19mm; }
+            .wristband-info { min-width: 0; overflow: hidden; }
+            .wristband-info strong { color: #000; display: block; font-size: 12px; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+            .wristband-info span { color: #000; display: block; font-size: 9px; line-height: 1.15; margin-top: 1mm; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+            .wristband-info code { color: #000; display: block; font-family: Consolas, Monaco, monospace; font-size: 9px; font-weight: 700; line-height: 1; margin-top: 1mm; white-space: nowrap; }
+            .wristband-brand { border-left: 0.3mm solid #111; color: #000; font-size: 10px; font-weight: 800; line-height: 1.1; padding-left: 2mm; text-align: center; text-transform: uppercase; }
+            .wristband-brand small { display: block; font-size: 7px; font-weight: 700; margin-top: 1mm; }
+            .print-status { display: none; }
+            @media screen {
+              body { align-items: center; background: #eef3f5; display: flex; justify-content: center; min-height: 100vh; width: 100vw; }
+              .wristband-page { background: #fff; box-shadow: 0 8px 22px rgba(0,0,0,.18); }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="wristband-page">
+            <section class="wristband-strip">
+              <div class="wristband-qr"><img id="wristbandQr" src="${qrUrl}" alt="QR"></div>
+              <div class="wristband-info">
+                <strong>${escapeHtml(fullName || "Participante")}</strong>
+                <span>${escapeHtml(company || "BITORA")}</span>
+                <code>${escapeHtml(tokenText)}</code>
+              </div>
+              <div class="wristband-brand">
+                BITORA
+                <small>${escapeHtml(portal.event_name || "Evento")}</small>
+              </div>
+            </section>
+          </main>
+          <script>
+            const image = document.getElementById("wristbandQr");
+            image.addEventListener("load", () => setTimeout(() => window.print(), 250));
+            image.addEventListener("error", () => alert("No se pudo cargar el QR de la pulsera."));
+          <\/script>
+        </body>
+        </html>
+      `);
+      win.document.close();
+      win.focus();
     }
 
     function printAgenda() {
@@ -565,7 +653,10 @@
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-      $("#printCredentialBtn").addEventListener("click", printCredential);
+      $("#printCredentialBtn").addEventListener("click", openPrintModeDialog);
+      $("#printCardModeBtn").addEventListener("click", printCredentialCard);
+      $("#printWristbandModeBtn").addEventListener("click", printWristband);
+      $("#printModeCancelBtn").addEventListener("click", closePrintModeDialog);
       $("#printAgendaBtn").addEventListener("click", printAgenda);
       $("#copyPortalBtn").addEventListener("click", async () => {
         await navigator.clipboard.writeText(location.href);
