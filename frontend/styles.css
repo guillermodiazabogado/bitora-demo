@@ -21,6 +21,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
 
 button,
@@ -75,6 +76,10 @@ button:hover,
   z-index: 2;
 }
 
+.topbar > * {
+  min-width: 0;
+}
+
 .topbar strong {
   display: block;
 }
@@ -104,6 +109,7 @@ small {
 nav {
   display: flex;
   gap: 8px;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -911,13 +917,20 @@ code,
 
 .participant-portal {
   max-width: 1180px;
+  overflow-x: hidden;
+  width: min(100%, 1180px);
 }
 
 .portal-head {
   align-items: center;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+.portal-head > div {
+  min-width: 0;
 }
 
 .portal-head h1 {
@@ -929,6 +942,7 @@ code,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .portal-status-line {
@@ -951,6 +965,11 @@ code,
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(0, 1fr) 320px;
+  min-width: 0;
+}
+
+.portal-grid > * {
+  min-width: 0;
 }
 
 .portal-wide {
@@ -977,6 +996,8 @@ code,
 
 .credential-card dd {
   margin: 0 0 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .next-activity-card {
@@ -996,11 +1017,17 @@ code,
   gap: 10px;
   grid-template-columns: 1fr auto auto;
   padding: 12px;
+  min-width: 0;
+}
+
+.highlight-activity > * {
+  min-width: 0;
 }
 
 .highlight-activity strong,
 .highlight-activity span {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .highlight-activity p {
@@ -1097,6 +1124,11 @@ code,
   gap: 10px;
   grid-template-columns: 1fr auto;
   padding: 12px;
+  min-width: 0;
+}
+
+.portal-activity > * {
+  min-width: 0;
 }
 
 .portal-activity span,
@@ -1104,13 +1136,16 @@ code,
   color: var(--muted);
   display: block;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .portal-reserved-actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .portal-reserved-actions .pill {
@@ -1600,6 +1635,12 @@ code,
   gap: 10px;
   grid-template-columns: minmax(180px, 1fr) auto auto auto;
   padding: 10px;
+  min-width: 0;
+}
+
+.attendance-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .captation-actions {
@@ -1613,13 +1654,19 @@ code,
 
 .demo-ribbon {
   background: #d4a23a;
+  border: 1px solid rgba(23, 33, 43, 0.12);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(14, 24, 32, 0.12);
   color: #17212b;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0;
-  padding: 8px 14px;
+  line-height: 1;
+  padding: 9px 13px;
+  pointer-events: none;
   position: fixed;
-  right: 14px;
-  top: 14px;
+  right: 16px;
+  bottom: 16px;
   z-index: 50;
 }
 
@@ -1691,5 +1738,11 @@ code,
 
   .next-activity-card {
     order: -1;
+  }
+
+  .demo-ribbon {
+    bottom: 10px;
+    font-size: 12px;
+    right: 10px;
   }
 }
