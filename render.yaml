@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: bitora-demo
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python backend/app.py
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: demo
+      - key: HTTPS_REQUIRED
+        value: "true"
+      - key: QR_DB_ENGINE
+        value: sqlite
+      - key: QR_SQLITE_PATH
+        value: acreditaciones.sqlite3
+      - key: QR_AUTO_BACKUP_MINUTES
+        value: "10"
+      - key: QR_BACKUP_KEEP_LAST
+        value: "24"

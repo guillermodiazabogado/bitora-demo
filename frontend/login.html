@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar - Acreditaciones QR</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="login-body">
+  <main class="login-panel">
+    <h1>Acreditaciones QR</h1>
+    <form id="loginForm" class="stack">
+      <select id="loginUser" name="name" required></select>
+      <input name="pin" type="password" inputmode="numeric" placeholder="PIN" required>
+      <button>Ingresar</button>
+    </form>
+    <div id="loginResult" class="result"></div>
+  </main>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Error inesperado");
+      return data;
+    }
+
+    function applyAppConfig(config) {
+      if (!config?.demo || document.querySelector(".demo-ribbon")) return;
+      const ribbon = document.createElement("div");
+      ribbon.className = "demo-ribbon";
+      ribbon.textContent = "BITORA DEMO";
+      document.body.appendChild(ribbon);
+    }
+
+    async function initLogin() {
+      applyAppConfig(await api("/api/app-config"));
+      const me = await api("/api/auth/me");
+      if (me.authenticated) {
+        location.href = "/";
+        return;
+      }
+      const users = await api("/api/users");
+      $("#loginUser").innerHTML = users.map((row) => `<option value="${row.name}">${row.name} - ${row.role}</option>`).join("");
+    }
+
+    $("#loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+        await api("/api/auth/login", { method: "POST", body: JSON.stringify(data) });
+        location.href = "/";
+      } catch (err) {
+        $("#loginResult").innerHTML = `<div class="panel danger">${err.message}</div>`;
+      }
+    });
+
+    initLogin().catch((err) => {
+      $("#loginResult").innerHTML = `<div class="panel danger">${err.message}</div>`;
+    });
+  </script>
+</body>
+</html>

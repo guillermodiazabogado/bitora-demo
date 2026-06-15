@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inscripcion al evento</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="public-body">
+  <main class="public-page">
+    <section class="public-hero">
+      <div>
+        <span class="badge">Inscripcion</span>
+        <h1 id="eventTitle">Evento</h1>
+        <p id="eventDescription"></p>
+      </div>
+      <dl class="event-facts">
+        <dt>Fecha</dt><dd id="eventDate">-</dd>
+        <dt>Lugar</dt><dd id="eventVenue">-</dd>
+        <dt>Cupo</dt><dd id="eventCapacity">-</dd>
+      </dl>
+    </section>
+
+    <section class="public-layout public-register-only">
+      <div id="captationActions" class="panel captation-actions"></div>
+      <form id="publicRegisterForm" class="panel form-grid">
+        <h2>Datos de acreditacion</h2>
+        <input name="source" id="sourceInput" type="hidden">
+        <input name="source_detail" id="sourceDetailInput" type="hidden">
+        <input name="device_type" id="deviceInput" type="hidden">
+        <input name="session_id" id="sessionInput" type="hidden">
+        <input name="first_name" placeholder="Nombre" required>
+        <input name="last_name" placeholder="Apellido" required>
+        <input name="email" type="email" placeholder="Email" required>
+        <input name="phone" placeholder="Telefono">
+        <input name="dni" placeholder="DNI">
+        <input name="company" placeholder="Empresa / institucion">
+        <input name="position" placeholder="Cargo">
+        <select name="type" id="publicTypeSelect"></select>
+        <button>Inscribirme</button>
+      </form>
+    </section>
+
+    <div id="publicResult" class="result"></div>
+  </main>
+  <script src="/public.js?v=20260614-4102"></script>
+</body>
+</html>

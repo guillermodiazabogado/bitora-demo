@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Credencial digital</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="credential-body">
+  <main class="credential">
+    <div class="badge">Credencial digital</div>
+    <h1 id="eventName">Evento</h1>
+    <p id="personName"></p>
+    <img id="qrImg" alt="QR" class="qr">
+    <div id="token" class="token"></div>
+    <dl>
+      <dt>Tipo</dt><dd id="type"></dd>
+      <dt>Lugar</dt><dd id="venue"></dd>
+      <dt>Estado</dt><dd id="status"></dd>
+    </dl>
+    <button id="printCredentialBtn" class="credential-print" type="button">Imprimir</button>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token") || "";
+    fetch(`/api/portal?token=${encodeURIComponent(token)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) throw new Error(data.error);
+        document.getElementById("eventName").textContent = data.event_name;
+        document.getElementById("personName").textContent = `${data.first_name} ${data.last_name}`;
+        document.getElementById("token").textContent = data.token;
+        document.getElementById("type").textContent = data.type;
+        document.getElementById("venue").textContent = data.venue || "-";
+        document.getElementById("status").textContent = data.checked_in_at ? "Acreditado" : data.status;
+        document.getElementById("qrImg").src = `/api/qr.svg?token=${encodeURIComponent(data.qr_payload)}`;
+      })
+      .catch(err => {
+        document.querySelector(".credential").innerHTML = `<h1>No encontrado</h1><p>${err.message}</p>`;
+      });
+    document.getElementById("printCredentialBtn").addEventListener("click", () => window.print());
+  </script>
+</body>
+</html>

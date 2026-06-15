@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acreditaciones QR</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>Acreditaciones QR</strong>
+      <span>Consola operativa</span>
+    </div>
+    <label class="user-picker">
+      <span>Usuario</span>
+      <select id="currentUserSelect"></select>
+    </label>
+    <button id="logoutBtn" class="ghost" type="button">Salir</button>
+    <nav>
+      <button data-view="dashboard" class="active">Panel</button>
+      <button data-view="register">Inscribir</button>
+      <button data-view="reception">Recepcion</button>
+      <button data-view="agenda">Agenda</button>
+      <button data-view="access">Acceso</button>
+      <button data-view="communications">Comunicaciones</button>
+      <button data-view="audit">Auditoria</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="dashboard" class="view active">
+      <div class="section-head">
+        <div>
+          <h1>Panel operativo</h1>
+          <p>Estado simple del evento, acreditaciones y ultimos accesos.</p>
+        </div>
+        <div class="actions">
+          <button id="refreshBtn">Actualizar</button>
+          <a id="publicDisplayLink" class="button" href="#" target="_blank">Pantalla publica</a>
+          <a id="exportAttendancesLink" class="button ghost" href="#">Asistencias CSV</a>
+          <a id="exportCertificatesLink" class="button ghost" href="#">Elegibles CSV</a>
+          <a id="exportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
+          <a id="exportJsonLink" class="button ghost" href="#">Exportar JSON</a>
+          <a id="backupLink" class="button ghost" href="/api/backup">Backup</a>
+        </div>
+      </div>
+
+      <div class="layout">
+        <aside class="panel">
+          <h2>Evento activo</h2>
+          <select id="eventSelect"></select>
+          <a id="publicEventLink" class="button ghost full-link" href="#" target="_blank">Abrir landing publica</a>
+          <form id="eventForm" class="stack">
+            <input name="name" placeholder="Nombre del evento" required>
+            <input name="venue" placeholder="Lugar">
+            <div class="two">
+              <input name="starts_at" type="datetime-local">
+              <input name="ends_at" type="datetime-local">
+            </div>
+            <input name="capacity" type="number" min="0" placeholder="Cupo general">
+            <select name="activity_selection_mode">
+              <option value="optional_later">Actividades opcionales posteriores</option>
+              <option value="registration_only">Solo inscripcion</option>
+              <option value="required_landing">Actividades obligatorias</option>
+            </select>
+            <select name="controlar_asistencia">
+              <option value="1">Controlar asistencia</option>
+              <option value="0">No controlar asistencia</option>
+            </select>
+            <select name="attendance_mode">
+              <option value="entry_only">Solo ingreso</option>
+              <option value="entry_exit">Ingreso y egreso</option>
+            </select>
+            <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+            <select name="generar_certificados">
+              <option value="1">Preparar certificados</option>
+              <option value="0">Sin certificados</option>
+            </select>
+            <select name="captation_mode">
+              <option value="MIXTO">Captacion mixta</option>
+              <option value="WEB_DIRECTA">Web directa</option>
+              <option value="WHATSAPP_PRIMERO">WhatsApp primero</option>
+            </select>
+            <input name="whatsapp_number" placeholder="WhatsApp de captacion">
+            <input name="primary_action_label" placeholder="Texto boton principal">
+            <input name="secondary_action_label" placeholder="Texto boton secundario">
+            <textarea name="description" placeholder="Descripcion breve"></textarea>
+            <button>Crear evento</button>
+          </form>
+          <details class="prepare-box">
+            <summary>Preparar evento real</summary>
+            <form id="prepareEventForm" class="stack">
+              <input name="name" placeholder="Nombre del evento real" required>
+              <input name="venue" placeholder="Lugar">
+              <div class="two">
+                <input name="starts_at" type="datetime-local">
+                <input name="ends_at" type="datetime-local">
+              </div>
+              <input name="capacity" type="number" min="0" placeholder="Cupo general">
+              <select name="activity_selection_mode">
+                <option value="optional_later">Actividades opcionales posteriores</option>
+                <option value="registration_only">Solo inscripcion</option>
+                <option value="required_landing">Actividades obligatorias</option>
+              </select>
+              <select name="controlar_asistencia">
+                <option value="1">Controlar asistencia</option>
+                <option value="0">No controlar asistencia</option>
+              </select>
+              <select name="attendance_mode">
+                <option value="entry_only">Solo ingreso</option>
+                <option value="entry_exit">Ingreso y egreso</option>
+              </select>
+              <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+              <select name="generar_certificados">
+                <option value="1">Preparar certificados</option>
+                <option value="0">Sin certificados</option>
+              </select>
+              <select name="captation_mode">
+                <option value="MIXTO">Captacion mixta</option>
+                <option value="WEB_DIRECTA">Web directa</option>
+                <option value="WHATSAPP_PRIMERO">WhatsApp primero</option>
+              </select>
+              <input name="whatsapp_number" placeholder="WhatsApp de captacion">
+              <input name="primary_action_label" placeholder="Texto boton principal">
+              <input name="secondary_action_label" placeholder="Texto boton secundario">
+              <textarea name="description" placeholder="Descripcion breve"></textarea>
+              <input name="confirm" placeholder="Escribir PREPARAR para confirmar" required>
+              <button class="danger-button">Crear base limpia</button>
+            </form>
+          </details>
+          <details class="prepare-box">
+            <summary>Crear Demo Real</summary>
+            <form id="demoRealForm" class="stack">
+              <p>Genera 500 participantes simulados, 5 salas, 20 actividades, reservas, listas de espera, pantalla publica y comunicaciones demo.</p>
+              <input name="confirm" placeholder="Escribir DEMO para confirmar" required>
+              <button class="danger-button">Crear demo real</button>
+            </form>
+          </details>
+          <div id="prepareNotice" class="result"></div>
+        </aside>
+
+        <section class="content">
+          <div class="metrics">
+            <div><span id="mTotal">0</span><small>Inscriptos</small></div>
+            <div><span id="mIn">0</span><small>Acreditados</small></div>
+            <div><span id="mPending">0</span><small>Pendientes</small></div>
+          </div>
+          <div class="panel system-panel">
+            <h2>Estado del sistema</h2>
+            <div id="systemStatus" class="system-status"></div>
+          </div>
+          <div class="panel network-panel">
+            <h2>Red local</h2>
+            <div id="networkStatus" class="network-status"></div>
+          </div>
+          <div class="panel summary-panel">
+            <h2>Resumen operativo</h2>
+            <div id="summaryStatus" class="summary-status"></div>
+          </div>
+          <div class="panel marketing-panel">
+            <h2>Marketing y conversion</h2>
+            <div id="marketingStatus" class="summary-status"></div>
+          </div>
+          <div class="panel participant-metrics-panel">
+            <h2>Experiencia participante</h2>
+            <div id="participantMetricsStatus" class="summary-grid"></div>
+          </div>
+          <div id="demoRealPanel" class="panel hidden">
+            <h2>Participantes demo para probar</h2>
+            <div id="demoParticipants" class="demo-participants"></div>
+            <h2>Guia de prueba demo</h2>
+            <ol id="demoGuide" class="demo-guide"></ol>
+          </div>
+          <div class="panel readiness-panel">
+            <h2>Checklist pre-evento</h2>
+            <div id="readinessStatus" class="readiness-status"></div>
+          </div>
+          <div class="panel">
+            <h2>Pantalla publica</h2>
+            <form id="displayConfigForm" class="display-config-form">
+              <select name="mode" id="displayMode">
+                <option value="airport">Modo aeropuerto</option>
+                <option value="now">Ahora / proximas</option>
+                <option value="room">Por sala</option>
+              </select>
+              <input name="refresh_seconds" id="displayRefresh" type="number" min="3" value="10" placeholder="Refresh">
+              <label class="toggle"><input name="paused" id="displayPaused" type="checkbox"> Pausar</label>
+              <input name="message" id="displayMessageInput" placeholder="Mensaje general">
+              <button>Guardar pantalla</button>
+            </form>
+          </div>
+          <div class="panel alerts-panel">
+            <h2>Alertas</h2>
+            <div id="alertsList" class="alerts-list"></div>
+          </div>
+          <div class="panel types-panel">
+            <h2>Tipos y cupos</h2>
+            <div id="typesList" class="types-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Ultimos accesos</h2>
+            <div id="logs" class="logs"></div>
+          </div>
+          <div class="panel">
+            <h2>Ultimos rechazos</h2>
+            <div id="rejectionsList" class="logs"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="register" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Inscripcion</h1>
+          <p>Crea una acreditacion con token unico.</p>
+        </div>
+      </div>
+      <form id="registerForm" class="panel form-grid">
+        <input name="first_name" placeholder="Nombre" required>
+        <input name="last_name" placeholder="Apellido" required>
+        <input name="email" type="email" placeholder="Email" required>
+        <input name="phone" placeholder="Telefono">
+        <input name="dni" placeholder="DNI">
+        <input name="company" placeholder="Empresa">
+        <select name="type" id="typeSelect"></select>
+        <button>Inscribir y emitir credencial</button>
+      </form>
+      <div id="registerResult" class="result"></div>
+    </section>
+
+    <section id="reception" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Recepcion</h1>
+          <p>Busqueda rapida por nombre, DNI, empresa, email o token.</p>
+        </div>
+        <div class="actions">
+          <button id="printFilteredBtn" type="button">Imprimir filtrados</button>
+          <a id="exportLink" class="button" href="#">Exportar CSV</a>
+        </div>
+      </div>
+      <div class="reception-tools">
+        <input id="searchInput" class="search" placeholder="Buscar acreditado">
+        <select id="statusFilter" aria-label="Filtrar por estado">
+          <option value="">Todos</option>
+          <option value="pending">Pendientes</option>
+          <option value="checked">Acreditados</option>
+          <option value="cancelled">Cancelados</option>
+        </select>
+        <select id="typeFilter" aria-label="Filtrar por tipo">
+          <option value="">Todos los tipos</option>
+        </select>
+      </div>
+      <div id="receptionNotice" class="result"></div>
+      <details class="import-box">
+        <summary>Importar acreditados CSV</summary>
+        <form id="importForm" class="stack">
+          <label class="file-picker">
+            <span>Seleccionar CSV</span>
+            <input id="importFile" type="file" accept=".csv,text/csv">
+          </label>
+          <div id="importFileName" class="file-name">Sin archivo seleccionado</div>
+          <textarea id="importCsv" placeholder="nombre,apellido,email,telefono,dni,empresa,tipo&#10;Ana,Perez,ana@example.com,549...,123,Empresa,General"></textarea>
+          <button>Importar acreditados</button>
+        </form>
+        <div id="importResult" class="result"></div>
+      </details>
+      <form id="editAccreditationForm" class="panel form-grid hidden">
+        <input name="id" type="hidden">
+        <input name="first_name" placeholder="Nombre" required>
+        <input name="last_name" placeholder="Apellido" required>
+        <input name="email" type="email" placeholder="Email" required>
+        <input name="phone" placeholder="Telefono">
+        <input name="dni" placeholder="DNI">
+        <input name="company" placeholder="Empresa">
+        <select name="type" id="editTypeSelect"></select>
+        <button>Guardar cambios</button>
+      </form>
+      <div id="accreditations" class="table"></div>
+    </section>
+
+    <section id="agenda" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Agenda</h1>
+          <p>Espacios, actividades y transicion minima por sala.</p>
+        </div>
+        <a id="exportReservationsLink" class="button ghost" href="#">Exportar reservas</a>
+      </div>
+      <div class="layout">
+        <aside class="panel">
+          <h2>Espacio</h2>
+          <form id="spaceForm" class="stack">
+            <input name="name" placeholder="Nombre del espacio" required>
+            <input name="capacity" type="number" min="0" placeholder="Capacidad">
+            <input name="responsible" placeholder="Responsable">
+            <input name="transition_minutes" type="number" min="15" value="15" placeholder="Transicion">
+            <button>Guardar espacio</button>
+          </form>
+          <div id="spacesList" class="mini-list"></div>
+        </aside>
+        <section class="content">
+          <form id="activityForm" class="panel form-grid">
+            <select name="space_id" id="spaceSelect" required></select>
+            <input name="title" placeholder="Titulo de actividad" required>
+            <input name="speaker" placeholder="Disertante">
+            <select name="activity_type">
+              <option>Charla</option>
+              <option>Workshop</option>
+              <option>Panel</option>
+              <option>Networking</option>
+              <option>Coffee break</option>
+              <option>Capacitacion</option>
+            </select>
+            <input name="starts_at" type="datetime-local" required>
+            <input name="ends_at" type="datetime-local" required>
+            <input name="capacity" type="number" min="0" placeholder="Cupo">
+            <select name="reservation_mode">
+              <option value="free">Libre acceso</option>
+              <option value="optional">Reserva opcional</option>
+              <option value="required">Reserva obligatoria</option>
+              <option value="invited">Solo invitados</option>
+            </select>
+            <select name="requiere_asistencia">
+              <option value="1">Requiere asistencia</option>
+              <option value="0">No requiere asistencia</option>
+            </select>
+            <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+            <select name="habilita_certificado">
+              <option value="1">Habilita certificado</option>
+              <option value="0">No habilita certificado</option>
+            </select>
+            <select name="attendance_mode">
+              <option value="">Usar modo del evento</option>
+              <option value="entry_only">Solo ingreso</option>
+              <option value="entry_exit">Ingreso y egreso</option>
+            </select>
+            <textarea name="description" placeholder="Descripcion"></textarea>
+            <button>Agregar actividad</button>
+          </form>
+          <div id="agendaAlert" class="result"></div>
+          <div class="panel reservation-panel">
+            <h2>Reservas</h2>
+            <form id="reservationForm" class="reservation-form">
+              <select name="accreditation_id" id="reservationAccreditationSelect" required></select>
+              <select name="activity_id" id="reservationActivitySelect" required></select>
+              <button>Reservar</button>
+            </form>
+            <div id="reservationsList" class="reservation-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Bolsas de cupos</h2>
+            <div id="capacityBagsList" class="bags-list"></div>
+          </div>
+          <div id="activityDetailPanel" class="panel hidden">
+            <h2>Detalle de actividad</h2>
+            <div id="activityDetail"></div>
+          </div>
+          <div id="activitiesList" class="agenda-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="access" class="view">
+      <div class="access-box">
+        <h1>Modo acceso</h1>
+        <div class="two">
+          <input id="operator" placeholder="Operador" value="Operador 1">
+          <input id="checkpoint" placeholder="Punto de acceso" value="Acceso principal">
+        </div>
+        <select id="accessActivitySelect">
+          <option value="">Evento general</option>
+        </select>
+        <input id="tokenInput" class="token-input" placeholder="Escanear o pegar token">
+        <div class="scan-actions">
+          <button id="cameraBtn" type="button">Abrir camara</button>
+          <button id="validateBtn" class="big">Validar acceso</button>
+          <button id="attendanceExitBtn" type="button" class="ghost">Registrar egreso</button>
+        </div>
+        <video id="cameraPreview" class="camera-preview" muted playsinline></video>
+        <div id="accessResult" class="access-result idle">Listo para validar</div>
+      </div>
+    </section>
+
+    <section id="audit" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Auditoria</h1>
+          <p>Registro de acciones relevantes del evento.</p>
+        </div>
+      </div>
+      <div class="layout">
+        <aside class="panel">
+          <h2>Usuario operativo</h2>
+          <form id="userForm" class="stack">
+            <input name="name" placeholder="Nombre" required>
+            <select name="role" required>
+              <option>Super Admin</option>
+              <option>Productor</option>
+              <option>Coordinador</option>
+              <option>Operador de recepcion</option>
+              <option>Operador de acceso</option>
+              <option>Visualizador</option>
+            </select>
+            <button>Guardar usuario</button>
+          </form>
+          <div id="usersList" class="mini-list"></div>
+        </aside>
+        <section class="content">
+          <div id="auditList" class="audit-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="communications" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Centro de comunicaciones</h1>
+          <p>Historial y envios demo preparados para email y WhatsApp.</p>
+        </div>
+      </div>
+      <div class="layout">
+        <aside class="panel">
+          <h2>Envio demo</h2>
+          <form id="communicationForm" class="stack">
+            <select name="channel">
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="both">Ambos</option>
+            </select>
+            <select name="type" id="communicationTypeSelect"></select>
+            <input name="subject" placeholder="Asunto">
+            <textarea name="content" placeholder="Contenido del mensaje" required></textarea>
+            <button>Registrar envio demo</button>
+          </form>
+          <div id="communicationNotice" class="result"></div>
+        </aside>
+        <section class="content">
+          <div class="panel">
+            <h2>Participantes</h2>
+            <div id="communicationStats" class="summary-grid"></div>
+          </div>
+          <div class="panel">
+            <h2>Plantillas</h2>
+            <div id="communicationTemplates" class="mini-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Historial</h2>
+            <div id="communicationLogs" class="audit-list"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js?v=20260614-4054"></script>
+</body>
+</html>

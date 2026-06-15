@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pantalla publica</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="display-body">
+  <main class="display-page">
+    <header class="display-head">
+      <div>
+        <span class="badge">Pantalla publica</span>
+        <h1 id="displayTitle">Agenda</h1>
+      </div>
+      <time id="displayClock"></time>
+    </header>
+    <section id="displayMessage" class="display-message hidden"></section>
+    <section id="displayContent" class="display-content"></section>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get("event_id") || "0";
+    let refreshSeconds = 10;
+
+    const $ = (selector) => document.querySelector(selector);
+    const fmtTime = (value) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    function stateClass(text) {
+      if (text.includes("Completa") || text.includes("Cancelada")) return "red";
+      if (text.includes("Ultimos") || text.includes("Demorada")) return "yellow";
+      if (text.includes("En curso")) return "blue";
+      if (text.includes("Finalizada")) return "gray";
+      return "green";
+    }
+
+    function renderAirport(rows) {
+      return rows.map((row) => `
+        <article class="display-row">
+          <time>${fmtTime(row.starts_at)}</time>
+          <strong>${row.space_name}</strong>
+          <span>${row.title}</span>
+          <em class="${stateClass(row.status)}">${row.status}</em>
+          <em class="${stateClass(row.availability)}">${row.availability}</em>
+        </article>
+      `).join("");
+    }
+
+    function renderNow(rows) {
+      const now = new Date();
+      const current = rows.filter((row) => new Date(row.starts_at) <= now && new Date(row.ends_at) >= now);
+      const next = rows.filter((row) => new Date(row.starts_at) > now).slice(0, 6);
+      const later = rows.filter((row) => new Date(row.starts_at) > now).slice(6, 14);
+      const group = (title, items) => `
+        <div class="display-group">
+          <h2>${title}</h2>
+          ${renderAirport(items)}
+        </div>
+      `;
+      return group("Ahora", current) + group("Proximas", next) + group("Luego", later);
+    }
+
+    function renderRoom(rows) {
+      const byRoom = {};
+      rows.forEach((row) => {
+        byRoom[row.space_name] ||= [];
+        byRoom[row.space_name].push(row);
+      });
+      return Object.entries(byRoom).map(([room, items]) => `
+        <div class="display-group">
+          <h2>${room}</h2>
+          ${renderAirport(items.slice(0, 4))}
+        </div>
+      `).join("");
+    }
+
+    async function loadDisplay() {
+      const response = await fetch(`/api/public-display?event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      refreshSeconds = Number(data.config.refresh_seconds || 10);
+      $("#displayClock").textContent = new Date().toLocaleTimeString();
+      if (data.config.message) {
+        $("#displayMessage").classList.remove("hidden");
+        $("#displayMessage").textContent = data.config.message;
+      } else {
+        $("#displayMessage").classList.add("hidden");
+      }
+      if (data.config.paused) return;
+      const rows = data.activities || [];
+      if (data.config.mode === "now") $("#displayContent").innerHTML = renderNow(rows);
+      else if (data.config.mode === "room") $("#displayContent").innerHTML = renderRoom(rows);
+      else $("#displayContent").innerHTML = renderAirport(rows);
+    }
+
+    async function loop() {
+      await loadDisplay();
+      setTimeout(loop, refreshSeconds * 1000);
+    }
+
+    loop();
+  </script>
+</body>
+</html>

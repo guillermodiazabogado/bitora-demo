@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Escaner movil</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="scan-body">
+  <main class="scan-app">
+    <section class="scan-head">
+      <div>
+        <span class="badge">Acceso</span>
+        <h1>Escaner movil</h1>
+      </div>
+      <a class="button ghost" href="/">Panel</a>
+    </section>
+
+    <section id="scanLoginPanel" class="panel scan-login hidden">
+      <h2>Ingresar operador</h2>
+      <form id="scanLoginForm" class="stack">
+        <select id="scanLoginUser" name="name" required></select>
+        <input name="pin" type="password" inputmode="numeric" placeholder="PIN" required>
+        <button>Ingresar</button>
+      </form>
+    </section>
+
+    <section id="scanPanel" class="panel scan-panel hidden">
+      <label>
+        <span>Evento</span>
+        <input id="scanEventId" inputmode="numeric" placeholder="ID evento">
+      </label>
+      <label>
+        <span>Punto de acceso</span>
+        <input id="scanCheckpoint" value="Acceso movil">
+      </label>
+      <label>
+        <span>Actividad</span>
+        <select id="scanActivitySelect">
+          <option value="">Evento general</option>
+        </select>
+      </label>
+
+      <video id="scanVideo" class="scan-video" muted playsinline></video>
+      <div class="scan-actions">
+        <button id="scanCameraBtn" type="button">Abrir camara</button>
+        <button id="scanStopBtn" type="button" class="ghost">Cerrar camara</button>
+      </div>
+      <label class="button ghost scan-file-button">
+        Tomar foto QR
+        <input id="scanImageInput" type="file" accept="image/*" capture="environment">
+      </label>
+
+      <label>
+        <span>Token manual</span>
+        <input id="scanTokenInput" class="token-input" autocomplete="off" placeholder="Pegar token o QR">
+      </label>
+      <button id="scanValidateBtn" type="button">Validar</button>
+      <button id="scanExitBtn" type="button" class="ghost">Registrar egreso</button>
+    </section>
+
+    <section id="scanResult" class="scan-result idle">Listo para escanear</section>
+    <div id="html5QrReader" class="scan-reader-hidden"></div>
+  </main>
+
+  <script src="/html5-qrcode.min.js"></script>
+  <script src="/jsQR.min.js"></script>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const params = new URLSearchParams(location.search);
+    let currentUser = null;
+    let cameraStream = null;
+    let scanning = false;
+    let scanCanvas = null;
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Error inesperado");
+      return data;
+    }
+
+    function setResult(kind, text) {
+      const box = $("#scanResult");
+      box.className = `scan-result ${kind}`;
+      box.textContent = text;
+    }
+
+    async function init() {
+      $("#scanEventId").value = params.get("event_id") || "";
+      const me = await api("/api/auth/me");
+      if (me.authenticated) {
+        currentUser = me.user.name;
+        $("#scanPanel").classList.remove("hidden");
+        await loadActivities();
+      } else {
+        $("#scanLoginPanel").classList.remove("hidden");
+        const users = await api("/api/users");
+        $("#scanLoginUser").innerHTML = users.map((row) => (
+          `<option value="${row.name}" ${row.name === "Acceso" ? "selected" : ""}>${row.name} - ${row.role}</option>`
+        )).join("");
+      }
+    }
+
+    async function login(event) {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      await api("/api/auth/login", { method: "POST", body: JSON.stringify(data) });
+      currentUser = data.name;
+      $("#scanLoginPanel").classList.add("hidden");
+      $("#scanPanel").classList.remove("hidden");
+      await loadActivities();
+    }
+
+    async function loadActivities() {
+      const eventId = Number($("#scanEventId").value || 0);
+      const select = $("#scanActivitySelect");
+      select.innerHTML = `<option value="">Evento general</option>`;
+      if (!eventId) return;
+      const event = await api(`/api/event?event_id=${eventId}`);
+      document.title = `Escaner - ${event.name}`;
+      select.innerHTML += (event.activities || []).map((row) => (
+        `<option value="${row.id}">${row.title} - ${row.space_name || ""}</option>`
+      )).join("");
+    }
+
+    async function validateToken() {
+      const token = $("#scanTokenInput").value.trim();
+      if (!token) {
+        setResult("warn", "Ingresar token");
+        return;
+      }
+      try {
+        const result = await api("/api/validate", {
+          method: "POST",
+          body: JSON.stringify({
+            token,
+            operator: currentUser || "Acceso",
+            checkpoint: $("#scanCheckpoint").value || "Acceso movil",
+            activity_id: $("#scanActivitySelect").value,
+          }),
+        });
+        setResult(result.color || (result.result === "granted" ? "green" : "red"), result.reason);
+        $("#scanTokenInput").value = "";
+      } catch (err) {
+        setResult("red", err.message);
+      }
+    }
+
+    async function registerExit() {
+      const token = $("#scanTokenInput").value.trim();
+      const activityId = $("#scanActivitySelect").value;
+      if (!token || !activityId) {
+        setResult("warn", "Para egreso, ingresar token y elegir actividad");
+        return;
+      }
+      try {
+        const result = await api("/api/attendance/exit", {
+          method: "POST",
+          body: JSON.stringify({
+            token,
+            actor: currentUser || "Acceso",
+            activity_id: activityId,
+          }),
+        });
+        setResult("green", `Egreso registrado - ${result.percentage}% - ${result.eligibility_status}`);
+        $("#scanTokenInput").value = "";
+      } catch (err) {
+        setResult("red", err.message);
+      }
+    }
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const video = $("#scanVideo");
+        video.srcObject = cameraStream;
+        video.classList.add("active");
+        await video.play();
+        scanning = true;
+        setResult("idle", "Camara abierta");
+        if ("BarcodeDetector" in window) {
+          scanWithBarcodeDetector(video);
+        } else {
+          scanWithJsQr(video);
+        }
+      } catch (err) {
+        setResult("red", "No se pudo abrir la camara en vivo. Proba Tomar foto QR o usa token manual.");
+      }
+    }
+
+    async function scanWithBarcodeDetector(video) {
+      const detector = new BarcodeDetector({ formats: ["qr_code"] });
+      const scan = async () => {
+        if (!scanning) return;
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          await handleScannedToken(codes[0].rawValue);
+          return;
+        }
+        requestAnimationFrame(scan);
+      };
+      scan();
+    }
+
+    function scanWithJsQr(video) {
+      if (typeof jsQR !== "function") {
+        setResult("warn", "Lector QR local no disponible. Usa token manual.");
+        return;
+      }
+      scanCanvas ||= document.createElement("canvas");
+      const context = scanCanvas.getContext("2d", { willReadFrequently: true });
+      const scan = async () => {
+        if (!scanning) return;
+        if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
+          scanCanvas.width = video.videoWidth;
+          scanCanvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+          const image = context.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+          const code = jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
+          if (code?.data) {
+            await handleScannedToken(code.data);
+            return;
+          }
+        }
+        requestAnimationFrame(scan);
+      };
+      scan();
+    }
+
+    async function handleScannedToken(value) {
+      $("#scanTokenInput").value = value;
+      stopCamera();
+      await validateToken();
+    }
+
+    async function decodeImageFile(event) {
+      const file = event.currentTarget.files[0];
+      event.currentTarget.value = "";
+      if (!file) return;
+      setResult("idle", "Leyendo foto QR...");
+      try {
+        const decoded = await decodeWithHtml5Qr(file).catch(() => decodeWithJsQr(file));
+        await handleScannedToken(decoded);
+      } catch (err) {
+        setResult("warn", "No pude leer QR en la foto. Acercate mas, enfoca recto y evita reflejos.");
+      }
+    }
+
+    async function decodeWithHtml5Qr(file) {
+      if (typeof Html5Qrcode !== "function") throw new Error("html5-qrcode no disponible");
+      const readerId = "html5QrReader";
+      const scanner = new Html5Qrcode(readerId, { verbose: false });
+      return scanner.scanFile(file, false);
+    }
+
+    async function decodeWithJsQr(file) {
+      if (typeof jsQR !== "function") throw new Error("jsQR no disponible");
+      const bitmap = await createImageBitmap(file);
+      scanCanvas ||= document.createElement("canvas");
+      const attempts = [
+        { width: bitmap.width, height: bitmap.height },
+        fitSize(bitmap.width, bitmap.height, 1600),
+        fitSize(bitmap.width, bitmap.height, 900),
+      ];
+      for (const size of attempts) {
+        scanCanvas.width = Math.max(1, Math.round(size.width));
+        scanCanvas.height = Math.max(1, Math.round(size.height));
+        const context = scanCanvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(bitmap, 0, 0, scanCanvas.width, scanCanvas.height);
+        const image = context.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+        const code = jsQR(image.data, image.width, image.height, { inversionAttempts: "attemptBoth" });
+        if (code?.data) return code.data;
+      }
+      throw new Error("QR no detectado");
+    }
+
+    function fitSize(width, height, maxSide) {
+      const factor = Math.min(1, maxSide / Math.max(width, height));
+      return { width: width * factor, height: height * factor };
+    }
+
+    function stopCamera() {
+      scanning = false;
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        cameraStream = null;
+      }
+      $("#scanVideo").classList.remove("active");
+    }
+
+    $("#scanLoginForm").addEventListener("submit", login);
+    $("#scanEventId").addEventListener("change", () => loadActivities().catch((err) => setResult("red", err.message)));
+    $("#scanCameraBtn").addEventListener("click", startCamera);
+    $("#scanStopBtn").addEventListener("click", stopCamera);
+    $("#scanImageInput").addEventListener("change", decodeImageFile);
+    $("#scanValidateBtn").addEventListener("click", validateToken);
+    $("#scanExitBtn").addEventListener("click", registerExit);
+    $("#scanTokenInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") validateToken();
+    });
+    init().catch((err) => setResult("red", err.message));
+  </script>
+</body>
+</html>

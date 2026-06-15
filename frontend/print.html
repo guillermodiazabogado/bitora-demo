@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Imprimir credenciales</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="print-body">
+  <header class="print-toolbar">
+    <div>
+      <strong id="printTitle">Credenciales</strong>
+      <span id="printCount">Preparando impresion</span>
+    </div>
+    <div class="actions">
+      <button id="printBtn" type="button">Imprimir</button>
+      <a class="button ghost" href="/">Volver</a>
+    </div>
+  </header>
+  <main id="printSheet" class="print-sheet"></main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get("event_id") || "";
+    const q = params.get("q") || "";
+    const status = params.get("status") || "";
+    const type = params.get("type") || "";
+
+    const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[char]));
+
+    function matchesFilters(row) {
+      const statusOk = !status
+        || (status === "cancelled" && row.status === "cancelled")
+        || (status === "checked" && Boolean(row.checked_in_at) && row.status !== "cancelled")
+        || (status === "pending" && !row.checked_in_at && row.status !== "cancelled");
+      const typeOk = !type || row.type === type;
+      return statusOk && typeOk;
+    }
+
+    function credential(row) {
+      return `
+        <article class="print-card ${row.status === "cancelled" ? "cancelled" : ""}">
+          <div class="print-card-head">
+            <strong>${escapeHtml(row.event_name)}</strong>
+            <span>${escapeHtml(row.type)}</span>
+          </div>
+          <h2>${escapeHtml(row.first_name)} ${escapeHtml(row.last_name)}</h2>
+          <p>${escapeHtml(row.company || row.email)}</p>
+          <img src="/api/qr.svg?token=${encodeURIComponent(row.token)}" alt="QR ${escapeHtml(row.token)}">
+          <code>${escapeHtml(row.token)}</code>
+          <small>${row.checked_in_at ? "Acreditado" : row.status === "cancelled" ? "Cancelado" : "Pendiente"}</small>
+        </article>
+      `;
+    }
+
+    async function loadPrint() {
+      const response = await fetch(`/api/accreditations?event_id=${encodeURIComponent(eventId)}&q=${encodeURIComponent(q)}&limit=2000`);
+      const rows = (await response.json()).filter(matchesFilters);
+      document.getElementById("printTitle").textContent = rows[0]?.event_name || "Credenciales";
+      document.getElementById("printCount").textContent = `${rows.length} credenciales`;
+      document.getElementById("printSheet").innerHTML = rows.map(credential).join("") || `<p class="empty">No hay credenciales para imprimir.</p>`;
+    }
+
+    document.getElementById("printBtn").addEventListener("click", () => window.print());
+    loadPrint().catch((err) => {
+      document.getElementById("printSheet").innerHTML = `<p class="empty">${escapeHtml(err.message)}</p>`;
+    });
+  </script>
+</body>
+</html>

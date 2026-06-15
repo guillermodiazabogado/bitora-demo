@@ -1,0 +1,35 @@
+# Entorno local
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Base local y archivos transitorios de SQLite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+
+# Backups y salidas operativas locales
+backups/
+*.log
+server.log
+server.err.log
+
+# Archivos temporales
+*.tmp
+*.bak
+*.zip
+deploy_package/
+~$*
+
+# Sistema/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
