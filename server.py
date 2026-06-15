@@ -121,7 +121,7 @@ def absolute_url(path: str, handler: SimpleHTTPRequestHandler | None = None) -> 
 
 
 def public_link(path: str, handler: SimpleHTTPRequestHandler | None = None) -> str:
-    if BASE_URL:
+    if BASE_URL or (handler and APP_ENV in {"demo", "production"}):
         return absolute_url(path, handler)
     return path if path.startswith("/") else "/" + path
 

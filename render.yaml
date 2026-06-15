@@ -9,6 +9,8 @@ services:
     envVars:
       - key: APP_ENV
         value: demo
+      - key: BASE_URL
+        value: https://bitora-demo.onrender.com
       - key: HTTPS_REQUIRED
         value: "true"
       - key: QR_DB_ENGINE
