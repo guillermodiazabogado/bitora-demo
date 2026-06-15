@@ -9,8 +9,8 @@
 <body>
   <header class="topbar">
     <div>
-      <strong>Acreditaciones QR</strong>
-      <span>Consola operativa</span>
+      <strong class="bitora-wordmark">BITORA</strong>
+      <span>Bitacora digital de eventos</span>
     </div>
     <label class="user-picker">
       <span>Usuario</span>
@@ -23,6 +23,7 @@
       <button data-view="reception">Recepcion</button>
       <button data-view="agenda">Agenda</button>
       <button data-view="access">Acceso</button>
+      <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
     </nav>
   </header>
@@ -37,6 +38,9 @@
         <div class="actions">
           <button id="refreshBtn">Actualizar</button>
           <a id="publicDisplayLink" class="button" href="#" target="_blank">Pantalla publica</a>
+          <a id="exportAttendancesLink" class="button ghost" href="#">Asistencias CSV</a>
+          <a id="exportCertificatesLink" class="button ghost" href="#">Elegibles CSV</a>
+          <a id="exportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
           <a id="exportJsonLink" class="button ghost" href="#">Exportar JSON</a>
           <a id="backupLink" class="button ghost" href="/api/backup">Backup</a>
         </div>
@@ -55,6 +59,32 @@
               <input name="ends_at" type="datetime-local">
             </div>
             <input name="capacity" type="number" min="0" placeholder="Cupo general">
+            <select name="activity_selection_mode">
+              <option value="optional_later">Actividades opcionales posteriores</option>
+              <option value="registration_only">Solo inscripcion</option>
+              <option value="required_landing">Actividades obligatorias</option>
+            </select>
+            <select name="controlar_asistencia">
+              <option value="1">Controlar asistencia</option>
+              <option value="0">No controlar asistencia</option>
+            </select>
+            <select name="attendance_mode">
+              <option value="entry_only">Solo ingreso</option>
+              <option value="entry_exit">Ingreso y egreso</option>
+            </select>
+            <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+            <select name="generar_certificados">
+              <option value="1">Preparar certificados</option>
+              <option value="0">Sin certificados</option>
+            </select>
+            <select name="captation_mode">
+              <option value="MIXTO">Captacion mixta</option>
+              <option value="WEB_DIRECTA">Web directa</option>
+              <option value="WHATSAPP_PRIMERO">WhatsApp primero</option>
+            </select>
+            <input name="whatsapp_number" placeholder="WhatsApp de captacion">
+            <input name="primary_action_label" placeholder="Texto boton principal">
+            <input name="secondary_action_label" placeholder="Texto boton secundario">
             <textarea name="description" placeholder="Descripcion breve"></textarea>
             <button>Crear evento</button>
           </form>
@@ -68,9 +98,43 @@
                 <input name="ends_at" type="datetime-local">
               </div>
               <input name="capacity" type="number" min="0" placeholder="Cupo general">
+              <select name="activity_selection_mode">
+                <option value="optional_later">Actividades opcionales posteriores</option>
+                <option value="registration_only">Solo inscripcion</option>
+                <option value="required_landing">Actividades obligatorias</option>
+              </select>
+              <select name="controlar_asistencia">
+                <option value="1">Controlar asistencia</option>
+                <option value="0">No controlar asistencia</option>
+              </select>
+              <select name="attendance_mode">
+                <option value="entry_only">Solo ingreso</option>
+                <option value="entry_exit">Ingreso y egreso</option>
+              </select>
+              <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+              <select name="generar_certificados">
+                <option value="1">Preparar certificados</option>
+                <option value="0">Sin certificados</option>
+              </select>
+              <select name="captation_mode">
+                <option value="MIXTO">Captacion mixta</option>
+                <option value="WEB_DIRECTA">Web directa</option>
+                <option value="WHATSAPP_PRIMERO">WhatsApp primero</option>
+              </select>
+              <input name="whatsapp_number" placeholder="WhatsApp de captacion">
+              <input name="primary_action_label" placeholder="Texto boton principal">
+              <input name="secondary_action_label" placeholder="Texto boton secundario">
               <textarea name="description" placeholder="Descripcion breve"></textarea>
               <input name="confirm" placeholder="Escribir PREPARAR para confirmar" required>
               <button class="danger-button">Crear base limpia</button>
+            </form>
+          </details>
+          <details class="prepare-box">
+            <summary>Crear Demo Real</summary>
+            <form id="demoRealForm" class="stack">
+              <p>Genera 500 participantes simulados, 5 salas, 20 actividades, reservas, listas de espera, pantalla publica y comunicaciones demo.</p>
+              <input name="confirm" placeholder="Escribir DEMO para confirmar" required>
+              <button class="danger-button">Crear demo real</button>
             </form>
           </details>
           <div id="prepareNotice" class="result"></div>
@@ -94,8 +158,22 @@
             <h2>Resumen operativo</h2>
             <div id="summaryStatus" class="summary-status"></div>
           </div>
+          <div class="panel marketing-panel">
+            <h2>Marketing y conversion</h2>
+            <div id="marketingStatus" class="summary-status"></div>
+          </div>
+          <div class="panel participant-metrics-panel">
+            <h2>Experiencia participante</h2>
+            <div id="participantMetricsStatus" class="summary-grid"></div>
+          </div>
+          <div id="demoRealPanel" class="panel hidden">
+            <h2>Participantes demo para probar</h2>
+            <div id="demoParticipants" class="demo-participants"></div>
+            <h2>Guia de prueba demo</h2>
+            <ol id="demoGuide" class="demo-guide"></ol>
+          </div>
           <div class="panel readiness-panel">
-            <h2>Preparacion</h2>
+            <h2>Checklist pre-evento</h2>
             <div id="readinessStatus" class="readiness-status"></div>
           </div>
           <div class="panel">
@@ -245,6 +323,20 @@
               <option value="required">Reserva obligatoria</option>
               <option value="invited">Solo invitados</option>
             </select>
+            <select name="requiere_asistencia">
+              <option value="1">Requiere asistencia</option>
+              <option value="0">No requiere asistencia</option>
+            </select>
+            <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+            <select name="habilita_certificado">
+              <option value="1">Habilita certificado</option>
+              <option value="0">No habilita certificado</option>
+            </select>
+            <select name="attendance_mode">
+              <option value="">Usar modo del evento</option>
+              <option value="entry_only">Solo ingreso</option>
+              <option value="entry_exit">Ingreso y egreso</option>
+            </select>
             <textarea name="description" placeholder="Descripcion"></textarea>
             <button>Agregar actividad</button>
           </form>
@@ -285,6 +377,7 @@
         <div class="scan-actions">
           <button id="cameraBtn" type="button">Abrir camara</button>
           <button id="validateBtn" class="big">Validar acceso</button>
+          <button id="attendanceExitBtn" type="button" class="ghost">Registrar egreso</button>
         </div>
         <video id="cameraPreview" class="camera-preview" muted playsinline></video>
         <div id="accessResult" class="access-result idle">Listo para validar</div>
@@ -320,8 +413,48 @@
         </section>
       </div>
     </section>
+
+    <section id="communications" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Centro de comunicaciones</h1>
+          <p>Historial y envios demo preparados para email y WhatsApp.</p>
+        </div>
+      </div>
+      <div class="layout">
+        <aside class="panel">
+          <h2>Envio demo</h2>
+          <form id="communicationForm" class="stack">
+            <select name="channel">
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="both">Ambos</option>
+            </select>
+            <select name="type" id="communicationTypeSelect"></select>
+            <input name="subject" placeholder="Asunto">
+            <textarea name="content" placeholder="Contenido del mensaje" required></textarea>
+            <button>Registrar envio demo</button>
+          </form>
+          <div id="communicationNotice" class="result"></div>
+        </aside>
+        <section class="content">
+          <div class="panel">
+            <h2>Participantes</h2>
+            <div id="communicationStats" class="summary-grid"></div>
+          </div>
+          <div class="panel">
+            <h2>Plantillas</h2>
+            <div id="communicationTemplates" class="mini-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Historial</h2>
+            <div id="communicationLogs" class="audit-list"></div>
+          </div>
+        </section>
+      </div>
+    </section>
   </main>
 
-  <script src="/app.js?v=20260613-2224"></script>
+  <script src="/app.js?v=20260614-4054"></script>
 </body>
 </html>

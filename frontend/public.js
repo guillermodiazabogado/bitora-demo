@@ -8,6 +8,27 @@ localStorage.setItem("captation_session", sessionId);
 let currentEvent = null;
 let formStarted = false;
 
+const eventThemes = [
+  { primary: "#4c2ea3", secondary: "#1b0f4e", accent: "#20c7b5", soft: "#f4f1ff" },
+  { primary: "#0b6f7a", secondary: "#07333d", accent: "#d4a23a", soft: "#eefafa" },
+  { primary: "#9d3f34", secondary: "#431816", accent: "#efb75c", soft: "#fff3ef" },
+  { primary: "#1f5f3d", secondary: "#0d2f20", accent: "#bddf7a", soft: "#f1f8ec" },
+  { primary: "#244f93", secondary: "#102647", accent: "#6dd6ff", soft: "#eef5ff" },
+];
+
+function hashText(text) {
+  return [...String(text || "bitora")].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+}
+
+function applyEventTheme(event) {
+  const theme = eventThemes[hashText(event.name) % eventThemes.length];
+  const root = document.documentElement;
+  root.style.setProperty("--event-primary", event.theme_color || theme.primary);
+  root.style.setProperty("--event-secondary", event.theme_dark || theme.secondary);
+  root.style.setProperty("--event-accent", event.theme_accent || theme.accent);
+  root.style.setProperty("--event-soft", event.theme_soft || theme.soft);
+}
+
 function deviceType() {
   const width = window.innerWidth || screen.width;
   const ua = navigator.userAgent || "";
@@ -57,6 +78,7 @@ async function loadEvent() {
   if (!eventId) throw new Error("Falta evento");
   const event = await api(`/api/event?event_id=${eventId}`);
   currentEvent = event;
+  applyEventTheme(event);
   document.title = event.name;
   $("#eventTitle").textContent = event.name;
   $("#eventDescription").textContent = event.description || "Completa tus datos para recibir tu credencial digital.";

@@ -8,7 +8,8 @@
 </head>
 <body class="login-body">
   <main class="login-panel">
-    <h1>Acreditaciones QR</h1>
+    <h1><span class="bitora-wordmark">BITORA</span></h1>
+    <p class="login-subtitle">Bitacora digital de eventos</p>
     <form id="loginForm" class="stack">
       <select id="loginUser" name="name" required></select>
       <input name="pin" type="password" inputmode="numeric" placeholder="PIN" required>
@@ -29,7 +30,16 @@
       return data;
     }
 
+    function applyAppConfig(config) {
+      if (!config?.demo || document.querySelector(".demo-ribbon")) return;
+      const ribbon = document.createElement("div");
+      ribbon.className = "demo-ribbon";
+      ribbon.textContent = "BITORA DEMO";
+      document.body.appendChild(ribbon);
+    }
+
     async function initLogin() {
+      applyAppConfig(await api("/api/app-config"));
       const me = await api("/api/auth/me");
       if (me.authenticated) {
         location.href = "/";
