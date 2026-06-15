@@ -1551,7 +1551,38 @@ def certificate_payload(db: sqlite3.Connection, token: str, activity_id: int | N
         """,
         params,
     ).fetchone()
-    return dict(row) if row else None
+    if row:
+        return dict(row)
+    if not manual or activity_id:
+        return None
+    fallback = db.execute(
+        """
+        SELECT e.id AS event_id, e.name AS event_name, e.venue, e.starts_at, e.ends_at,
+               ac.id AS accreditation_id, ac.token, ac.type, ac.checked_in_at,
+               p.first_name, p.last_name, p.email, p.company, p.dni
+        FROM accreditations ac
+        JOIN events e ON e.id = ac.event_id
+        JOIN people p ON p.id = ac.person_id
+        WHERE ac.token = ? AND ac.status = 'active'
+        LIMIT 1
+        """,
+        [token.strip().upper()],
+    ).fetchone()
+    if not fallback:
+        return None
+    data = dict(fallback)
+    return {
+        **data,
+        "certificate_id": f"M-{data['accreditation_id']}",
+        "activity_id": None,
+        "activity_title": f"Participacion en {data['event_name']}",
+        "space_name": data.get("venue") or "",
+        "porcentaje": 100 if data.get("checked_in_at") else 0,
+        "elegible": 1,
+        "estado": "Manual",
+        "fecha_calculo": now_iso(),
+        "certificate_generated_at": now_iso(),
+    }
 
 
 def participant_metrics(db: sqlite3.Connection, event_id: int) -> dict:

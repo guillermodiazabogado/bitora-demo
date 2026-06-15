@@ -158,8 +158,30 @@ function printOneCredential(token) {
   window.open(printUrl({ q: token, status: "", type: "" }), "_blank");
 }
 
-function printManualCertificate(token) {
-  window.open(`/api/certificate.pdf?token=${encodeURIComponent(token)}&manual=1`, "_blank");
+async function printManualCertificate(token) {
+  const notice = $("#receptionNotice");
+  const url = `/api/certificate.pdf?token=${encodeURIComponent(token)}&manual=1`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      let message = "Certificado no disponible para este acreditado.";
+      try {
+        const data = await response.json();
+        message = data.error || message;
+      } catch (err) {
+        // Algunos errores del servidor llegan como HTML; mostramos mensaje operativo.
+      }
+      notice.innerHTML = `<div class="panel danger">${message}</div>`;
+      return;
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, "_blank");
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    notice.innerHTML = `<div class="panel success">Certificado preparado para imprimir.</div>`;
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">No se pudo preparar el certificado.</div>`;
+  }
 }
 
 function accreditationStatusLabel(row) {
