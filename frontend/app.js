@@ -121,6 +121,7 @@ async function loadAccreditations() {
       <div class="row-actions">
         <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
         <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+        <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
         <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
         <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
         <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
@@ -133,6 +134,7 @@ async function loadAccreditations() {
   `).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
   $$(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
   $$(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
+  $$(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
   $$(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
   $$(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
   $$(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
@@ -156,6 +158,10 @@ function printFilteredCredentials() {
 
 function printOneCredential(token) {
   window.open(printUrl({ q: token, status: "", type: "" }), "_blank");
+}
+
+function printOneWristband(token) {
+  window.open(printUrl({ q: token, status: "", type: "", mode: "wristband" }), "_blank");
 }
 
 async function printManualCertificate(token) {
