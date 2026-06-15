@@ -46,6 +46,7 @@
         <button id="scanCameraBtn" type="button">Abrir camara</button>
         <button id="scanStopBtn" type="button" class="ghost">Cerrar camara</button>
       </div>
+      <p id="cameraHelp" class="scan-help hidden"></p>
       <label class="button ghost scan-file-button">
         Tomar foto QR
         <input id="scanImageInput" type="file" accept="image/*" capture="environment">
@@ -174,6 +175,13 @@
     }
 
     async function startCamera() {
+      $("#cameraHelp").classList.add("hidden");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        $("#cameraHelp").textContent = "Este navegador no habilita camara en vivo. Usa Tomar foto QR o token manual.";
+        $("#cameraHelp").classList.remove("hidden");
+        setResult("warn", "Camara en vivo no disponible en este navegador.");
+        return;
+      }
       try {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         const video = $("#scanVideo");
@@ -188,7 +196,18 @@
           scanWithJsQr(video);
         }
       } catch (err) {
-        setResult("red", "No se pudo abrir la camara en vivo. Proba Tomar foto QR o usa token manual.");
+        const name = err?.name || "";
+        let message = "No se pudo abrir la camara en vivo. Usa Tomar foto QR o token manual.";
+        if (name === "NotAllowedError" || name === "SecurityError") {
+          message = "Permiso de camara bloqueado. En el candado del navegador, permiti Camara y volve a tocar Abrir camara.";
+        } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+          message = "No se detecto camara en este equipo. Usa Tomar foto QR o pega el token manual.";
+        } else if (name === "NotReadableError" || name === "TrackStartError") {
+          message = "La camara esta ocupada por otra aplicacion. Cerrala o usa Tomar foto QR.";
+        }
+        $("#cameraHelp").textContent = message;
+        $("#cameraHelp").classList.remove("hidden");
+        setResult("warn", message);
       }
     }
 

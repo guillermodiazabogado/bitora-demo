@@ -1573,6 +1573,17 @@ code,
   grid-template-columns: 1fr 1fr;
 }
 
+.scan-help {
+  background: #fff8eb;
+  border: 1px solid #f1d7a8;
+  border-left: 5px solid var(--yellow);
+  border-radius: 8px;
+  color: #8a5a11;
+  font-weight: 700;
+  margin: 8px 0;
+  padding: 10px 12px;
+}
+
 .scan-file-button {
   width: 100%;
 }
