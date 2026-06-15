@@ -90,6 +90,21 @@
       box.textContent = text;
     }
 
+    function normalizeScannedToken(value) {
+      const raw = String(value || "").trim();
+      const match = raw.match(/EVT-[A-Z0-9]+/i);
+      if (match) return match[0].toUpperCase();
+      try {
+        const url = new URL(raw);
+        const token = url.searchParams.get("token") || "";
+        const tokenMatch = token.match(/EVT-[A-Z0-9]+/i);
+        if (tokenMatch) return tokenMatch[0].toUpperCase();
+      } catch (err) {
+        // No era una URL completa; seguimos con el texto limpio.
+      }
+      return raw.toUpperCase();
+    }
+
     async function init() {
       $("#scanEventId").value = params.get("event_id") || "";
       const me = await api("/api/auth/me");
@@ -129,7 +144,7 @@
     }
 
     async function validateToken() {
-      const token = $("#scanTokenInput").value.trim();
+      const token = normalizeScannedToken($("#scanTokenInput").value);
       if (!token) {
         setResult("warn", "Ingresar token");
         return;
@@ -152,7 +167,7 @@
     }
 
     async function registerExit() {
-      const token = $("#scanTokenInput").value.trim();
+      const token = normalizeScannedToken($("#scanTokenInput").value);
       const activityId = $("#scanActivitySelect").value;
       if (!token || !activityId) {
         setResult("warn", "Para egreso, ingresar token y elegir actividad");
@@ -251,7 +266,7 @@
     }
 
     async function handleScannedToken(value) {
-      $("#scanTokenInput").value = value;
+      $("#scanTokenInput").value = normalizeScannedToken(value);
       stopCamera();
       await validateToken();
     }

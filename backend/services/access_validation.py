@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
+from urllib.parse import parse_qs, urlparse
 
 from backend.repositories import SQLiteRepository
 from backend.services.audit import AuditService
@@ -24,7 +26,7 @@ class AccessValidationService:
         self.audit_service = audit_service or AuditService(repository=self.repository, now=now)
 
     def validate(self, db, token: str, operator: str, checkpoint: str, activity_id: int | None = None) -> dict:
-        token = token.strip()
+        token = self._normalize_token(token)
         operator = operator.strip() or "operador"
         checkpoint = checkpoint.strip() or "Acceso principal"
         activity_id = int(activity_id or 0)
@@ -94,3 +96,16 @@ class AccessValidationService:
         if not self.now:
             raise RuntimeError("AccessValidationService requires a now provider")
         return self.now()
+
+    def _normalize_token(self, token: str) -> str:
+        raw = str(token or "").strip()
+        match = re.search(r"EVT-[A-Z0-9]+", raw, re.IGNORECASE)
+        if match:
+            return match.group(0).upper()
+        parsed = urlparse(raw)
+        if parsed.query:
+            candidate = parse_qs(parsed.query).get("token", [""])[0]
+            match = re.search(r"EVT-[A-Z0-9]+", candidate, re.IGNORECASE)
+            if match:
+                return match.group(0).upper()
+        return raw.upper()
