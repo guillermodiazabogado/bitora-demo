@@ -543,39 +543,77 @@
     </section>
 
     <section id="communications" class="view">
-      <div class="section-head">
-        <div>
-          <h1>Centro de comunicaciones</h1>
-          <p>Historial y envios demo preparados para email y WhatsApp.</p>
+        <div class="section-head">
+          <div>
+            <h1>Centro de comunicaciones</h1>
+            <p>Comunicaciones operativas por email y WhatsApp, con cola, consentimiento e historial.</p>
+          </div>
         </div>
-      </div>
-      <div class="layout">
-        <aside class="panel">
-          <h2>Envio demo</h2>
-          <form id="communicationForm" class="stack">
-            <select name="channel">
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="both">Ambos</option>
-            </select>
-            <select name="type" id="communicationTypeSelect"></select>
-            <input name="subject" placeholder="Asunto">
-            <textarea name="content" placeholder="Contenido del mensaje" required></textarea>
-            <button>Registrar envio demo</button>
-          </form>
-          <div id="communicationNotice" class="result"></div>
-        </aside>
-        <section class="content">
-          <div class="panel">
-            <h2>Participantes</h2>
-            <div id="communicationStats" class="summary-grid"></div>
-          </div>
-          <div class="panel">
-            <h2>Plantillas</h2>
-            <div id="communicationTemplates" class="mini-list"></div>
-          </div>
-          <div class="panel">
-            <h2>Historial</h2>
+        <div class="layout">
+          <aside class="panel">
+            <h2>Nueva comunicacion</h2>
+            <p class="empty">MODO DEMO: se encola y simula el envio si no hay proveedor real configurado.</p>
+            <form id="communicationForm" class="stack">
+              <select name="audience">
+                <option value="all">Todos los acreditados</option>
+                <option value="confirmed">Acreditados presentes</option>
+                <option value="pending">Pendientes</option>
+                <option value="vip">VIP</option>
+                <option value="staff">Staff</option>
+                <option value="prensa">Prensa</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="elegibles">Elegibles certificado</option>
+              </select>
+              <select name="channel">
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="both">Ambos</option>
+              </select>
+              <select name="type" id="communicationTypeSelect"></select>
+              <input name="subject" placeholder="Asunto">
+              <textarea name="content" placeholder="Contenido del mensaje" required></textarea>
+              <label class="toggle"><input name="confirm" type="checkbox" checked> Confirmar y procesar cola</label>
+              <button>Crear cola de envio</button>
+            </form>
+            <div class="panel">
+              <h2>WhatsApp inteligente</h2>
+              <form id="assistantTestForm" class="stack">
+                <input name="phone" placeholder="Telefono participante">
+                <input name="message" placeholder="Mensaje: QR, Agenda, Portal">
+                <button>Probar asistente</button>
+              </form>
+              <div id="assistantTestResult" class="result"></div>
+            </div>
+            <div id="communicationNotice" class="result"></div>
+          </aside>
+          <section class="content">
+            <div class="panel">
+              <h2>Proveedores</h2>
+              <div id="communicationProviders" class="summary-grid"></div>
+            </div>
+            <div class="panel">
+              <h2>Participantes</h2>
+              <div id="communicationStats" class="summary-grid"></div>
+            </div>
+            <div class="panel">
+              <h2>Metricas V5</h2>
+              <div id="communicationV5Metrics" class="summary-grid"></div>
+            </div>
+            <div class="panel">
+              <h2>Plantillas</h2>
+              <div id="communicationTemplates" class="mini-list"></div>
+            </div>
+            <div class="panel">
+              <h2>Cola de envios</h2>
+              <div id="communicationQueue" class="audit-list"></div>
+            </div>
+            <div class="panel">
+              <h2>WhatsApp Inteligente</h2>
+              <div id="assistantMetrics" class="summary-grid"></div>
+              <div id="assistantTickets" class="mini-list"></div>
+            </div>
+            <div class="panel">
+              <h2>Historial</h2>
             <div id="communicationLogs" class="audit-list"></div>
           </div>
         </section>

@@ -350,6 +350,14 @@ async function loadCommunications() {
   if (!state.eventId) return;
   state.communications = await api(`/api/communications?event_id=${state.eventId}`);
   const stats = state.communications.stats || {};
+  const providers = state.communications.providers || {};
+  const queueMetrics = state.communications.queue_metrics || {};
+  const assistantMetrics = state.communications.assistant_metrics || {};
+  $("#communicationProviders").innerHTML = `
+    <div><strong>${state.communications.mode === "demo" ? "DEMO" : "REAL"}</strong><span>Modo</span></div>
+    <div><strong>${providers.email?.provider || "demo"}</strong><span>Email ${providers.email?.ready ? "listo" : "demo"}</span></div>
+    <div><strong>${providers.whatsapp?.provider || "demo"}</strong><span>WhatsApp ${providers.whatsapp?.ready ? "listo" : "demo"}</span></div>
+  `;
   $("#communicationStats").innerHTML = `
     <div><strong>${Number(stats.participants || 0)}</strong><span>Participantes</span></div>
     <div><strong>${Number(stats.with_email || 0)}</strong><span>Con email</span></div>
@@ -357,15 +365,45 @@ async function loadCommunications() {
     <div><strong>${Number(stats.with_both || 0)}</strong><span>Con ambos</span></div>
     <div><strong>${Number(stats.with_consent || 0)}</strong><span>Con consentimiento</span></div>
   `;
+  $("#communicationV5Metrics").innerHTML = `
+    <div><strong>${Number(queueMetrics.emails_sent || 0)}</strong><span>Emails enviados</span></div>
+    <div><strong>${Number(queueMetrics.emails_delivered || 0)}</strong><span>Emails entregados</span></div>
+    <div><strong>${Number(queueMetrics.whatsapp_sent || 0)}</strong><span>WhatsApp enviados</span></div>
+    <div><strong>${Number(queueMetrics.whatsapp_delivered || 0)}</strong><span>WhatsApp entregados</span></div>
+    <div><strong>${Number(queueMetrics.whatsapp_read || 0)}</strong><span>WhatsApp leidos</span></div>
+    <div><strong>${Number(queueMetrics.pending || 0)}</strong><span>Pendientes</span></div>
+    <div><strong>${Number(queueMetrics.errors || 0)}</strong><span>Errores</span></div>
+  `;
+  $("#assistantMetrics").innerHTML = `
+    <div><strong>${Number(assistantMetrics.received || 0)}</strong><span>Consultas</span></div>
+    <div><strong>${Number(assistantMetrics.resolved || 0)}</strong><span>Resueltas</span></div>
+    <div><strong>${Number(assistantMetrics.handoffs || 0)}</strong><span>Derivaciones</span></div>
+    <div><strong>${Number(assistantMetrics.errors || 0)}</strong><span>Errores</span></div>
+  `;
+  $("#assistantTickets").innerHTML = (state.communications.tickets || []).map((row) => `
+    <div class="mini-row">
+      <strong>${row.reason || "Derivacion humana"}</strong>
+      <span>${row.status} - ${new Date(row.created_at).toLocaleString()}</span>
+    </div>
+  `).join("") || `<p class="empty">Sin derivaciones humanas.</p>`;
   $("#communicationTemplates").innerHTML = state.communications.templates.map((row) => `
-    <button type="button" class="mini-row template-pick" data-type="${row.tipo}" data-subject="${row.asunto}" data-content="${row.contenido}">
+    <button type="button" class="mini-row template-pick" data-code="${row.code}" data-type="${row.tipo}" data-subject="${row.asunto}" data-content="${row.contenido}">
       <strong>${row.name}</strong>
       <span>${row.tipo}</span>
     </button>
   `).join("") || `<p class="empty">Sin plantillas.</p>`;
   $("#communicationTypeSelect").innerHTML = state.communications.templates.map((row) => (
-    `<option value="${row.tipo}">${row.name}</option>`
+    `<option value="${row.code}">${row.name}</option>`
   )).join("") || `<option value="aviso operativo">Aviso operativo</option>`;
+  $("#communicationQueue").innerHTML = (state.communications.queue || []).map((row) => `
+    <article class="audit-row">
+      <div>
+        <strong>${row.subject || row.template_code}</strong>
+        <span>${row.first_name} ${row.last_name} - ${row.channel} - ${row.status} - ${row.provider}</span>
+      </div>
+      <code>${row.audience}</code>
+    </article>
+  `).join("") || `<p class="empty">Cola vacia.</p>`;
   $("#communicationLogs").innerHTML = state.communications.logs.map((row) => `
     <article class="audit-row">
       <div>
@@ -380,6 +418,7 @@ async function loadCommunications() {
     form.elements.type.value = button.dataset.type;
     form.elements.subject.value = button.dataset.subject;
     form.elements.content.value = button.dataset.content;
+    form.dataset.templateCode = button.dataset.code;
   }));
 }
 
@@ -1193,13 +1232,30 @@ async function sendDemoCommunication(event) {
   const data = formData(form);
   data.event_id = state.eventId;
   data.actor = state.currentUser;
+  data.template_code = form.dataset.templateCode || form.elements.type.value;
+  data.type = form.elements.type.value;
   try {
     const result = await api("/api/communications/send", { method: "POST", body: JSON.stringify(data) });
-    $("#communicationNotice").innerHTML = `<div class="panel success">Envios registrados: ${result.sent}. Omitidos por consentimiento: ${result.skipped}.</div>`;
+    $("#communicationNotice").innerHTML = `<div class="panel success">Cola creada: ${result.queued}. Enviados/simulados: ${result.sent}. Omitidos: ${result.skipped}. Errores: ${result.errors}.</div>`;
     form.reset();
     await Promise.all([loadCommunications(), loadAudit()]);
   } catch (err) {
     $("#communicationNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function testAssistant(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/communications/assistant/message", { method: "POST", body: JSON.stringify(data) });
+    $("#assistantTestResult").innerHTML = `<div class="panel success"><strong>${result.intent}</strong><p>${result.reply}</p></div>`;
+    await loadCommunications();
+  } catch (err) {
+    $("#assistantTestResult").innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
 }
 
@@ -1338,6 +1394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#importFile").addEventListener("change", loadImportFile);
   $("#userForm").addEventListener("submit", saveUser);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
+  $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);
   $("#reservationForm").addEventListener("submit", saveReservation);

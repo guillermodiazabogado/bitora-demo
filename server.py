@@ -346,6 +346,52 @@ def init_db() -> None:
                 estado TEXT NOT NULL DEFAULT 'demo'
             );
 
+            CREATE TABLE IF NOT EXISTS communication_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                channel TEXT NOT NULL,
+                audience TEXT NOT NULL DEFAULT '',
+                template_code TEXT NOT NULL DEFAULT '',
+                subject TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                recipient TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pendiente',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                provider TEXT NOT NULL DEFAULT 'demo',
+                last_error TEXT NOT NULL DEFAULT '',
+                scheduled_at TEXT,
+                processed_at TEXT,
+                created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS communication_assistant_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                phone TEXT NOT NULL DEFAULT '',
+                inbound TEXT NOT NULL DEFAULT '',
+                outbound TEXT NOT NULL DEFAULT '',
+                intent TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'resolved',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS communication_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                channel TEXT NOT NULL DEFAULT 'whatsapp',
+                reason TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS communication_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL DEFAULT 0,
@@ -460,6 +506,9 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_activities_event_start ON activities(event_id, starts_at);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_communication_logs_event ON communication_logs(event_id, fecha);
+        CREATE INDEX IF NOT EXISTS idx_communication_queue_event_status ON communication_queue(event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_communication_assistant_event ON communication_assistant_history(event_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_communication_tickets_event_status ON communication_tickets(event_id, status);
         CREATE INDEX IF NOT EXISTS idx_preferences_person ON participant_communication_preferences(person_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_event_activity ON activity_attendance(event_id, activity_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_accreditation ON activity_attendance(accreditation_id);
@@ -619,6 +668,52 @@ def ensure_v3_tables(db: sqlite3.Connection) -> None:
             estado TEXT NOT NULL DEFAULT 'demo'
         );
 
+        CREATE TABLE IF NOT EXISTS communication_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            channel TEXT NOT NULL,
+            audience TEXT NOT NULL DEFAULT '',
+            template_code TEXT NOT NULL DEFAULT '',
+            subject TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            recipient TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pendiente',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            provider TEXT NOT NULL DEFAULT 'demo',
+            last_error TEXT NOT NULL DEFAULT '',
+            scheduled_at TEXT,
+            processed_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS communication_assistant_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            phone TEXT NOT NULL DEFAULT '',
+            inbound TEXT NOT NULL DEFAULT '',
+            outbound TEXT NOT NULL DEFAULT '',
+            intent TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'resolved',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS communication_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            channel TEXT NOT NULL DEFAULT 'whatsapp',
+            reason TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS communication_templates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id INTEGER NOT NULL DEFAULT 0,
@@ -646,11 +741,18 @@ def ensure_v3_tables(db: sqlite3.Connection) -> None:
 
 def ensure_communication_templates(db: sqlite3.Connection) -> None:
     templates = [
-        ("registration_confirmation", "Confirmacion de inscripcion", "confirmacion", "Inscripcion confirmada", "Tu inscripcion fue confirmada. Accede a tu portal personal para ver credencial, agenda e inscripciones."),
-        ("reminder", "Recordatorio", "recordatorio", "Recordatorio del evento", "Te recordamos revisar tu agenda personal antes de asistir."),
-        ("room_change", "Cambio de sala", "cambio de sala", "Cambio de sala", "Una actividad de tu agenda cambio de sala. Revisa tu portal personal."),
-        ("time_change", "Cambio de horario", "cambio de horario", "Cambio de horario", "Una actividad de tu agenda cambio de horario. Revisa tu portal personal."),
-        ("certificate_available", "Certificado disponible", "certificado", "Certificado disponible", "Tu certificado estara disponible desde el portal personal."),
+        ("registration_confirmation", "Confirmacion de inscripcion", "confirmacion", "Inscripcion confirmada", "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Portal: {{portal_participante}}"),
+        ("qr_resend", "Reenvio QR", "qr", "Tu QR de acceso", "Hola {{nombre}}, este es tu acceso a {{evento}}: {{portal_participante}}"),
+        ("payment_approved", "Pago aprobado", "pago aprobado", "Pago aprobado", "Hola {{nombre}}, tu pago para {{evento}} fue aprobado."),
+        ("payment_pending", "Pago pendiente", "pago pendiente", "Pago pendiente", "Hola {{nombre}}, tu pago para {{evento}} figura pendiente."),
+        ("reminder_24h", "Recordatorio 24 horas", "recordatorio", "Recordatorio del evento", "Te recordamos que {{evento}} inicia el {{fecha_evento}}. Tu portal: {{portal_participante}}"),
+        ("reminder_1h", "Recordatorio 1 hora", "recordatorio", "Tu evento esta por comenzar", "{{nombre}}, {{evento}} esta por comenzar. Tene tu QR disponible: {{portal_participante}}"),
+        ("room_change", "Cambio de sala", "cambio de sala", "Cambio de sala", "Una actividad de tu agenda cambio de sala. Revisa tu portal: {{portal_participante}}"),
+        ("time_change", "Cambio de horario", "cambio de horario", "Cambio de horario", "Una actividad de tu agenda cambio de horario. Revisa tu portal: {{portal_participante}}"),
+        ("activity_registration", "Inscripcion actividad", "inscripcion actividad", "Inscripcion a actividad", "Tu inscripcion a {{actividad}} en {{sala}} fue registrada."),
+        ("waitlist", "Lista de espera", "lista espera", "Lista de espera", "Quedaste en lista de espera para {{actividad}}."),
+        ("survey", "Encuesta", "encuesta", "Encuesta del evento", "Gracias por asistir a {{evento}}. Te invitamos a completar la encuesta operativa."),
+        ("certificate_available", "Certificado disponible", "certificado", "Certificado disponible", "Tu certificado de {{evento}} esta disponible desde el portal: {{portal_participante}}"),
     ]
     for code, name, tipo, asunto, contenido in templates:
         db.execute(
@@ -1336,6 +1438,236 @@ def communication_log(
         (now_iso(), now_iso(), person_id),
     )
     return int(cur.lastrowid)
+
+
+def communication_provider(channel: str) -> str:
+    if channel == "email":
+        return os.environ.get("EMAIL_PROVIDER", "demo").strip() or "demo"
+    if channel == "whatsapp":
+        return os.environ.get("WHATSAPP_PROVIDER", "demo").strip() or "demo"
+    return "demo"
+
+
+def communication_provider_ready(channel: str) -> bool:
+    provider = communication_provider(channel)
+    if provider == "demo":
+        return False
+    if channel == "email":
+        return bool(os.environ.get("EMAIL_API_KEY") and os.environ.get("EMAIL_FROM"))
+    if channel == "whatsapp":
+        return bool(os.environ.get("WHATSAPP_API_KEY") and os.environ.get("WHATSAPP_PHONE_ID"))
+    return False
+
+
+def render_communication_template(text: str, row: sqlite3.Row | dict, activity: sqlite3.Row | dict | None = None) -> str:
+    source = dict(row)
+    act = dict(activity) if activity else {}
+    portal_url = public_link(f"/p.html?token={source.get('token') or ''}")
+    values = {
+        "nombre": source.get("first_name", ""),
+        "apellido": source.get("last_name", ""),
+        "evento": source.get("event_name", ""),
+        "fecha_evento": str(source.get("starts_at") or "")[:10],
+        "hora_evento": str(source.get("starts_at") or "")[11:16],
+        "qr": source.get("token", ""),
+        "actividad": act.get("title", ""),
+        "sala": act.get("space_name", ""),
+        "empresa": source.get("company", ""),
+        "tipo_acreditacion": source.get("type", ""),
+        "portal_participante": portal_url,
+    }
+    output = str(text or "")
+    for key, value in values.items():
+        output = output.replace("{{" + key + "}}", str(value or ""))
+    return output
+
+
+def communication_audience_rows(db: sqlite3.Connection, event_id: int, audience: str = "all", filters: dict | None = None) -> list[sqlite3.Row]:
+    filters = filters or {}
+    params: list[object] = [event_id]
+    where = ["a.event_id = ?", "a.status <> 'cancelled'"]
+    audience = (audience or "all").strip().lower()
+    if audience in {"confirmed", "acreditados", "presentes"}:
+        where.append("a.checked_in_at IS NOT NULL")
+    elif audience in {"pending", "pendientes"}:
+        where.append("a.checked_in_at IS NULL")
+    elif audience in {"expositores", "disertantes"}:
+        where.append("LOWER(a.type) IN ('disertante', 'expositor')")
+    elif audience in {"sponsors", "sponsor", "prensa", "staff", "vip"}:
+        where.append("LOWER(a.type) = ?")
+        params.append("sponsor" if audience == "sponsors" else audience)
+    elif audience == "empresa" and filters.get("company"):
+        where.append("LOWER(p.company) = LOWER(?)")
+        params.append(str(filters["company"]))
+    elif audience == "activity" and filters.get("activity_id"):
+        where.append("EXISTS (SELECT 1 FROM reservations r WHERE r.accreditation_id = a.id AND r.activity_id = ? AND r.status = 'confirmed')")
+        params.append(int(filters["activity_id"]))
+    elif audience in {"ausentes", "absent"}:
+        where.append("a.checked_in_at IS NULL")
+    elif audience in {"elegibles", "eligible_certificates"}:
+        where.append("EXISTS (SELECT 1 FROM certificate_eligibility ce WHERE ce.accreditation_id = a.id AND ce.elegible = 1)")
+    rows = db.execute(
+        f"""
+        SELECT a.id AS accreditation_id, a.token, a.type, a.status,
+               p.id AS person_id, p.first_name, p.last_name, p.email, p.phone, p.company,
+               e.name AS event_name, e.starts_at, e.ends_at,
+               COALESCE(cp.acepta_email, 0) AS acepta_email,
+               COALESCE(cp.acepta_whatsapp, 0) AS acepta_whatsapp,
+               COALESCE(NULLIF(cp.email, ''), p.email) AS preferred_email,
+               COALESCE(NULLIF(cp.phone, ''), p.phone) AS preferred_phone
+        FROM accreditations a
+        JOIN people p ON p.id = a.person_id
+        JOIN events e ON e.id = a.event_id
+        LEFT JOIN participant_communication_preferences cp ON cp.person_id = p.id
+        WHERE {" AND ".join(where)}
+        ORDER BY p.last_name, p.first_name, a.id
+        """,
+        params,
+    ).fetchall()
+    seen: set[int] = set()
+    unique = []
+    for row in rows:
+        person_id = int(row["person_id"])
+        if person_id in seen:
+            continue
+        seen.add(person_id)
+        unique.append(row)
+    return unique
+
+
+def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, audience: str, channel: str, template_code: str, subject: str, content: str, rows: list[sqlite3.Row], process_now: bool = True) -> dict:
+    sent = skipped = queued = errors = 0
+    channels = ["email", "whatsapp"] if channel == "both" else [channel]
+    for row in rows:
+        for item_channel in channels:
+            recipient = row["preferred_email"] if item_channel == "email" else row["preferred_phone"]
+            consent = int(row["acepta_email"] or 0) if item_channel == "email" else int(row["acepta_whatsapp"] or 0)
+            if not recipient or not consent:
+                skipped += 1
+                continue
+            rendered_subject = render_communication_template(subject, row)
+            rendered_content = render_communication_template(content, row)
+            provider = communication_provider(item_channel)
+            status = "pendiente"
+            processed_at = None
+            last_error = ""
+            if process_now:
+                processed_at = now_iso()
+                if communication_provider_ready(item_channel):
+                    status = "enviado"
+                else:
+                    status = "enviado" if provider == "demo" else "error"
+                    last_error = "" if provider == "demo" else "Proveedor no configurado"
+            db.execute(
+                """
+                INSERT INTO communication_queue (
+                    event_id, person_id, accreditation_id, channel, audience, template_code,
+                    subject, content, recipient, status, attempts, provider, last_error,
+                    scheduled_at, processed_at, created_by, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id, row["person_id"], row["accreditation_id"], item_channel, audience,
+                    template_code, rendered_subject, rendered_content, recipient, status,
+                    1 if process_now else 0, provider, last_error, None, processed_at, actor, now_iso(),
+                ),
+            )
+            queued += 1
+            if status in {"enviado", "entregado", "leido"}:
+                sent += 1
+                communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", rendered_subject, rendered_content, "demo" if provider == "demo" else "enviado")
+            elif status == "error":
+                errors += 1
+                communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", rendered_subject, last_error, "error")
+    return {"queued": queued, "sent": sent, "skipped": skipped, "errors": errors}
+
+
+def find_participant_by_phone(db: sqlite3.Connection, event_id: int, phone: str) -> sqlite3.Row | None:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if not digits:
+        return None
+    return db.execute(
+        """
+        SELECT a.id AS accreditation_id, a.token, a.type, p.id AS person_id,
+               p.first_name, p.last_name, p.phone, p.email, p.company,
+               e.name AS event_name, e.starts_at
+        FROM accreditations a
+        JOIN people p ON p.id = a.person_id
+        JOIN events e ON e.id = a.event_id
+        WHERE a.event_id = ? AND REPLACE(REPLACE(REPLACE(REPLACE(p.phone, '+', ''), ' ', ''), '-', ''), '(', '') LIKE ?
+          AND a.status <> 'cancelled'
+        ORDER BY a.id DESC
+        LIMIT 1
+        """,
+        (event_id, f"%{digits[-8:]}"),
+    ).fetchone()
+
+
+def assistant_reply(db: sqlite3.Connection, event_id: int, phone: str, message: str) -> dict:
+    participant = find_participant_by_phone(db, event_id, phone)
+    text = str(message or "").strip().lower()
+    if not participant:
+        return {"status": "unidentified", "intent": "unknown", "reply": "No encontre una inscripcion asociada a este numero. Escribi Operador para ayuda humana."}
+    portal = public_link(f"/p.html?token={participant['token']}")
+    intent = "help"
+    if text in {"hola", "ayuda", "evento", "menu", "menú"}:
+        reply = "BITORA operativo:\n1 Mi QR\n2 Mi Agenda\n3 Mis Actividades\n4 Certificados\n5 Ayuda"
+    elif text in {"1", "qr", "mi qr"}:
+        intent = "qr"
+        reply = f"Hola {participant['first_name']}. Tu QR y portal: {portal}"
+    elif text in {"2", "agenda", "mi agenda"}:
+        intent = "agenda"
+        rows = db.execute(
+            """
+            SELECT a.title, a.starts_at, s.name AS room
+            FROM reservations r
+            JOIN activities a ON a.id = r.activity_id
+            JOIN spaces s ON s.id = a.space_id
+            WHERE r.accreditation_id = ? AND r.status = 'confirmed'
+            ORDER BY a.starts_at
+            LIMIT 6
+            """,
+            (participant["accreditation_id"],),
+        ).fetchall()
+        reply = "\n".join([f"{row['title']} - {row['room']} - {row['starts_at']}" for row in rows]) or f"No tenes agenda reservada. Portal: {portal}"
+    elif text in {"3", "mis inscripciones", "actividades", "mis actividades"}:
+        intent = "registrations"
+        reply = f"Tus inscripciones y estados estan en tu portal: {portal}"
+    elif "proxima" in text or "próxima" in text:
+        intent = "next_activity"
+        row = db.execute(
+            """
+            SELECT a.title, a.starts_at, s.name AS room
+            FROM reservations r
+            JOIN activities a ON a.id = r.activity_id
+            JOIN spaces s ON s.id = a.space_id
+            WHERE r.accreditation_id = ? AND r.status = 'confirmed' AND a.starts_at >= ?
+            ORDER BY a.starts_at
+            LIMIT 1
+            """,
+            (participant["accreditation_id"], now_iso()[:16]),
+        ).fetchone()
+        reply = f"Proxima actividad: {row['title']} - {row['room']} - {row['starts_at']}" if row else "No tenes una proxima actividad registrada."
+    elif text in {"4", "certificados", "certificado"}:
+        intent = "certificates"
+        reply = f"Tus certificados disponibles se consultan desde el portal: {portal}"
+    elif text in {"portal", "acceso"}:
+        intent = "portal"
+        reply = f"Tu portal participante: {portal}"
+    elif "operador" in text or "soporte" in text or "humana" in text:
+        intent = "handoff"
+        db.execute(
+            """
+            INSERT INTO communication_tickets (event_id, person_id, accreditation_id, channel, reason, status, created_at, updated_at)
+            VALUES (?, ?, ?, 'whatsapp', ?, 'open', ?, ?)
+            """,
+            (event_id, participant["person_id"], participant["accreditation_id"], message, now_iso(), now_iso()),
+        )
+        reply = "Derive tu consulta a un operador. Te van a responder por este canal."
+    else:
+        reply = "Puedo ayudarte con QR, Agenda, Proxima actividad, Mis inscripciones, Certificados o Portal. Escribi Operador para ayuda humana."
+    return {"status": "resolved", "intent": intent, "reply": reply, "participant": dict(participant)}
 
 
 def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | None:
@@ -2435,6 +2767,7 @@ def public_api_post(path: str) -> bool:
         "/api/portal/reservations/status",
         "/api/portal/preferences",
         "/api/portal/profile",
+        "/api/communications/whatsapp/webhook",
     }
 
 
@@ -3925,6 +4258,52 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (event_id,),
                         ).fetchall()
                     ]
+                    queue = [
+                        dict(r)
+                        for r in db.execute(
+                            """
+                            SELECT q.*, p.first_name, p.last_name
+                            FROM communication_queue q
+                            JOIN people p ON p.id = q.person_id
+                            WHERE q.event_id = ?
+                            ORDER BY q.id DESC
+                            LIMIT 100
+                            """,
+                            (event_id,),
+                        ).fetchall()
+                    ]
+                    queue_metrics = dict(
+                        db.execute(
+                            """
+                            SELECT
+                                SUM(CASE WHEN channel = 'email' AND status IN ('enviado', 'entregado', 'leido') THEN 1 ELSE 0 END) AS emails_sent,
+                                SUM(CASE WHEN channel = 'email' AND status IN ('entregado', 'leido') THEN 1 ELSE 0 END) AS emails_delivered,
+                                SUM(CASE WHEN channel = 'whatsapp' AND status IN ('enviado', 'entregado', 'leido') THEN 1 ELSE 0 END) AS whatsapp_sent,
+                                SUM(CASE WHEN channel = 'whatsapp' AND status IN ('entregado', 'leido') THEN 1 ELSE 0 END) AS whatsapp_delivered,
+                                SUM(CASE WHEN channel = 'whatsapp' AND status = 'leido' THEN 1 ELSE 0 END) AS whatsapp_read,
+                                SUM(CASE WHEN status = 'pendiente' THEN 1 ELSE 0 END) AS pending,
+                                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors
+                            FROM communication_queue
+                            WHERE event_id = ?
+                            """,
+                            (event_id,),
+                        ).fetchone()
+                    )
+                    assistant_metrics = dict(
+                        db.execute(
+                            """
+                            SELECT
+                                COUNT(*) AS received,
+                                SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) AS resolved,
+                                SUM(CASE WHEN intent = 'handoff' THEN 1 ELSE 0 END) AS handoffs,
+                                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors
+                            FROM communication_assistant_history
+                            WHERE event_id = ?
+                            """,
+                            (event_id,),
+                        ).fetchone()
+                    )
+                    tickets = [dict(r) for r in db.execute("SELECT * FROM communication_tickets WHERE event_id = ? ORDER BY id DESC LIMIT 50", (event_id,)).fetchall()]
                     templates = [
                         dict(r)
                         for r in db.execute(
@@ -3937,7 +4316,60 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (event_id,),
                         ).fetchall()
                     ]
-                self.send_json({"stats": stats, "logs": logs, "templates": templates})
+                self.send_json({
+                    "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
+                    "providers": {
+                        "email": {"provider": communication_provider("email"), "ready": communication_provider_ready("email"), "from": os.environ.get("EMAIL_FROM", "")},
+                        "whatsapp": {"provider": communication_provider("whatsapp"), "ready": communication_provider_ready("whatsapp"), "phone_id": os.environ.get("WHATSAPP_PHONE_ID", "")},
+                    },
+                    "stats": stats,
+                    "queue_metrics": queue_metrics,
+                    "assistant_metrics": assistant_metrics,
+                    "queue": queue,
+                    "tickets": tickets,
+                    "logs": logs,
+                    "templates": templates,
+                })
+                return
+
+            if path == "/api/communications/history":
+                event_id = int(query.get("event_id", ["0"])[0])
+                person_id = int(query.get("person_id", ["0"])[0] or 0)
+                params: list[object] = [event_id]
+                where = "l.event_id = ?"
+                if person_id:
+                    where += " AND l.person_id = ?"
+                    params.append(person_id)
+                with connect() as db:
+                    rows = db.execute(
+                        f"""
+                        SELECT l.*, p.first_name, p.last_name
+                        FROM communication_logs l
+                        JOIN people p ON p.id = l.person_id
+                        WHERE {where}
+                        ORDER BY l.id DESC
+                        LIMIT 200
+                        """,
+                        params,
+                    ).fetchall()
+                self.send_json([dict(r) for r in rows])
+                return
+
+            if path == "/api/communications/assistant/history":
+                event_id = int(query.get("event_id", ["0"])[0])
+                with connect() as db:
+                    rows = db.execute(
+                        """
+                        SELECT h.*, p.first_name, p.last_name
+                        FROM communication_assistant_history h
+                        LEFT JOIN people p ON p.id = h.person_id
+                        WHERE h.event_id = ?
+                        ORDER BY h.id DESC
+                        LIMIT 100
+                        """,
+                        (event_id,),
+                    ).fetchall()
+                self.send_json([dict(r) for r in rows])
                 return
 
             if path == "/api/demo-real":
@@ -4829,6 +5261,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 event_id = int(data.get("event_id") or 0)
                 channel = data.get("channel", "email").strip() or "email"
                 message_type = data.get("type", "aviso operativo").strip() or "aviso operativo"
+                template_code = data.get("template_code", message_type).strip() or message_type
+                audience = data.get("audience", "all").strip() or "all"
                 subject = data.get("subject", "").strip() or "Aviso operativo"
                 content = data.get("content", "").strip()
                 accreditation_id = int(data.get("accreditation_id") or 0)
@@ -4841,49 +5275,89 @@ class AppHandler(SimpleHTTPRequestHandler):
                         db.execute("ROLLBACK")
                         self.send_json(deny_message(actor), 403)
                         return
-                    params: list[object] = [event_id]
-                    where = "a.event_id = ? AND a.status <> 'cancelled'"
                     if accreditation_id:
-                        where += " AND a.id = ?"
-                        params.append(accreditation_id)
-                    recipients = db.execute(
-                        f"""
-                        SELECT a.id AS accreditation_id, a.person_id,
-                               cp.acepta_email, cp.acepta_whatsapp
-                        FROM accreditations a
-                        JOIN people p ON p.id = a.person_id
-                        LEFT JOIN participant_communication_preferences cp ON cp.person_id = p.id
-                        WHERE {where}
-                        """,
-                        params,
-                    ).fetchall()
-                    sent = 0
-                    skipped = 0
-                    for recipient in recipients:
-                        allowed = []
-                        if channel in {"email", "both"} and int(recipient["acepta_email"] or 0) == 1:
-                            allowed.append("email")
-                        if channel in {"whatsapp", "both"} and int(recipient["acepta_whatsapp"] or 0) == 1:
-                            allowed.append("whatsapp")
-                        if not allowed:
-                            skipped += 1
-                            continue
-                        for item_channel in allowed:
-                            communication_log(
-                                db,
-                                event_id,
-                                recipient["person_id"],
-                                recipient["accreditation_id"],
-                                item_channel,
-                                message_type,
-                                subject,
-                                content,
-                                "demo",
-                            )
-                            sent += 1
-                    audit(db, actor, "communications.demo_sent", "event", event_id, {"channel": channel, "sent": sent, "skipped": skipped, "type": message_type})
+                        rows = communication_audience_rows(db, event_id, "all")
+                        recipients = [row for row in rows if int(row["accreditation_id"]) == accreditation_id]
+                    else:
+                        recipients = communication_audience_rows(db, event_id, audience, data.get("filters") or {})
+                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
+                    audit(db, actor, "communications.queued", "event", event_id, {"channel": channel, "audience": audience, "template": template_code, **result})
                     db.execute("COMMIT")
-                self.send_json({"ok": True, "sent": sent, "skipped": skipped})
+                self.send_json({"ok": True, **result})
+                return
+
+            if path in {"/api/communications/email/send", "/api/communications/whatsapp/send"}:
+                data["channel"] = "email" if path.endswith("/email/send") else "whatsapp"
+                path = "/api/communications/send"
+                # Fall through is not possible inside this handler, so repeat with the normalized payload.
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                channel = data["channel"]
+                audience = data.get("audience", "all").strip() or "all"
+                template_code = data.get("template_code", data.get("type", "manual")).strip() or "manual"
+                subject = data.get("subject", "").strip() or ("WhatsApp operativo" if channel == "whatsapp" else "Email operativo")
+                content = data.get("content", "").strip()
+                if not event_id or not content:
+                    self.send_json({"error": "Faltan evento o contenido"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    recipients = communication_audience_rows(db, event_id, audience, data.get("filters") or {})
+                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
+                    audit(db, actor, f"communications.{channel}_queued", "event", event_id, {"audience": audience, **result})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/communications/whatsapp/webhook":
+                event_id = int(data.get("event_id") or 0)
+                phone = str(data.get("phone") or data.get("from") or "").strip()
+                message = str(data.get("message") or data.get("text") or "").strip()
+                status = str(data.get("status") or "").strip().lower()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if status and data.get("queue_id"):
+                        db.execute("UPDATE communication_queue SET status = ?, processed_at = ? WHERE id = ?", (status, now_iso(), int(data["queue_id"])))
+                        audit(db, "webhook", "communications.whatsapp_status", "communication_queue", int(data["queue_id"]), data)
+                        reply = {"ok": True, "status": status}
+                    else:
+                        answer = assistant_reply(db, event_id, phone, message)
+                        participant = answer.get("participant") or {}
+                        db.execute(
+                            """
+                            INSERT INTO communication_assistant_history (event_id, person_id, accreditation_id, phone, inbound, outbound, intent, status, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (event_id, participant.get("person_id"), participant.get("accreditation_id"), phone, message, answer["reply"], answer["intent"], answer["status"], now_iso()),
+                        )
+                        audit(db, "whatsapp", "communications.assistant_replied", "event", event_id, {"intent": answer["intent"], "status": answer["status"]})
+                        reply = {k: v for k, v in answer.items() if k != "participant"}
+                    db.execute("COMMIT")
+                self.send_json(reply)
+                return
+
+            if path == "/api/communications/assistant/message":
+                event_id = int(data.get("event_id") or 0)
+                phone = str(data.get("phone") or "").strip()
+                message = str(data.get("message") or "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    answer = assistant_reply(db, event_id, phone, message)
+                    participant = answer.get("participant") or {}
+                    db.execute(
+                        """
+                        INSERT INTO communication_assistant_history (event_id, person_id, accreditation_id, phone, inbound, outbound, intent, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (event_id, participant.get("person_id"), participant.get("accreditation_id"), phone, message, answer["reply"], answer["intent"], answer["status"], now_iso()),
+                    )
+                    audit(db, data.get("actor", "assistant"), "communications.assistant_message", "event", event_id, {"intent": answer["intent"], "status": answer["status"]})
+                    db.execute("COMMIT")
+                self.send_json({k: v for k, v in answer.items() if k != "participant"})
                 return
 
             if path == "/api/accreditations/update":
