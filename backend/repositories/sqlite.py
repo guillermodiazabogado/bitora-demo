@@ -24,7 +24,12 @@ class SQLiteRepository:
 
     def activity_for_access(self, db: sqlite3.Connection, activity_id: int, event_id: int):
         return db.execute(
-            "SELECT * FROM activities WHERE id = ? AND event_id = ? AND status <> 'cancelled'",
+            """
+            SELECT a.*, e.activity_access_open_minutes_before AS event_access_open_minutes_before
+            FROM activities a
+            JOIN events e ON e.id = a.event_id
+            WHERE a.id = ? AND a.event_id = ? AND a.status <> 'cancelled'
+            """,
             (activity_id, event_id),
         ).fetchone()
 
@@ -33,6 +38,21 @@ class SQLiteRepository:
             """
             SELECT * FROM reservations
             WHERE activity_id = ? AND accreditation_id = ? AND status = 'confirmed'
+            """,
+            (activity_id, accreditation_id),
+        ).fetchone()
+
+    def granted_activity_access(self, db: sqlite3.Connection, activity_id: int, accreditation_id: int):
+        return db.execute(
+            """
+            SELECT *
+            FROM access_logs
+            WHERE activity_id = ?
+              AND accreditation_id = ?
+              AND access_context = 'activity_entry'
+              AND result = 'granted'
+            ORDER BY id
+            LIMIT 1
             """,
             (activity_id, accreditation_id),
         ).fetchone()
@@ -67,13 +87,33 @@ class SQLiteRepository:
         created_at: str,
         accreditation_id: int | None = None,
         event_id: int | None = None,
+        activity_id: int | None = None,
+        access_context: str = "event_entry",
+        access_point: str = "",
+        operator_id: int | None = None,
     ) -> None:
         db.execute(
             """
-            INSERT INTO access_logs (accreditation_id, event_id, token, operator, checkpoint, result, reason, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO access_logs (
+                accreditation_id, event_id, activity_id, token, operator, operator_id,
+                checkpoint, access_point, access_context, result, reason, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (accreditation_id, event_id, token, operator, checkpoint, result, reason, created_at),
+            (
+                accreditation_id,
+                event_id,
+                activity_id,
+                token,
+                operator,
+                operator_id,
+                checkpoint,
+                access_point or checkpoint,
+                access_context,
+                result,
+                reason,
+                created_at,
+            ),
         )
 
     def insert_audit(

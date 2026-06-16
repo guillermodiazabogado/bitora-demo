@@ -162,6 +162,7 @@ def init_db() -> None:
                 ends_at TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
                 capacity INTEGER NOT NULL DEFAULT 0,
+                activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
                 created_at TEXT NOT NULL
             );
 
@@ -226,6 +227,7 @@ def init_db() -> None:
                 ends_at TEXT NOT NULL,
                 capacity INTEGER NOT NULL DEFAULT 0,
                 reservation_mode TEXT NOT NULL DEFAULT 'free',
+                access_open_minutes_before INTEGER,
                 status TEXT NOT NULL DEFAULT 'published',
                 created_at TEXT NOT NULL
             );
@@ -283,9 +285,13 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
                 event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
                 token TEXT NOT NULL,
                 operator TEXT NOT NULL DEFAULT '',
+                operator_id INTEGER,
                 checkpoint TEXT NOT NULL DEFAULT '',
+                access_point TEXT NOT NULL DEFAULT '',
+                access_context TEXT NOT NULL DEFAULT 'event_entry',
                 result TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TEXT NOT NULL
@@ -422,6 +428,7 @@ def init_db() -> None:
         ensure_v4_1_columns(db)
         ensure_v4_2_columns(db)
         ensure_v4_4_columns(db)
+        ensure_activity_access_window_columns(db)
         ensure_user_pin_column(db)
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
@@ -446,6 +453,7 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_reservations_activity_status ON reservations(activity_id, status);
         CREATE INDEX IF NOT EXISTS idx_access_logs_event_created ON access_logs(event_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_access_logs_token ON access_logs(token);
+        CREATE INDEX IF NOT EXISTS idx_access_logs_activity_context ON access_logs(activity_id, accreditation_id, access_context, result);
         CREATE INDEX IF NOT EXISTS idx_activities_event_start ON activities(event_id, starts_at);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_communication_logs_event ON communication_logs(event_id, fecha);
@@ -540,6 +548,26 @@ def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE accreditations ADD COLUMN device_type TEXT NOT NULL DEFAULT ''")
 
 
+def ensure_activity_access_window_columns(db: sqlite3.Connection) -> None:
+    event_columns = [row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()]
+    if "activity_access_open_minutes_before" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10")
+
+    activity_columns = [row["name"] for row in db.execute("PRAGMA table_info(activities)").fetchall()]
+    if "access_open_minutes_before" not in activity_columns:
+        db.execute("ALTER TABLE activities ADD COLUMN access_open_minutes_before INTEGER")
+
+    access_columns = [row["name"] for row in db.execute("PRAGMA table_info(access_logs)").fetchall()]
+    if "activity_id" not in access_columns:
+        db.execute("ALTER TABLE access_logs ADD COLUMN activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL")
+    if "operator_id" not in access_columns:
+        db.execute("ALTER TABLE access_logs ADD COLUMN operator_id INTEGER")
+    if "access_point" not in access_columns:
+        db.execute("ALTER TABLE access_logs ADD COLUMN access_point TEXT NOT NULL DEFAULT ''")
+    if "access_context" not in access_columns:
+        db.execute("ALTER TABLE access_logs ADD COLUMN access_context TEXT NOT NULL DEFAULT 'event_entry'")
+
+
 def ensure_user_pin_column(db: sqlite3.Connection) -> None:
     columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
     if "pin_hash" not in columns:
@@ -609,7 +637,7 @@ def ensure_v3_tables(db: sqlite3.Connection) -> None:
 
 def ensure_communication_templates(db: sqlite3.Connection) -> None:
     templates = [
-        ("registration_confirmation", "Confirmacion de inscripcion", "confirmacion", "Inscripcion confirmada", "Tu inscripcion fue confirmada. Accede a tu portal personal para ver credencial, agenda y reservas."),
+        ("registration_confirmation", "Confirmacion de inscripcion", "confirmacion", "Inscripcion confirmada", "Tu inscripcion fue confirmada. Accede a tu portal personal para ver credencial, agenda e inscripciones."),
         ("reminder", "Recordatorio", "recordatorio", "Recordatorio del evento", "Te recordamos revisar tu agenda personal antes de asistir."),
         ("room_change", "Cambio de sala", "cambio de sala", "Cambio de sala", "Una actividad de tu agenda cambio de sala. Revisa tu portal personal."),
         ("time_change", "Cambio de horario", "cambio de horario", "Cambio de horario", "Una actividad de tu agenda cambio de horario. Revisa tu portal personal."),
@@ -633,8 +661,11 @@ def seed_if_empty() -> None:
         created = now_iso()
         cur = db.execute(
             """
-            INSERT INTO events (name, description, venue, starts_at, ends_at, status, capacity, activity_selection_mode, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO events (
+                name, description, venue, starts_at, ends_at, status, capacity,
+                activity_selection_mode, activity_access_open_minutes_before, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "Demo Congreso Operativo",
@@ -645,6 +676,7 @@ def seed_if_empty() -> None:
                 "published",
                 3000,
                 "optional_later",
+                10,
                 created,
             ),
         )
@@ -2769,6 +2801,28 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (activity_id,),
                         ).fetchone()
                     )
+                    access_open_minutes = activity.get("access_open_minutes_before")
+                    if access_open_minutes in (None, ""):
+                        event_config = db.execute(
+                            "SELECT activity_access_open_minutes_before FROM events WHERE id = ?",
+                            (activity["event_id"],),
+                        ).fetchone()
+                        access_open_minutes = int(event_config["activity_access_open_minutes_before"] or 10) if event_config else 10
+                    access_open_minutes = max(0, int(access_open_minutes or 0))
+                    access_open_at = (parse_local_datetime(activity["starts_at"]) - timedelta(minutes=access_open_minutes)).isoformat(timespec="minutes")
+                    access_attempts = dict(
+                        db.execute(
+                            """
+                            SELECT
+                                SUM(CASE WHEN result = 'rejected' AND reason LIKE 'Acceso aun no habilitado%' THEN 1 ELSE 0 END) AS early_attempts,
+                                SUM(CASE WHEN result = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+                                SUM(CASE WHEN result = 'granted' THEN 1 ELSE 0 END) AS granted
+                            FROM access_logs
+                            WHERE activity_id = ?
+                            """,
+                            (activity_id,),
+                        ).fetchone()
+                    )
                     bags = [
                         dict(r)
                         for r in db.execute(
@@ -2791,11 +2845,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                             FROM access_logs l
                             LEFT JOIN accreditations ac ON ac.id = l.accreditation_id
                             LEFT JOIN people p ON p.id = ac.person_id
-                            WHERE l.checkpoint LIKE ? OR l.event_id = ?
+                            WHERE l.activity_id = ?
                             ORDER BY l.id DESC
                             LIMIT 10
                             """,
-                            (f"%{activity['title']}%", activity["event_id"]),
+                            (activity_id,),
                         ).fetchall()
                     ]
                     attendance_rows = [
@@ -2813,7 +2867,22 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (activity_id,),
                         ).fetchall()
                     ]
-                self.send_json({"activity": activity, "availability": availability, "stats": stats, "attendance": attendance, "attendance_rows": attendance_rows, "bags": bags, "recent_access": recent_access})
+                self.send_json({
+                    "activity": activity,
+                    "availability": availability,
+                    "stats": stats,
+                    "attendance": attendance,
+                    "access_window": {
+                        "minutes_before": access_open_minutes,
+                        "opens_at": access_open_at,
+                        "early_attempts": int(access_attempts.get("early_attempts") or 0),
+                        "rejected": int(access_attempts.get("rejected") or 0),
+                        "granted": int(access_attempts.get("granted") or 0),
+                    },
+                    "attendance_rows": attendance_rows,
+                    "bags": bags,
+                    "recent_access": recent_access,
+                })
                 return
 
             if path == "/api/system-status":
@@ -3351,10 +3420,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                     ).fetchall()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
-                self.send_header("Content-Disposition", "attachment; filename=reservas.csv")
+                self.send_header("Content-Disposition", "attachment; filename=inscripciones.csv")
                 self.end_headers()
                 writer = csv.writer(self.wfile.read if False else _TextWriter(self.wfile))
-                writer.writerow(["Evento", "Actividad", "Sala", "Inicio", "Fin", "Nombre", "Apellido", "Email", "Telefono", "DNI", "Empresa", "Tipo", "Token", "Reserva"])
+                writer.writerow(["Evento", "Actividad", "Sala", "Inicio", "Fin", "Nombre", "Apellido", "Email", "Telefono", "DNI", "Empresa", "Tipo", "Token", "Inscripcion"])
                 for row in rows:
                     writer.writerow([row[key] for key in row.keys()])
                 return
@@ -3676,12 +3745,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if event and not int(event["permitir_reserva_actividades_desde_portal"] or 0):
                         audit(db, "portal", "portal.reservation_rejected", "activity", activity_id, {"event_id": portal["event_id"], "reason": "portal_disabled"})
                         db.execute("COMMIT")
-                        self.send_json({"error": "Las reservas desde portal no estan habilitadas"}, 403)
+                        self.send_json({"error": "Las inscripciones desde portal no estan habilitadas"}, 403)
                         return
                     if event and int(event["reserva_requiere_confirmacion"] or 0) and not truthy(data.get("confirmed")):
                         audit(db, "portal", "portal.reservation_rejected", "activity", activity_id, {"event_id": portal["event_id"], "reason": "confirmation_required"})
                         db.execute("COMMIT")
-                        self.send_json({"error": "Debes confirmar manualmente la reserva"}, 400)
+                        self.send_json({"error": "Debes confirmar manualmente la inscripcion"}, 400)
                         return
                     if event and int(event["reserva_requiere_verificacion_simple"] or 0) and str(data.get("verification_answer") or "").strip() != "7":
                         audit(db, "portal", "portal.reservation_verification_failed", "activity", activity_id, {"event_id": portal["event_id"], "accreditation_id": portal["id"]})
@@ -3695,7 +3764,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if existing:
                         audit(db, "portal", "portal.reservation_rejected", "reservation", existing["id"], {"event_id": portal["event_id"], "reason": "duplicate"})
                         db.execute("COMMIT")
-                        self.send_json({"error": "Ya tenes una reserva activa para esta actividad"}, 409)
+                        self.send_json({"error": "Ya tenes una inscripcion activa para esta actividad"}, 409)
                         return
                     cooldown = max(10, int(event["reserva_cooldown_segundos"] or 0)) if event else 10
                     if cooldown > 0:
@@ -3726,13 +3795,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 wait = max(1, int(round(300 - elapsed)))
                                 audit(db, "portal", "portal.reservation_cooldown_blocked", "activity", activity_id, {"event_id": portal["event_id"], "wait_seconds": wait, "block": "five_reservations"})
                                 db.execute("COMMIT")
-                                self.send_json({"error": f"Llegaste a 5 reservas seguidas. Espera {wait} segundos antes de continuar.", "wait_seconds": wait, "block": "five_reservations"}, 429)
+                                self.send_json({"error": f"Llegaste a 5 inscripciones seguidas. Espera {wait} segundos antes de continuar.", "wait_seconds": wait, "block": "five_reservations"}, 429)
                                 return
                             if elapsed < cooldown:
                                 wait = max(1, int(round(cooldown - elapsed)))
                                 audit(db, "portal", "portal.reservation_cooldown_blocked", "activity", activity_id, {"event_id": portal["event_id"], "wait_seconds": wait})
                                 db.execute("COMMIT")
-                                self.send_json({"error": f"Espera {wait} segundos antes de reservar otra actividad", "wait_seconds": wait, "block": "short_cooldown"}, 429)
+                                self.send_json({"error": f"Espera {wait} segundos antes de inscribirte a otra actividad", "wait_seconds": wait, "block": "short_cooldown"}, 429)
                                 return
                     reservation = create_reservation(db, portal["event_id"], activity_id, portal["id"], "public")
                     if not reservation["ok"]:
@@ -3768,7 +3837,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 reservation_id = int(data.get("id") or 0)
                 status = data.get("status", "").strip()
                 if not token or not reservation_id or status != "cancelled":
-                    self.send_json({"error": "Solo se permite cancelar reservas desde el portal"}, 400)
+                    self.send_json({"error": "Solo se permite cancelar inscripciones desde el portal"}, 400)
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
@@ -3783,7 +3852,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     ).fetchone()
                     if not reservation:
                         db.execute("ROLLBACK")
-                        self.send_json({"error": "Reserva inexistente"}, 404)
+                        self.send_json({"error": "Inscripcion inexistente"}, 404)
                         return
                     promoted = None
                     db.execute("UPDATE reservations SET status = 'cancelled' WHERE id = ?", (reservation_id,))
@@ -3814,9 +3883,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             name, description, venue, starts_at, ends_at, status, capacity,
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
-                            primary_action_label, secondary_action_label, whatsapp_number, created_at
+                            primary_action_label, secondary_action_label, whatsapp_number,
+                            activity_access_open_minutes_before, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             data.get("name", "").strip(),
@@ -3835,6 +3905,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             data.get("primary_action_label", "").strip(),
                             data.get("secondary_action_label", "").strip(),
                             data.get("whatsapp_number", "").strip(),
+                            max(0, int(data.get("activity_access_open_minutes_before") or 10)),
                             now_iso(),
                         ),
                     )
@@ -3877,9 +3948,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             name, description, venue, starts_at, ends_at, status, capacity,
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
-                            primary_action_label, secondary_action_label, whatsapp_number, created_at
+                            primary_action_label, secondary_action_label, whatsapp_number,
+                            activity_access_open_minutes_before, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             name,
@@ -3897,6 +3969,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             data.get("primary_action_label", "").strip(),
                             data.get("secondary_action_label", "").strip(),
                             data.get("whatsapp_number", "").strip(),
+                            max(0, int(data.get("activity_access_open_minutes_before") or 10)),
                             now_iso(),
                         ),
                     )
@@ -4400,9 +4473,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             event_id, space_id, title, description, speaker, activity_type,
                             starts_at, ends_at, capacity, reservation_mode,
                             requiere_asistencia, porcentaje_minimo_asistencia, habilita_certificado, attendance_mode,
+                            access_open_minutes_before,
                             status, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?)
                         """,
                         (
                             event_id,
@@ -4419,6 +4493,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             int(data.get("porcentaje_minimo_asistencia") or 80),
                             1 if truthy(data.get("habilita_certificado", True)) else 0,
                             data.get("attendance_mode", "").strip(),
+                            None if str(data.get("access_open_minutes_before", "")).strip() == "" else max(0, int(data.get("access_open_minutes_before") or 0)),
                             now_iso(),
                         ),
                     )
@@ -4434,7 +4509,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 activity_id = int(data.get("activity_id") or 0)
                 accreditation_id = int(data.get("accreditation_id") or 0)
                 if not event_id or not activity_id or not accreditation_id:
-                    self.send_json({"error": "Faltan datos de reserva"}, 400)
+                    self.send_json({"error": "Faltan datos de inscripcion"}, 400)
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
@@ -4468,7 +4543,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 reservation_id = int(data.get("id") or 0)
                 status = data.get("status", "").strip()
                 if not reservation_id or status not in ("cancelled", "confirmed"):
-                    self.send_json({"error": "Estado de reserva invalido"}, 400)
+                    self.send_json({"error": "Estado de inscripcion invalido"}, 400)
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
@@ -4479,13 +4554,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                     reservation = db.execute("SELECT * FROM reservations WHERE id = ?", (reservation_id,)).fetchone()
                     if not reservation:
                         db.execute("ROLLBACK")
-                        self.send_json({"error": "Reserva inexistente"}, 404)
+                        self.send_json({"error": "Inscripcion inexistente"}, 404)
                         return
                     promoted = None
                     if status == "confirmed":
                         if reservation["status"] != "waitlisted":
                             db.execute("ROLLBACK")
-                            self.send_json({"error": "Solo se puede promover una reserva en espera"}, 409)
+                            self.send_json({"error": "Solo se puede promover una inscripcion en espera"}, 409)
                             return
                         if not activity_has_capacity(db, reservation["activity_id"]):
                             db.execute("ROLLBACK")
@@ -4527,7 +4602,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     raw_activity_ids = [item for item in raw_activity_ids.split(",") if item.strip()]
                 activity_ids = [int(item) for item in raw_activity_ids if str(item).strip().isdigit()]
                 if len(activity_ids) > 1:
-                    self.send_json({"error": "Solo se permite reservar una actividad por vez. Repeti el paso para sumar otra actividad."}, 400)
+                    self.send_json({"error": "Solo se permite inscribirse a una actividad por vez. Repeti el paso para sumar otra actividad."}, 400)
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")

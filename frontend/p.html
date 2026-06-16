@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portal del participante</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=20260615-5001">
 </head>
 <body class="credential-body">
   <main class="participant-portal">
@@ -26,7 +26,7 @@
 
     <section class="portal-grid">
       <article class="panel portal-main-activities" id="actividades">
-        <h2>Charlas para reservar</h2>
+        <h2>Charlas para inscribirse</h2>
         <div id="reservationNotice" class="reservation-inline-notice hidden"></div>
         <div id="availableActivities" class="portal-activity-list"></div>
       </article>
@@ -58,7 +58,7 @@
       </article>
 
       <article class="panel" id="reservas">
-        <h2>Mis reservas</h2>
+        <h2>Mis inscripciones</h2>
         <div id="myReservations" class="reservation-list"></div>
       </article>
 
@@ -112,7 +112,7 @@
     <div id="portalNotice" class="result"></div>
     <dialog id="reservationDialog" class="reservation-dialog">
       <form method="dialog" id="reservationConfirmForm" class="stack">
-        <h2>Confirmar reserva</h2>
+        <h2>Confirmar inscripcion</h2>
         <input name="activity_id" type="hidden">
         <div id="reservationDialogDetail" class="reservation-dialog-detail"></div>
         <label id="reservationVerificationLabel">
@@ -120,7 +120,7 @@
           <input name="verification_answer" inputmode="numeric" autocomplete="off">
         </label>
         <div class="confirmation-actions">
-          <button value="confirm" type="submit">Confirmar reserva</button>
+          <button value="confirm" type="submit">Confirmar inscripcion</button>
           <button value="cancel" type="button" class="ghost" id="reservationCancelBtn">Cancelar</button>
         </div>
       </form>
@@ -163,7 +163,7 @@
     }
 
     function reservationLabel(status) {
-      if (status === "confirmed") return "Confirmada";
+      if (status === "confirmed") return "Inscripta";
       if (status === "cancelled") return "Cancelada";
       return "Lista de espera";
     }
@@ -308,7 +308,7 @@
           <span>${escapeHtml(row.space_name || "-")}</span>
           <span class="pill">${escapeHtml(activityParticipantLabel(row))}</span>
         </article>
-      `).join("") || `<p>No tenes actividades reservadas.</p>`;
+      `).join("") || `<p>No tenes actividades inscriptas.</p>`;
       openPrintWindow("Agenda personal", `
         <main class="print-page">
           <section class="print-card">
@@ -342,9 +342,9 @@
       $("#downloadPdfBtn").href = `/api/credential.pdf?token=${encodeURIComponent(data.qr_payload)}`;
       $("#downloadPdfBtn").download = `${data.token}-credencial.pdf`;
 
-      $("#nextActivity").innerHTML = renderActivityHighlight(data.next_activity, "No tienes actividades reservadas.");
+      $("#nextActivity").innerHTML = renderActivityHighlight(data.next_activity, "No tienes actividades inscriptas.");
       $("#eventMode").innerHTML = `
-        ${renderActivityHighlight(data.current_activity, "No hay actividad actual reservada.")}
+        ${renderActivityHighlight(data.current_activity, "No hay actividad actual inscripta.")}
         <div class="event-mode-next">
           <strong>Proxima</strong>
           ${renderActivityHighlight(data.next_activity, "Sin proxima actividad.")}
@@ -367,7 +367,7 @@
           </div>
           ${row.status !== "cancelled" ? `<button type="button" class="portal-cancel danger-button" data-id="${row.id}">Cancelar</button>` : ""}
         </article>
-      `).join("") || `<p class="empty">Todavia no tenes actividades reservadas.</p>`;
+      `).join("") || `<p class="empty">Todavia no tenes actividades inscriptas.</p>`;
 
       $("#myReservations").innerHTML = (data.reservations || []).map((row) => `
         <article class="reservation-row ${row.status}">
@@ -378,7 +378,7 @@
             ${row.status !== "cancelled" ? `<button type="button" class="portal-cancel danger-button" data-id="${row.id}">Cancelar</button>` : ""}
           </div>
         </article>
-      `).join("") || `<p class="empty">Sin reservas.</p>`;
+      `).join("") || `<p class="empty">Sin inscripciones.</p>`;
 
       $("#myAttendances").innerHTML = (data.attendances || []).map((row) => `
         <article class="attendance-row">
@@ -402,10 +402,10 @@
           </div>
           ${row.reserved
             ? `<div class="portal-reserved-actions">
-                <span class="pill">${row.reservation_label || "Confirmada"}</span>
+                <span class="pill">${row.reservation_label || "Inscripta"}</span>
                 <button type="button" class="portal-cancel danger-button" data-id="${row.reservation_id}">Cancelar</button>
               </div>`
-            : `<button type="button" class="portal-reserve" data-id="${row.id}">Reservar</button>`}
+            : `<button type="button" class="portal-reserve" data-id="${row.id}">Inscribirme</button>`}
         </article>
       `).join("") || `<p class="empty">No hay actividades disponibles.</p>`;
 
@@ -477,7 +477,7 @@
     function openReservationDialog(activityId) {
       const remaining = Math.ceil((reserveLockedUntil - Date.now()) / 1000);
       if (remaining > 0) {
-        showReservationNotice("warn", `Espera ${formatWait(remaining)} antes de reservar otra actividad.`);
+        showReservationNotice("warn", `Espera ${formatWait(remaining)} antes de inscribirte a otra actividad.`);
         return;
       }
       const activity = (portal.activities || []).find((row) => Number(row.id) === Number(activityId));
@@ -493,7 +493,7 @@
           <span>${activity.space_name || "-"}</span>
           <span>${activity.public_availability || "Disponible"}</span>
         </article>
-        <p>Confirmas que queres reservar esta actividad?</p>
+        <p>Confirmas que queres inscribirte a esta actividad?</p>
       `;
       $("#reservationVerificationLabel").classList.toggle("hidden", !Number(portal.reservation_config?.reserva_requiere_verificacion_simple || 0));
       dialog.showModal();
@@ -516,14 +516,14 @@
       const count = activeReservationCount(result.portal || {});
       const cooldown = count > 0 && blockEvery > 0 && count % blockEvery === 0 ? blockSeconds : shortCooldown;
       reserveLockedUntil = Date.now() + cooldown * 1000;
-      showReservationNotice("success", `Reserva ${result.reservation.status === "confirmed" ? "confirmada" : "en lista de espera"}. Espera ${formatWait(cooldown)} antes de reservar otra actividad.`);
+      showReservationNotice("success", `Inscripcion ${result.reservation.status === "confirmed" ? "confirmada" : "en lista de espera"}. Espera ${formatWait(cooldown)} antes de inscribirte a otra actividad.`);
       render(result.portal);
     }
 
     async function cancelReservation(id) {
-      if (!confirm("Cancelar esta reserva")) return;
+      if (!confirm("Cancelar esta inscripcion")) return;
       const result = await api("/api/portal/reservations/status", { method: "POST", body: JSON.stringify({ token, id, status: "cancelled" }) });
-      $("#portalNotice").innerHTML = `<div class="panel success">Reserva cancelada</div>`;
+      $("#portalNotice").innerHTML = `<div class="panel success">Inscripcion cancelada</div>`;
       render(result.portal);
     }
 

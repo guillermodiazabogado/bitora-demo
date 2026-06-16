@@ -3,42 +3,599 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Credencial digital</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>Portal del participante</title>
+  <link rel="stylesheet" href="/styles.css?v=20260615-5001">
 </head>
 <body class="credential-body">
-  <main class="credential">
-    <div class="badge">Credencial digital</div>
-    <h1 id="eventName">Evento</h1>
-    <p id="personName"></p>
-    <img id="qrImg" alt="QR" class="qr">
-    <div id="token" class="token"></div>
-    <dl>
-      <dt>Tipo</dt><dd id="type"></dd>
-      <dt>Lugar</dt><dd id="venue"></dd>
-      <dt>Estado</dt><dd id="status"></dd>
-    </dl>
-    <button id="printCredentialBtn" class="credential-print" type="button">Imprimir</button>
+  <main class="participant-portal">
+    <section class="portal-head panel">
+      <div>
+        <span class="badge">Credencial digital</span>
+        <h1 id="eventName">Evento</h1>
+        <p id="personName"></p>
+        <div id="portalStatusLine" class="portal-status-line"></div>
+      </div>
+      <div class="portal-actions">
+        <button id="copyPortalBtn" type="button" class="ghost">Copiar enlace</button>
+        <button id="printCredentialBtn" type="button">Imprimir QR</button>
+        <button id="printAgendaBtn" type="button" class="ghost">Imprimir agenda</button>
+        <a id="downloadImageBtn" class="button ghost" href="#" download="credencial.png">Descargar imagen</a>
+        <a id="downloadPdfBtn" class="button ghost" href="#" download="credencial.pdf">Descargar PDF</a>
+      </div>
+    </section>
+
+    <section class="portal-grid">
+      <article class="panel portal-main-activities" id="actividades">
+        <h2>Charlas para inscribirse</h2>
+        <div id="reservationNotice" class="reservation-inline-notice hidden"></div>
+        <div id="availableActivities" class="portal-activity-list"></div>
+      </article>
+
+      <article class="panel credential-card" id="qr">
+        <h2>Mi credencial</h2>
+        <img id="qrImg" alt="QR" class="qr">
+        <div id="token" class="token"></div>
+        <dl>
+          <dt>Tipo</dt><dd id="type"></dd>
+          <dt>Lugar</dt><dd id="venue"></dd>
+          <dt>Estado</dt><dd id="status"></dd>
+        </dl>
+      </article>
+
+      <article class="panel portal-wide next-activity-card">
+        <h2>Proxima actividad</h2>
+        <div id="nextActivity"></div>
+      </article>
+
+      <article class="panel portal-wide event-mode-card">
+        <h2>Evento en curso</h2>
+        <div id="eventMode"></div>
+      </article>
+
+      <article class="panel" id="agenda">
+        <h2>Mi agenda</h2>
+        <div id="myAgenda" class="mini-list"></div>
+      </article>
+
+      <article class="panel" id="reservas">
+        <h2>Mis inscripciones</h2>
+        <div id="myReservations" class="reservation-list"></div>
+      </article>
+
+      <article class="panel portal-wide" id="asistencias">
+        <h2>Mis asistencias</h2>
+        <div id="myAttendances" class="attendance-list"></div>
+      </article>
+
+      <article class="panel">
+        <h2>Novedades</h2>
+        <div id="announcements" class="mini-list"></div>
+      </article>
+
+      <article class="panel">
+        <h2>Comunicaciones</h2>
+        <form id="preferencesForm" class="stack">
+          <input name="email" type="email" placeholder="Email">
+          <input name="phone" placeholder="Telefono">
+          <label class="toggle"><input name="acepta_email" type="checkbox"> Email operativo</label>
+          <label class="toggle"><input name="acepta_whatsapp" type="checkbox"> WhatsApp operativo</label>
+          <select name="canal_preferido">
+            <option value="email">Prefiero email</option>
+            <option value="whatsapp">Prefiero WhatsApp</option>
+            <option value="ambos">Prefiero ambos</option>
+            <option value="ninguno">Sin comunicaciones</option>
+          </select>
+          <button>Guardar preferencias</button>
+        </form>
+        <div id="communicationHistory" class="mini-list"></div>
+      </article>
+
+      <article class="panel">
+        <h2>Mi perfil</h2>
+        <form id="profileForm" class="stack">
+          <input name="first_name" placeholder="Nombre" required>
+          <input name="last_name" placeholder="Apellido" required>
+          <input name="company" placeholder="Empresa">
+          <input name="position" placeholder="Cargo">
+          <input name="email" type="email" placeholder="Email" required>
+          <input name="phone" placeholder="Telefono">
+          <button>Guardar perfil</button>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h2>Certificados</h2>
+        <div id="certificateStatus"></div>
+      </article>
+    </section>
+
+    <div id="portalNotice" class="result"></div>
+    <dialog id="reservationDialog" class="reservation-dialog">
+      <form method="dialog" id="reservationConfirmForm" class="stack">
+        <h2>Confirmar inscripcion</h2>
+        <input name="activity_id" type="hidden">
+        <div id="reservationDialogDetail" class="reservation-dialog-detail"></div>
+        <label id="reservationVerificationLabel">
+          Escribi el numero 7 para confirmar
+          <input name="verification_answer" inputmode="numeric" autocomplete="off">
+        </label>
+        <div class="confirmation-actions">
+          <button value="confirm" type="submit">Confirmar inscripcion</button>
+          <button value="cancel" type="button" class="ghost" id="reservationCancelBtn">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
   </main>
+
   <script>
+    const $ = (selector) => document.querySelector(selector);
+    const pathToken = location.pathname.startsWith("/p/") ? decodeURIComponent(location.pathname.split("/p/")[1] || "") : "";
     const params = new URLSearchParams(location.search);
-    const token = params.get("token") || "";
-    fetch(`/api/portal?token=${encodeURIComponent(token)}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        document.getElementById("eventName").textContent = data.event_name;
-        document.getElementById("personName").textContent = `${data.first_name} ${data.last_name}`;
-        document.getElementById("token").textContent = data.token;
-        document.getElementById("type").textContent = data.type;
-        document.getElementById("venue").textContent = data.venue || "-";
-        document.getElementById("status").textContent = data.checked_in_at ? "Acreditado" : data.status;
-        document.getElementById("qrImg").src = `/api/qr.svg?token=${encodeURIComponent(data.qr_payload)}`;
-      })
-      .catch(err => {
-        document.querySelector(".credential").innerHTML = `<h1>No encontrado</h1><p>${err.message}</p>`;
+    const token = (pathToken || params.get("token") || "").trim();
+    let portal = null;
+    let reserveLockedUntil = 0;
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
       });
-    document.getElementById("printCredentialBtn").addEventListener("click", () => window.print());
+      const data = await response.json();
+      if (!response.ok) {
+        const error = new Error(data.error || "Error inesperado");
+        error.data = data;
+        throw error;
+      }
+      return data;
+    }
+
+    function applyAppConfig(config) {
+      if (!config?.demo || document.querySelector(".demo-ribbon")) return;
+      const ribbon = document.createElement("div");
+      ribbon.className = "demo-ribbon";
+      ribbon.textContent = "BITORA DEMO";
+      document.body.appendChild(ribbon);
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      return new Date(value).toLocaleString();
+    }
+
+    function reservationLabel(status) {
+      if (status === "confirmed") return "Inscripta";
+      if (status === "cancelled") return "Cancelada";
+      return "Lista de espera";
+    }
+
+    function participantStatus(data) {
+      if (data.checked_in_at) return "Acreditada";
+      if (data.status === "cancelled") return "Cancelada";
+      if (data.status === "pending") return "Pendiente";
+      return "Confirmada";
+    }
+
+    function activityParticipantLabel(row) {
+      return row.participant_status || reservationLabel(row.status);
+    }
+
+    function minutesUntil(value) {
+      if (!value) return "";
+      const diff = Math.round((new Date(value).getTime() - Date.now()) / 60000);
+      if (diff <= 0) return "En curso";
+      if (diff === 1) return "Comienza en 1 minuto";
+      if (diff < 60) return `Comienza en ${diff} minutos`;
+      const hours = Math.floor(diff / 60);
+      const minutes = diff % 60;
+      return minutes ? `Comienza en ${hours} h ${minutes} min` : `Comienza en ${hours} h`;
+    }
+
+    function renderActivityHighlight(row, emptyText) {
+      if (!row) return `<p class="empty">${emptyText}</p>`;
+      return `
+        <article class="highlight-activity ${row.status}">
+          <div>
+            <strong>${row.title}</strong>
+            <span>${row.space_name || "-"} - ${formatDate(row.starts_at)}</span>
+          </div>
+          <p>${minutesUntil(row.starts_at) || activityParticipantLabel(row)}</p>
+          <span class="pill">${activityParticipantLabel(row)}</span>
+        </article>
+      `;
+    }
+
+    function formatWait(seconds) {
+      const total = Math.max(1, Number(seconds || 0));
+      if (total < 60) return `${total} segundos`;
+      const minutes = Math.floor(total / 60);
+      const rest = total % 60;
+      return rest ? `${minutes} min ${rest} seg` : `${minutes} minutos`;
+    }
+
+    function showReservationNotice(kind, message) {
+      const box = $("#reservationNotice");
+      box.className = `reservation-inline-notice ${kind}`;
+      box.textContent = message;
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function activeReservationCount(data) {
+      return (data.reservations || []).filter((row) => row.status !== "cancelled").length;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function openPrintWindow(title, body) {
+      const win = window.open("", "_blank", "width=520,height=760");
+      if (!win) {
+        $("#portalNotice").innerHTML = `<div class="panel danger">El navegador bloqueo la ventana de impresion.</div>`;
+        return;
+      }
+      win.document.write(`
+        <!doctype html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8">
+          <title>${escapeHtml(title)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f6f7f8; color: #17212b; font-family: Arial, Helvetica, sans-serif; }
+            .print-page { margin: 0 auto; max-width: 520px; padding: 18px; }
+            .print-card { background: #fff; border: 1px solid #d9e0e6; border-radius: 12px; padding: 18px; }
+            .credential-img { display: block; margin: 0 auto; max-width: 100%; width: 420px; }
+            .print-status { margin: 0 0 14px; padding: 12px; background: #eef5f7; border-radius: 8px; color: #116a7b; text-align: center; font-weight: 700; }
+            .print-status.danger { background: #fff2ef; color: #b71c12; }
+            h1 { font-size: 24px; margin: 0 0 4px; }
+            h2 { font-size: 18px; margin: 20px 0 10px; }
+            p, span { color: #617080; }
+            .agenda-row { border: 1px solid #d9e0e6; border-radius: 8px; margin: 8px 0; padding: 10px; }
+            .agenda-row strong, .agenda-row span { display: block; }
+            .pill { color: #116a7b; font-weight: 700; margin-top: 5px; }
+            @media print {
+              @page { margin: 10mm; }
+              body { background: #fff; }
+              .print-page { max-width: none; padding: 0; }
+              .print-card { border: 0; padding: 0; }
+              .credential-img { width: 90mm; }
+            }
+          </style>
+        </head>
+        <body>${body}</body>
+        </html>
+      `);
+      win.document.close();
+      win.focus();
+    }
+
+    function printCredential() {
+      if (!portal) return;
+      const imgUrl = new URL(`/api/credential.png?token=${encodeURIComponent(portal.qr_payload)}&inline=1`, location.origin).href;
+      openPrintWindow("Credencial QR", `
+        <main class="print-page">
+          <section class="print-card">
+            <p id="printStatus" class="print-status">Cargando credencial para imprimir...</p>
+            <img id="credentialPrintImage" class="credential-img" src="${imgUrl}" alt="Credencial QR">
+          </section>
+          <script>
+            const status = document.getElementById("printStatus");
+            const image = document.getElementById("credentialPrintImage");
+            image.addEventListener("load", () => {
+              status.style.display = "none";
+              setTimeout(() => window.print(), 250);
+            });
+            image.addEventListener("error", () => {
+              status.className = "print-status danger";
+              status.textContent = "No se pudo cargar la credencial. Volve al portal y actualiza la pagina.";
+            });
+          <\/script>
+        </main>
+      `);
+    }
+
+    function printAgenda() {
+      if (!portal) return;
+      const rows = (portal.reservations || []).map((row) => `
+        <article class="agenda-row">
+          <strong>${escapeHtml(row.title)}</strong>
+          <span>${escapeHtml(formatDate(row.starts_at))}</span>
+          <span>${escapeHtml(row.space_name || "-")}</span>
+          <span class="pill">${escapeHtml(activityParticipantLabel(row))}</span>
+        </article>
+      `).join("") || `<p>No tenes actividades inscriptas.</p>`;
+      openPrintWindow("Agenda personal", `
+        <main class="print-page">
+          <section class="print-card">
+            <h1>${escapeHtml(portal.event_name)}</h1>
+            <p>${escapeHtml(`${portal.first_name} ${portal.last_name}`)}</p>
+            <h2>Agenda personal</h2>
+            ${rows}
+          </section>
+          <script>setTimeout(() => window.print(), 200);<\/script>
+        </main>
+      `);
+    }
+
+    function render(data) {
+      portal = data;
+      document.title = `${data.first_name} ${data.last_name} - ${data.event_name}`;
+      $("#eventName").textContent = data.event_name;
+      $("#personName").textContent = `${data.first_name} ${data.last_name}`;
+      $("#portalStatusLine").innerHTML = `
+        <span>${data.type}</span>
+        <span>${participantStatus(data)}</span>
+        <span>${data.venue || "-"}</span>
+      `;
+      $("#token").textContent = data.token;
+      $("#type").textContent = data.type;
+      $("#venue").textContent = data.venue || "-";
+      $("#status").textContent = participantStatus(data);
+      $("#qrImg").src = `/api/qr.svg?token=${encodeURIComponent(data.qr_payload)}`;
+      $("#downloadImageBtn").href = `/api/credential.png?token=${encodeURIComponent(data.qr_payload)}`;
+      $("#downloadImageBtn").download = `${data.token}-credencial.png`;
+      $("#downloadPdfBtn").href = `/api/credential.pdf?token=${encodeURIComponent(data.qr_payload)}`;
+      $("#downloadPdfBtn").download = `${data.token}-credencial.pdf`;
+
+      $("#nextActivity").innerHTML = renderActivityHighlight(data.next_activity, "No tienes actividades inscriptas.");
+      $("#eventMode").innerHTML = `
+        ${renderActivityHighlight(data.current_activity, "No hay actividad actual inscripta.")}
+        <div class="event-mode-next">
+          <strong>Proxima</strong>
+          ${renderActivityHighlight(data.next_activity, "Sin proxima actividad.")}
+        </div>
+        <div class="mini-list">
+          ${(data.announcements || []).slice(0, 3).map((row) => `
+            <div class="mini-row">
+              <strong>${row.title}</strong>
+              <span>${row.content}</span>
+            </div>
+          `).join("") || `<p class="empty">Sin avisos recientes.</p>`}
+        </div>
+      `;
+
+      $("#myAgenda").innerHTML = (data.reservations || []).map((row) => `
+        <article class="mini-row reservation-row ${row.status}">
+          <div>
+            <strong>${row.title}</strong>
+            <span>${formatDate(row.starts_at)} - ${row.space_name} - ${activityParticipantLabel(row)}</span>
+          </div>
+          ${row.status !== "cancelled" ? `<button type="button" class="portal-cancel danger-button" data-id="${row.id}">Cancelar</button>` : ""}
+        </article>
+      `).join("") || `<p class="empty">Todavia no tenes actividades inscriptas.</p>`;
+
+      $("#myReservations").innerHTML = (data.reservations || []).map((row) => `
+        <article class="reservation-row ${row.status}">
+          <strong>${row.title}</strong>
+          <span>${formatDate(row.starts_at)} - ${row.space_name}</span>
+          <span class="pill">${activityParticipantLabel(row)}</span>
+          <div class="reservation-actions">
+            ${row.status !== "cancelled" ? `<button type="button" class="portal-cancel danger-button" data-id="${row.id}">Cancelar</button>` : ""}
+          </div>
+        </article>
+      `).join("") || `<p class="empty">Sin inscripciones.</p>`;
+
+      $("#myAttendances").innerHTML = (data.attendances || []).map((row) => `
+        <article class="attendance-row">
+          <div>
+            <strong>${row.title}</strong>
+            <span>${formatDate(row.starts_at)} - ${row.space_name || "-"}</span>
+          </div>
+          <span class="pill">${row.status || "Pendiente"}</span>
+          <span>${Number(row.attendance_percentage || 0)}%</span>
+          <span class="pill">${row.eligibility_status || "Pendiente"}</span>
+          ${row.certificate_generated_at ? `<a class="button ghost" href="/api/certificate.pdf?token=${encodeURIComponent(data.token)}&activity_id=${row.activity_id}" target="_blank">Certificado</a>` : ""}
+        </article>
+      `).join("") || `<p class="empty">Todavia no hay asistencias registradas.</p>`;
+
+      $("#availableActivities").innerHTML = (data.activities || []).map((row) => `
+        <article class="portal-activity">
+          <div>
+            <strong>${row.title}</strong>
+            <span>${formatDate(row.starts_at)} - ${row.space_name} - ${row.activity_type}</span>
+            <small>${row.public_availability || ""}</small>
+          </div>
+          ${row.reserved
+            ? `<div class="portal-reserved-actions">
+                <span class="pill">${row.reservation_label || "Inscripta"}</span>
+                <button type="button" class="portal-cancel danger-button" data-id="${row.reservation_id}">Cancelar</button>
+              </div>`
+            : `<button type="button" class="portal-reserve" data-id="${row.id}">Inscribirme</button>`}
+        </article>
+      `).join("") || `<p class="empty">No hay actividades disponibles.</p>`;
+
+      $("#announcements").innerHTML = (data.announcements || []).map((row) => `
+        <div class="mini-row">
+          <strong>${row.title}</strong>
+          <span>${row.content}</span>
+        </div>
+      `).join("") || `<p class="empty">Sin novedades por ahora.</p>`;
+
+      const pref = data.communication_preference || {};
+      $("#preferencesForm").elements.email.value = pref.email || data.email || "";
+      $("#preferencesForm").elements.phone.value = pref.phone || data.phone || "";
+      $("#preferencesForm").elements.acepta_email.checked = Number(pref.acepta_email || 0) === 1;
+      $("#preferencesForm").elements.acepta_whatsapp.checked = Number(pref.acepta_whatsapp || 0) === 1;
+      $("#preferencesForm").elements.canal_preferido.value = pref.canal_preferido || "email";
+      $("#communicationHistory").innerHTML = (data.communications || []).map((row) => `
+        <div class="mini-row">
+          <strong>${row.asunto || row.tipo}</strong>
+          <span>${row.canal} - ${row.estado} - ${formatDate(row.fecha)}</span>
+        </div>
+      `).join("") || `<p class="empty">Sin comunicaciones registradas.</p>`;
+
+      const profileForm = $("#profileForm");
+      profileForm.elements.first_name.value = data.first_name || "";
+      profileForm.elements.last_name.value = data.last_name || "";
+      profileForm.elements.company.value = data.company || "";
+      profileForm.elements.position.value = data.position || "";
+      profileForm.elements.email.value = data.email || "";
+      profileForm.elements.phone.value = data.phone || "";
+
+      const attendances = data.attendances || [];
+      const eligible = attendances.filter((row) => row.eligibility_status === "Elegible");
+      const pending = attendances.filter((row) => row.eligibility_status === "Pendiente");
+      const notEligible = attendances.filter((row) => row.eligibility_status === "No elegible");
+      const certificateTitle = eligible.length
+        ? "Elegible para certificado"
+        : pending.length
+          ? "Certificado pendiente"
+          : notEligible.length
+            ? "No elegible para certificado"
+            : "Sin asistencias registradas";
+      $("#certificateStatus").innerHTML = `
+        <div class="certificate-prep">
+          <strong>${certificateTitle}</strong>
+          <span>${eligible.length} actividad(es) elegible(s)</span>
+          <span>${pending.length} pendiente(s) - ${notEligible.length} no elegible(s)</span>
+        </div>
+        <div class="mini-list">
+          ${attendances.map((row) => `
+            <div class="mini-row">
+              <strong>${row.title}</strong>
+              <span>${Number(row.attendance_percentage || 0)}% - ${row.status || "Pendiente"} - ${row.eligibility_status || "Pendiente"}</span>
+              ${row.certificate_generated_at ? `<a class="button ghost" href="/api/certificate.pdf?token=${encodeURIComponent(data.token)}&activity_id=${row.activity_id}" target="_blank">Imprimir certificado</a>` : ""}
+            </div>
+          `).join("") || `<p class="empty">Todavia no hay asistencias para evaluar certificados.</p>`}
+        </div>
+      `;
+
+      document.querySelectorAll(".portal-reserve").forEach((button) => button.addEventListener("click", () => openReservationDialog(button.dataset.id)));
+      document.querySelectorAll(".portal-cancel").forEach((button) => button.addEventListener("click", () => cancelReservation(button.dataset.id)));
+    }
+
+    async function loadPortal() {
+      const data = await api(`/api/portal?token=${encodeURIComponent(token)}`);
+      render(data);
+    }
+
+    function openReservationDialog(activityId) {
+      const remaining = Math.ceil((reserveLockedUntil - Date.now()) / 1000);
+      if (remaining > 0) {
+        showReservationNotice("warn", `Espera ${formatWait(remaining)} antes de inscribirte a otra actividad.`);
+        return;
+      }
+      const activity = (portal.activities || []).find((row) => Number(row.id) === Number(activityId));
+      if (!activity) return;
+      const dialog = $("#reservationDialog");
+      const form = $("#reservationConfirmForm");
+      form.elements.activity_id.value = activity.id;
+      form.elements.verification_answer.value = "";
+      $("#reservationDialogDetail").innerHTML = `
+        <article class="reservation-dialog-card">
+          <strong>${activity.title}</strong>
+          <span>${formatDate(activity.starts_at)}</span>
+          <span>${activity.space_name || "-"}</span>
+          <span>${activity.public_availability || "Disponible"}</span>
+        </article>
+        <p>Confirmas que queres inscribirte a esta actividad?</p>
+      `;
+      $("#reservationVerificationLabel").classList.toggle("hidden", !Number(portal.reservation_config?.reserva_requiere_verificacion_simple || 0));
+      dialog.showModal();
+    }
+
+    async function reserveActivity(activityId, verificationAnswer) {
+      const result = await api("/api/portal/reserve", {
+        method: "POST",
+        body: JSON.stringify({
+          token,
+          activity_id: activityId,
+          confirmed: true,
+          verification_answer: verificationAnswer,
+        }),
+      });
+      const config = result.portal?.reservation_config || portal?.reservation_config || {};
+      const shortCooldown = Math.max(10, Number(config.reserva_cooldown_segundos || 10));
+      const blockEvery = Number(config.reserva_bloque_cada || 5);
+      const blockSeconds = Number(config.reserva_bloque_segundos || 300);
+      const count = activeReservationCount(result.portal || {});
+      const cooldown = count > 0 && blockEvery > 0 && count % blockEvery === 0 ? blockSeconds : shortCooldown;
+      reserveLockedUntil = Date.now() + cooldown * 1000;
+      showReservationNotice("success", `Inscripcion ${result.reservation.status === "confirmed" ? "confirmada" : "en lista de espera"}. Espera ${formatWait(cooldown)} antes de inscribirte a otra actividad.`);
+      render(result.portal);
+    }
+
+    async function cancelReservation(id) {
+      if (!confirm("Cancelar esta inscripcion")) return;
+      const result = await api("/api/portal/reservations/status", { method: "POST", body: JSON.stringify({ token, id, status: "cancelled" }) });
+      $("#portalNotice").innerHTML = `<div class="panel success">Inscripcion cancelada</div>`;
+      render(result.portal);
+    }
+
+    async function savePreferences(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const result = await api("/api/portal/preferences", {
+        method: "POST",
+        body: JSON.stringify({
+          token,
+          acepta_email: form.elements.acepta_email.checked,
+          acepta_whatsapp: form.elements.acepta_whatsapp.checked,
+          email: form.elements.email.value,
+          phone: form.elements.phone.value,
+          canal_preferido: form.elements.canal_preferido.value,
+        }),
+      });
+      $("#portalNotice").innerHTML = `<div class="panel success">Preferencias guardadas</div>`;
+      render(result.portal);
+    }
+
+    async function saveProfile(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const result = await api("/api/portal/profile", {
+        method: "POST",
+        body: JSON.stringify({
+          token,
+          first_name: form.elements.first_name.value,
+          last_name: form.elements.last_name.value,
+          company: form.elements.company.value,
+          position: form.elements.position.value,
+          email: form.elements.email.value,
+          phone: form.elements.phone.value,
+        }),
+      });
+      $("#portalNotice").innerHTML = `<div class="panel success">Perfil actualizado</div>`;
+      render(result.portal);
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      $("#printCredentialBtn").addEventListener("click", printCredential);
+      $("#printAgendaBtn").addEventListener("click", printAgenda);
+      $("#copyPortalBtn").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(location.href);
+        $("#portalNotice").innerHTML = `<div class="panel success">Enlace copiado</div>`;
+      });
+      $("#preferencesForm").addEventListener("submit", savePreferences);
+      $("#profileForm").addEventListener("submit", saveProfile);
+      $("#reservationCancelBtn").addEventListener("click", () => $("#reservationDialog").close());
+      $("#reservationConfirmForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        try {
+          await reserveActivity(form.elements.activity_id.value, form.elements.verification_answer.value);
+          $("#reservationDialog").close();
+        } catch (err) {
+          const wait = err.data?.wait_seconds;
+          if (wait) reserveLockedUntil = Date.now() + Number(wait) * 1000;
+          showReservationNotice("danger", wait ? `${err.message}. Tiempo restante: ${formatWait(wait)}.` : err.message);
+        }
+      });
+      try {
+        applyAppConfig(await api("/api/app-config"));
+        if (!token) {
+          throw new Error("Falta el token del participante. Entra desde el enlace personal completo que se genera al inscribirse.");
+        }
+        await loadPortal();
+      } catch (err) {
+        $(".participant-portal").innerHTML = `<section class="panel danger"><h1>No encontrado</h1><p>${err.message}</p></section>`;
+      }
+    });
   </script>
 </body>
 </html>

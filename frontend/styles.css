@@ -611,6 +611,12 @@ textarea:focus {
   width: auto;
 }
 
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin: -4px 0 0;
+}
+
 code,
 .token {
   background: #eef3f5;

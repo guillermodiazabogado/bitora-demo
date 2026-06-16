@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=20260615-5001">
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,7 @@
       <button data-view="reception">Recepcion</button>
       <button data-view="agenda">Agenda</button>
       <button data-view="access">Acceso</button>
+      <button data-view="reports">Reportes</button>
       <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
     </nav>
@@ -51,6 +52,72 @@
           <h2>Evento activo</h2>
           <select id="eventSelect"></select>
           <a id="publicEventLink" class="button ghost full-link" href="#" target="_blank">Abrir landing publica</a>
+          <p class="empty">Usa este panel para controlar la operacion en vivo. La configuracion y el seguimiento analitico estan en Reportes.</p>
+        </aside>
+
+        <section class="content">
+          <div class="metrics">
+            <div><span id="mTotal">0</span><small>Inscriptos</small></div>
+            <div><span id="mIn">0</span><small>Acreditados</small></div>
+            <div><span id="mPending">0</span><small>Pendientes</small></div>
+          </div>
+          <div class="panel summary-panel">
+            <h2>Resumen operativo</h2>
+            <div id="summaryStatus" class="summary-status"></div>
+          </div>
+          <div class="panel">
+            <h2>Pantalla publica</h2>
+            <form id="displayConfigForm" class="display-config-form">
+              <select name="mode" id="displayMode">
+                <option value="airport">Modo aeropuerto</option>
+                <option value="now">Ahora / proximas</option>
+                <option value="room">Por sala</option>
+              </select>
+              <input name="refresh_seconds" id="displayRefresh" type="number" min="3" value="10" placeholder="Refresh">
+              <label class="toggle"><input name="paused" id="displayPaused" type="checkbox"> Pausar</label>
+              <input name="message" id="displayMessageInput" placeholder="Mensaje general">
+              <button>Guardar pantalla</button>
+            </form>
+            <div class="display-picker">
+              <div class="display-picker-head">
+                <strong>Charlas visibles en pantalla</strong>
+                <span>Si no marcas ninguna, se muestran todas.</span>
+              </div>
+              <div id="displayActivityPicker" class="display-activity-picker"></div>
+            </div>
+          </div>
+          <div class="panel alerts-panel">
+            <h2>Alertas</h2>
+            <div id="alertsList" class="alerts-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Ultimos accesos</h2>
+            <div id="logs" class="logs"></div>
+          </div>
+          <div class="panel">
+            <h2>Ultimos rechazos</h2>
+            <div id="rejectionsList" class="logs"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="reports" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Reportes</h1>
+          <p>Analitica, seguimiento tecnico y configuracion avanzada del evento.</p>
+        </div>
+        <div class="actions">
+          <a id="reportsExportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
+          <a id="reportsExportJsonLink" class="button ghost" href="#">Exportar JSON</a>
+          <a id="reportsBackupLink" class="button ghost" href="/api/backup">Backup</a>
+        </div>
+      </div>
+
+      <div class="layout">
+        <aside class="panel">
+          <h2>Configuracion del evento</h2>
           <form id="eventForm" class="stack">
             <input name="name" placeholder="Nombre del evento" required>
             <input name="venue" placeholder="Lugar">
@@ -73,6 +140,7 @@
               <option value="entry_exit">Ingreso y egreso</option>
             </select>
             <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+            <input name="activity_access_open_minutes_before" type="number" min="0" value="10" placeholder="Minutos previos para habilitar QR de actividades">
             <select name="generar_certificados">
               <option value="1">Preparar certificados</option>
               <option value="0">Sin certificados</option>
@@ -112,6 +180,7 @@
                 <option value="entry_exit">Ingreso y egreso</option>
               </select>
               <input name="porcentaje_minimo_asistencia" type="number" min="0" max="100" value="80" placeholder="Minimo asistencia %">
+              <input name="activity_access_open_minutes_before" type="number" min="0" value="10" placeholder="Minutos previos para habilitar QR de actividades">
               <select name="generar_certificados">
                 <option value="1">Preparar certificados</option>
                 <option value="0">Sin certificados</option>
@@ -132,7 +201,7 @@
           <details class="prepare-box">
             <summary>Crear Demo Real</summary>
             <form id="demoRealForm" class="stack">
-              <p>Genera 500 participantes simulados, 5 salas, 20 actividades, reservas, listas de espera, pantalla publica y comunicaciones demo.</p>
+              <p>Genera 500 participantes simulados, 5 salas, 20 actividades, inscripciones, listas de espera, pantalla publica y comunicaciones demo.</p>
               <input name="confirm" placeholder="Escribir DEMO para confirmar" required>
               <button class="danger-button">Crear demo real</button>
             </form>
@@ -141,11 +210,6 @@
         </aside>
 
         <section class="content">
-          <div class="metrics">
-            <div><span id="mTotal">0</span><small>Inscriptos</small></div>
-            <div><span id="mIn">0</span><small>Acreditados</small></div>
-            <div><span id="mPending">0</span><small>Pendientes</small></div>
-          </div>
           <div class="panel system-panel">
             <h2>Estado del sistema</h2>
             <div id="systemStatus" class="system-status"></div>
@@ -153,10 +217,6 @@
           <div class="panel network-panel">
             <h2>Red local</h2>
             <div id="networkStatus" class="network-status"></div>
-          </div>
-          <div class="panel summary-panel">
-            <h2>Resumen operativo</h2>
-            <div id="summaryStatus" class="summary-status"></div>
           </div>
           <div class="panel marketing-panel">
             <h2>Marketing y conversion</h2>
@@ -166,52 +226,19 @@
             <h2>Experiencia participante</h2>
             <div id="participantMetricsStatus" class="summary-grid"></div>
           </div>
-          <div id="demoRealPanel" class="panel hidden">
-            <h2>Participantes demo para probar</h2>
-            <div id="demoParticipants" class="demo-participants"></div>
-            <h2>Guia de prueba demo</h2>
-            <ol id="demoGuide" class="demo-guide"></ol>
-          </div>
           <div class="panel readiness-panel">
-            <h2>Checklist pre-evento</h2>
+            <h2>Checklist previa al evento</h2>
             <div id="readinessStatus" class="readiness-status"></div>
-          </div>
-          <div class="panel">
-            <h2>Pantalla publica</h2>
-            <form id="displayConfigForm" class="display-config-form">
-              <select name="mode" id="displayMode">
-                <option value="airport">Modo aeropuerto</option>
-                <option value="now">Ahora / proximas</option>
-                <option value="room">Por sala</option>
-              </select>
-              <input name="refresh_seconds" id="displayRefresh" type="number" min="3" value="10" placeholder="Refresh">
-              <label class="toggle"><input name="paused" id="displayPaused" type="checkbox"> Pausar</label>
-              <input name="message" id="displayMessageInput" placeholder="Mensaje general">
-              <button>Guardar pantalla</button>
-            </form>
-            <div class="display-picker">
-              <div class="display-picker-head">
-                <strong>Charlas visibles en pantalla</strong>
-                <span>Si no marcas ninguna, se muestran todas.</span>
-              </div>
-              <div id="displayActivityPicker" class="display-activity-picker"></div>
-            </div>
-          </div>
-          <div class="panel alerts-panel">
-            <h2>Alertas</h2>
-            <div id="alertsList" class="alerts-list"></div>
           </div>
           <div class="panel types-panel">
             <h2>Tipos y cupos</h2>
             <div id="typesList" class="types-list"></div>
           </div>
-          <div class="panel">
-            <h2>Ultimos accesos</h2>
-            <div id="logs" class="logs"></div>
-          </div>
-          <div class="panel">
-            <h2>Ultimos rechazos</h2>
-            <div id="rejectionsList" class="logs"></div>
+          <div id="demoRealPanel" class="panel hidden">
+            <h2>Participantes demo para probar</h2>
+            <div id="demoParticipants" class="demo-participants"></div>
+            <h2>Guia de prueba demo</h2>
+            <ol id="demoGuide" class="demo-guide"></ol>
           </div>
         </section>
       </div>
@@ -294,7 +321,7 @@
           <h1>Agenda</h1>
           <p>Espacios, actividades y transicion minima por sala.</p>
         </div>
-        <a id="exportReservationsLink" class="button ghost" href="#">Exportar reservas</a>
+        <a id="exportReservationsLink" class="button ghost" href="#">Exportar inscripciones</a>
       </div>
       <div class="layout">
         <aside class="panel">
@@ -326,8 +353,8 @@
             <input name="capacity" type="number" min="0" placeholder="Cupo">
             <select name="reservation_mode">
               <option value="free">Libre acceso</option>
-              <option value="optional">Reserva opcional</option>
-              <option value="required">Reserva obligatoria</option>
+              <option value="optional">Inscripcion opcional</option>
+              <option value="required">Inscripcion obligatoria</option>
               <option value="invited">Solo invitados</option>
             </select>
             <select name="requiere_asistencia">
@@ -344,21 +371,23 @@
               <option value="entry_only">Solo ingreso</option>
               <option value="entry_exit">Ingreso y egreso</option>
             </select>
+            <input name="access_open_minutes_before" type="number" min="0" placeholder="Minutos previos QR actividad (opcional)">
+            <p class="field-help">Si se deja vacio, se usa la configuracion general del evento.</p>
             <textarea name="description" placeholder="Descripcion"></textarea>
             <button>Agregar actividad</button>
           </form>
           <div id="agendaAlert" class="result"></div>
           <div class="panel reservation-panel">
-            <h2>Reservas</h2>
+            <h2>Inscripciones</h2>
             <form id="reservationForm" class="reservation-form">
               <select name="accreditation_id" id="reservationAccreditationSelect" required></select>
               <select name="activity_id" id="reservationActivitySelect" required></select>
-              <button>Reservar</button>
+              <button>Inscribir</button>
             </form>
             <div id="reservationsList" class="reservation-list"></div>
           </div>
           <div class="panel">
-            <h2>Bolsas de cupos</h2>
+            <h2>Bolsas de disponibilidad</h2>
             <div id="capacityBagsList" class="bags-list"></div>
           </div>
           <div id="activityDetailPanel" class="panel hidden">
@@ -462,6 +491,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260614-4054"></script>
+  <script src="/app.js?v=20260615-5001"></script>
 </body>
 </html>

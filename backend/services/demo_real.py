@@ -74,7 +74,7 @@ class DemoRealService:
             "Abrir landing publica.",
             "Inscribir nuevo participante.",
             "Abrir portal.",
-            "Reservar actividad disponible.",
+            "Inscribirse a una actividad disponible.",
             "Intentar reservar actividad completa.",
             "Entrar en lista de espera.",
             "Cancelar reserva confirmada.",

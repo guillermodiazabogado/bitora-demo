@@ -99,9 +99,12 @@ function updateMetrics() {
   $("#exportAttendancesLink").href = state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#";
   $("#exportCertificatesLink").href = state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#";
   $("#exportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
+  $("#reportsExportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
+  $("#reportsExportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
   $("#publicEventLink").href = state.eventId ? `/e.html?event_id=${state.eventId}` : "#";
   $("#publicDisplayLink").href = state.eventId ? `/display.html?event_id=${state.eventId}` : "#";
   $("#backupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
+  $("#reportsBackupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
 }
 
 async function loadAccreditations() {
@@ -361,7 +364,7 @@ async function loadDemoReal() {
         <a class="button" href="${row.portal_url}" target="_blank">Abrir portal</a>
         <a class="button ghost" href="${row.qr_url}" target="_blank">Ver QR</a>
         <a class="button ghost" href="${row.portal_url}#agenda" target="_blank">Agenda</a>
-        <a class="button ghost" href="${row.portal_url}#actividades" target="_blank">Reservas</a>
+        <a class="button ghost" href="${row.portal_url}#actividades" target="_blank">Inscripciones</a>
       </div>
     </article>
   `).join("");
@@ -409,7 +412,7 @@ async function loadAgenda() {
       </div>
       <span class="pill">${activityCapacityLabel(row)}</span>
       <button type="button" class="display-toggle" data-id="${row.id}">Pantalla</button>
-      <a class="button ghost" href="/api/reservations.csv?event_id=${state.eventId}&activity_id=${row.id}">Reservas CSV</a>
+      <a class="button ghost" href="/api/reservations.csv?event_id=${state.eventId}&activity_id=${row.id}">Inscripciones CSV</a>
       <a class="button ghost" href="/api/attendances.csv?event_id=${state.eventId}&activity_id=${row.id}">Asistencias CSV</a>
     </article>
   `}).join("") || `<p class="empty">Todavia no hay actividades cargadas.</p>`;
@@ -516,7 +519,7 @@ function renderReservations() {
         ${row.status !== "cancelled" ? `<button type="button" class="reservation-status danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>` : ""}
       </div>
     </article>
-  `).join("") || `<p class="empty">Todavia no hay reservas.</p>`;
+  `).join("") || `<p class="empty">Todavia no hay inscripciones.</p>`;
   $$(".reservation-status").forEach((button) => (
     button.addEventListener("click", () => changeReservationStatus(button.dataset.id, button.dataset.status))
   ));
@@ -584,7 +587,7 @@ async function loadSummary() {
       <div><strong>${Number(acc.checked || 0)}</strong><span>Acreditadas</span></div>
       <div><strong>${Number(acc.pending || 0)}</strong><span>Pendientes</span></div>
       <div><strong>${Number(acc.cancelled || 0)}</strong><span>Canceladas</span></div>
-      <div><strong>${reservations.confirmed || 0}</strong><span>Reservas confirmadas</span></div>
+      <div><strong>${reservations.confirmed || 0}</strong><span>Inscripciones confirmadas</span></div>
       <div><strong>${reservations.waitlisted || 0}</strong><span>En espera</span></div>
       <div><strong>${access.granted || 0}</strong><span>Accesos OK</span></div>
       <div><strong>${access.rejected || 0}</strong><span>Rechazos</span></div>
@@ -593,15 +596,6 @@ async function loadSummary() {
       <div><strong>${Number(summary.attendance?.average_percentage || 0)}%</strong><span>Participacion promedio</span></div>
     </div>
     <div class="summary-columns">
-      <div>
-        <h3>Por tipo</h3>
-        ${summary.by_type.map((row) => `
-          <div class="mini-row">
-            <strong>${row.type}</strong>
-            <span>${Number(row.checked || 0)}/${Number(row.active || 0)} acreditadas - ${Number(row.cancelled || 0)} canceladas</span>
-          </div>
-        `).join("") || `<p class="empty">Sin tipos registrados.</p>`}
-      </div>
       <div>
         <h3>Por actividad</h3>
         ${summary.by_activity.map((row) => `
@@ -615,7 +609,7 @@ async function loadSummary() {
   `;
   $("#participantMetricsStatus").innerHTML = `
     <div><strong>${participantMetrics.registered || 0}</strong><span>Registrados</span></div>
-    <div><strong>${participantMetrics.with_reservations || 0}</strong><span>Con reservas</span></div>
+    <div><strong>${participantMetrics.with_reservations || 0}</strong><span>Con inscripciones</span></div>
     <div><strong>${participantMetrics.with_agenda || 0}</strong><span>Con agenda</span></div>
     <div><strong>${participantMetrics.consent_email || 0}</strong><span>Email OK</span></div>
     <div><strong>${participantMetrics.consent_whatsapp || 0}</strong><span>WhatsApp OK</span></div>
@@ -754,7 +748,7 @@ async function saveReservation(event) {
   data.actor = state.currentUser;
   try {
     const result = await api("/api/reservations", { method: "POST", body: JSON.stringify(data) });
-    $("#agendaAlert").innerHTML = `<div class="panel success">Reserva ${result.status === "confirmed" ? "confirmada" : "en lista de espera"}</div>`;
+    $("#agendaAlert").innerHTML = `<div class="panel success">Inscripcion ${result.status === "confirmed" ? "confirmada" : "en lista de espera"}</div>`;
     await Promise.all([loadAgenda(), loadAlerts(), loadSummary(), loadReadiness(), loadAudit()]);
   } catch (err) {
     $("#agendaAlert").innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -815,13 +809,17 @@ async function openActivityDetail(activityId) {
       <div><strong>${new Date(detail.activity.starts_at).toLocaleString()}</strong><span>${new Date(detail.activity.ends_at).toLocaleTimeString()}</span></div>
       <div><strong>${detail.activity.capacity || "sin limite"}</strong><span>Capacidad fisica</span></div>
       <div><strong>${detail.availability.label}</strong><span>Disponibilidad publica</span></div>
-      <div><strong>${Number(detail.stats.confirmed || 0)}</strong><span>Reservas</span></div>
+      <div><strong>${Number(detail.stats.confirmed || 0)}</strong><span>Inscripciones</span></div>
       <div><strong>${Number(detail.stats.waitlisted || 0)}</strong><span>Lista espera</span></div>
       <div><strong>${Number(detail.attendance?.present || 0)}</strong><span>Presentes</span></div>
       <div><strong>${Number(detail.attendance?.absent || 0)}</strong><span>Ausentes</span></div>
       <div><strong>${Number(detail.attendance?.partial || 0)}</strong><span>Parciales</span></div>
       <div><strong>${Number(detail.attendance?.eligible || 0)}</strong><span>Elegibles</span></div>
       <div><strong>${Number(detail.attendance?.average_percentage || 0)}%</strong><span>Promedio</span></div>
+      <div><strong>${Number(detail.access_window?.minutes_before || 0)} min</strong><span>QR habilita antes</span></div>
+      <div><strong>${new Date(detail.access_window?.opens_at || detail.activity.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong><span>QR habilitado desde</span></div>
+      <div><strong>${Number(detail.access_window?.early_attempts || 0)}</strong><span>Intentos anticipados</span></div>
+      <div><strong>${Number(detail.access_window?.rejected || 0)}</strong><span>Rechazos actividad</span></div>
     </div>
     <h3>Asistencia</h3>
     <div class="mini-list">
@@ -864,15 +862,15 @@ async function updateAttendanceManual(id, status, percentage, activityId) {
 }
 
 async function changeReservationStatus(id, status) {
-  const label = status === "cancelled" ? "cancelar reserva" : "promover reserva";
+  const label = status === "cancelled" ? "cancelar inscripcion" : "promover inscripcion";
   if (!confirm(`Confirmar ${label}`)) return;
   try {
     const result = await api("/api/reservations/status", {
       method: "POST",
       body: JSON.stringify({ id, status, actor: state.currentUser }),
     });
-    const extra = result.promoted ? " y se promovio una reserva en espera" : "";
-    $("#agendaAlert").innerHTML = `<div class="panel success">Reserva actualizada${extra}</div>`;
+    const extra = result.promoted ? " y se promovio una inscripcion en espera" : "";
+    $("#agendaAlert").innerHTML = `<div class="panel success">Inscripcion actualizada${extra}</div>`;
     await Promise.all([loadAgenda(), loadAlerts(), loadSummary(), loadReadiness(), loadAudit(), loadSystemStatus()]);
   } catch (err) {
     $("#agendaAlert").innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -1194,7 +1192,11 @@ function stopCameraScan() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  $$("nav button").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$("nav button").forEach((button) => button.addEventListener("click", () => {
+    setView(button.dataset.view);
+    const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
+    history.replaceState(null, "", url);
+  }));
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
     updateMetrics();
@@ -1233,4 +1235,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (event.key === "Enter") validateAccess();
   });
   await loadEvents();
+  const initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
+    setView(initialView);
+  }
 });

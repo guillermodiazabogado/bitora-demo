@@ -153,23 +153,11 @@ async function register(event) {
     resultBox.innerHTML = `
       <div class="panel success">
         <h2>Inscripcion confirmada</h2>
-        <p>Tu inscripcion fue confirmada.</p>
-        <div class="confirmation-actions">
-          <a class="button" href="${result.portal_url}">Ir a mi portal</a>
-          <a class="button ghost" href="${result.portal_url}#qr">Ver mi QR</a>
-          <a class="button ghost" href="${result.portal_url}#actividades">Elegir charlas</a>
-          <button type="button" class="copy-portal-link" data-url="${result.portal_url}">Copiar enlace personal</button>
-        </div>
+        <p>Estamos abriendo tu portal personal.</p>
       </div>
     `;
-    resultBox.querySelector(".copy-portal-link")?.addEventListener("click", async (event) => {
-      await navigator.clipboard.writeText(new URL(event.currentTarget.dataset.url, location.origin).href);
-      event.currentTarget.textContent = "Enlace copiado";
-    });
     form.reset();
-    setTimeout(() => {
-      location.href = result.portal_url;
-    }, 2500);
+    location.href = result.portal_url;
   } catch (err) {
     resultBox.innerHTML = `<div class="panel danger">${err.message}</div>`;
   }

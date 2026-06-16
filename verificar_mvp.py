@@ -159,6 +159,7 @@ def run_checks() -> None:
                     "capacity": 1,
                     "reservation_mode": "required",
                     "activity_type": "Workshop",
+                    "access_open_minutes_before": 999999,
                 },
                 201,
             )

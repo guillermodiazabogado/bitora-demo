@@ -10,11 +10,15 @@ const state = {
   alerts: [],
   systemStatus: null,
   summary: null,
+  attendanceDashboard: null,
+  marketingDashboard: null,
   readiness: null,
   networkInfo: null,
   authUser: null,
   users: [],
   audit: [],
+  communications: null,
+  demoReal: null,
   currentUser: "Admin",
   eventId: null,
   cameraStream: null,
@@ -23,6 +27,14 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+function applyAppConfig(config) {
+  if (!config?.demo || document.querySelector(".demo-ribbon")) return;
+  const ribbon = document.createElement("div");
+  ribbon.className = "demo-ribbon";
+  ribbon.textContent = "BITORA DEMO";
+  document.body.appendChild(ribbon);
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -55,11 +67,12 @@ async function loadEvents() {
   select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   state.eventId = Number(select.value || state.events[0]?.id || 0);
   updateMetrics();
-  await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadReadiness(), loadAudit(), loadLogs()]);
+  await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
 }
 
 async function loadAuth() {
   const auth = await api("/api/auth/me");
+  applyAppConfig(auth.config);
   state.authUser = auth.user || null;
   if (state.authUser) {
     state.currentUser = state.authUser.name;
@@ -83,8 +96,15 @@ function updateMetrics() {
   $("#exportLink").href = state.eventId ? `/api/export.csv?event_id=${state.eventId}` : "#";
   $("#exportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
   $("#exportReservationsLink").href = state.eventId ? `/api/reservations.csv?event_id=${state.eventId}` : "#";
+  $("#exportAttendancesLink").href = state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#";
+  $("#exportCertificatesLink").href = state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#";
+  $("#exportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
+  $("#reportsExportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
+  $("#reportsExportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
   $("#publicEventLink").href = state.eventId ? `/e.html?event_id=${state.eventId}` : "#";
   $("#publicDisplayLink").href = state.eventId ? `/display.html?event_id=${state.eventId}` : "#";
+  $("#backupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
+  $("#reportsBackupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
 }
 
 async function loadAccreditations() {
@@ -104,6 +124,8 @@ async function loadAccreditations() {
       <div class="row-actions">
         <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
         <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+        <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
+        <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
         <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
         <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
         ${row.status === "cancelled"
@@ -115,6 +137,8 @@ async function loadAccreditations() {
   `).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
   $$(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
   $$(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
+  $$(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
+  $$(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
   $$(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
   $$(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
   renderReservationSelectors();
@@ -137,6 +161,36 @@ function printFilteredCredentials() {
 
 function printOneCredential(token) {
   window.open(printUrl({ q: token, status: "", type: "" }), "_blank");
+}
+
+function printOneWristband(token) {
+  window.open(printUrl({ q: token, status: "", type: "", mode: "wristband" }), "_blank");
+}
+
+async function printManualCertificate(token) {
+  const notice = $("#receptionNotice");
+  const url = `/api/certificate.pdf?token=${encodeURIComponent(token)}&manual=1`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      let message = "Certificado no disponible para este acreditado.";
+      try {
+        const data = await response.json();
+        message = data.error || message;
+      } catch (err) {
+        // Algunos errores del servidor llegan como HTML; mostramos mensaje operativo.
+      }
+      notice.innerHTML = `<div class="panel danger">${message}</div>`;
+      return;
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, "_blank");
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    notice.innerHTML = `<div class="panel success">Certificado preparado para imprimir.</div>`;
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">No se pudo preparar el certificado.</div>`;
+  }
 }
 
 function accreditationStatusLabel(row) {
@@ -232,6 +286,10 @@ async function loadNetworkInfo() {
       <div><strong>${info.network_url}</strong><span>Otra PC misma red</span></div>
       <div><strong>${info.require_login ? "Protegido" : "Local"}</strong><span>Consola</span></div>
     </div>
+    <div class="network-actions">
+      <a class="button" href="${info.local_url}/scan.html?event_id=${state.eventId || ""}" target="_blank">Escaner movil en esta PC</a>
+      <a class="button ghost" href="${info.network_url}/scan.html?event_id=${state.eventId || ""}" target="_blank">Escaner movil en red</a>
+    </div>
   `;
 }
 
@@ -249,14 +307,79 @@ async function loadAudit() {
   `).join("") || `<p class="empty">Todavia no hay auditoria para este evento.</p>`;
 }
 
+async function loadCommunications() {
+  if (!state.eventId) return;
+  state.communications = await api(`/api/communications?event_id=${state.eventId}`);
+  const stats = state.communications.stats || {};
+  $("#communicationStats").innerHTML = `
+    <div><strong>${Number(stats.participants || 0)}</strong><span>Participantes</span></div>
+    <div><strong>${Number(stats.with_email || 0)}</strong><span>Con email</span></div>
+    <div><strong>${Number(stats.with_whatsapp || 0)}</strong><span>Con WhatsApp</span></div>
+    <div><strong>${Number(stats.with_both || 0)}</strong><span>Con ambos</span></div>
+    <div><strong>${Number(stats.with_consent || 0)}</strong><span>Con consentimiento</span></div>
+  `;
+  $("#communicationTemplates").innerHTML = state.communications.templates.map((row) => `
+    <button type="button" class="mini-row template-pick" data-type="${row.tipo}" data-subject="${row.asunto}" data-content="${row.contenido}">
+      <strong>${row.name}</strong>
+      <span>${row.tipo}</span>
+    </button>
+  `).join("") || `<p class="empty">Sin plantillas.</p>`;
+  $("#communicationTypeSelect").innerHTML = state.communications.templates.map((row) => (
+    `<option value="${row.tipo}">${row.name}</option>`
+  )).join("") || `<option value="aviso operativo">Aviso operativo</option>`;
+  $("#communicationLogs").innerHTML = state.communications.logs.map((row) => `
+    <article class="audit-row">
+      <div>
+        <strong>${row.asunto || row.tipo}</strong>
+        <span>${row.first_name} ${row.last_name} - ${row.canal} - ${row.estado} - ${new Date(row.fecha).toLocaleString()}</span>
+      </div>
+      <code>${row.tipo}</code>
+    </article>
+  `).join("") || `<p class="empty">Todavia no hay comunicaciones registradas.</p>`;
+  $$(".template-pick").forEach((button) => button.addEventListener("click", () => {
+    const form = $("#communicationForm");
+    form.elements.type.value = button.dataset.type;
+    form.elements.subject.value = button.dataset.subject;
+    form.elements.content.value = button.dataset.content;
+  }));
+}
+
+async function loadDemoReal() {
+  if (!state.eventId) return;
+  state.demoReal = await api(`/api/demo-real?event_id=${state.eventId}`);
+  const panel = $("#demoRealPanel");
+  if (!state.demoReal.active) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  $("#demoParticipants").innerHTML = state.demoReal.examples.map((row) => `
+    <article class="mini-row demo-person">
+      <div>
+        <strong>${row.name}</strong>
+        <span>${row.type} - ${row.company}</span>
+        <code>${row.token}</code>
+      </div>
+      <div class="row-actions">
+        <a class="button" href="${row.portal_url}" target="_blank">Abrir portal</a>
+        <a class="button ghost" href="${row.qr_url}" target="_blank">Ver QR</a>
+        <a class="button ghost" href="${row.portal_url}#agenda" target="_blank">Agenda</a>
+        <a class="button ghost" href="${row.portal_url}#actividades" target="_blank">Inscripciones</a>
+      </div>
+    </article>
+  `).join("");
+  $("#demoGuide").innerHTML = state.demoReal.guide.map((step) => `<li>${step}</li>`).join("");
+}
+
 async function loadAgenda() {
   if (!state.eventId) return;
-  const [spaces, activities, reservations, bags, display] = await Promise.all([
+  const [spaces, activities, reservations, bags, display, attendanceDashboard] = await Promise.all([
     api(`/api/spaces?event_id=${state.eventId}`),
     api(`/api/activities?event_id=${state.eventId}`),
     api(`/api/reservations?event_id=${state.eventId}`),
     api(`/api/capacity-bags?event_id=${state.eventId}`),
     api(`/api/public-display?event_id=${state.eventId}`),
+    api(`/api/attendance-dashboard?event_id=${state.eventId}`),
   ]);
   state.spaces = spaces;
   state.activities = activities;
@@ -267,6 +390,7 @@ async function loadAgenda() {
     selected_activity_ids: display.selected_activity_ids || [],
     has_selection: Boolean(display.has_selection),
   };
+  state.attendanceDashboard = attendanceDashboard;
   renderDisplayConfig();
   $("#spaceSelect").innerHTML = spaces.map((row) => `<option value="${row.id}">${row.name}</option>`).join("");
   $("#spacesList").innerHTML = spaces.map((row) => `
@@ -275,18 +399,23 @@ async function loadAgenda() {
       <span>${row.capacity || "sin limite"} lugares - ${row.transition_minutes} min transicion</span>
     </div>
   `).join("");
-  $("#activitiesList").innerHTML = activities.map((row) => `
+  const attendanceByActivity = Object.fromEntries((attendanceDashboard.activities || []).map((row) => [Number(row.id), row]));
+  $("#activitiesList").innerHTML = activities.map((row) => {
+    const attendance = attendanceByActivity[Number(row.id)] || {};
+    return `
     <article class="activity-row" data-id="${row.id}">
       <time>${new Date(row.starts_at).toLocaleString()} - ${new Date(row.ends_at).toLocaleTimeString()}</time>
       <div>
         <strong>${row.title}</strong>
         <span>${row.space_name} - ${row.activity_type} - ${row.speaker || "sin disertante"}</span>
+        <small>${Number(attendance.present || 0)} presentes - ${Number(attendance.absent || 0)} ausentes - ${Number(attendance.eligible || 0)} elegibles</small>
       </div>
       <span class="pill">${activityCapacityLabel(row)}</span>
       <button type="button" class="display-toggle" data-id="${row.id}">Pantalla</button>
-      <a class="button ghost" href="/api/reservations.csv?event_id=${state.eventId}&activity_id=${row.id}">Reservas CSV</a>
+      <a class="button ghost" href="/api/reservations.csv?event_id=${state.eventId}&activity_id=${row.id}">Inscripciones CSV</a>
+      <a class="button ghost" href="/api/attendances.csv?event_id=${state.eventId}&activity_id=${row.id}">Asistencias CSV</a>
     </article>
-  `).join("") || `<p class="empty">Todavia no hay actividades cargadas.</p>`;
+  `}).join("") || `<p class="empty">Todavia no hay actividades cargadas.</p>`;
   renderReservationSelectors();
   renderAccessActivitySelector();
   renderReservations();
@@ -390,7 +519,7 @@ function renderReservations() {
         ${row.status !== "cancelled" ? `<button type="button" class="reservation-status danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>` : ""}
       </div>
     </article>
-  `).join("") || `<p class="empty">Todavia no hay reservas.</p>`;
+  `).join("") || `<p class="empty">Todavia no hay inscripciones.</p>`;
   $$(".reservation-status").forEach((button) => (
     button.addEventListener("click", () => changeReservationStatus(button.dataset.id, button.dataset.status))
   ));
@@ -423,6 +552,9 @@ async function loadSystemStatus() {
       <div><strong>${status.active_operators.length}</strong><span>Operadores activos</span></div>
       <div><strong>${formatBytes(status.database_size)}</strong><span>Base local</span></div>
       <div><strong>${backup}</strong><span>Ultimo backup</span></div>
+      <div><strong>${status.env || "-"}</strong><span>Entorno</span></div>
+      <div><strong>${status.version || "-"}</strong><span>Version</span></div>
+      <div><strong>${status.database?.engine || "-"}</strong><span>Base de datos</span></div>
     </div>
     <div class="operator-list">
       ${status.active_operators.map((row) => `
@@ -444,6 +576,7 @@ async function loadSystemStatus() {
 async function loadSummary() {
   if (!state.eventId) return;
   state.summary = await api(`/api/summary?event_id=${state.eventId}`);
+  const participantMetrics = await api(`/api/participant-metrics?event_id=${state.eventId}`);
   const summary = state.summary;
   const acc = summary.accreditation || {};
   const reservations = Object.fromEntries(summary.reservations.map((row) => [row.status, Number(row.total || 0)]));
@@ -454,21 +587,15 @@ async function loadSummary() {
       <div><strong>${Number(acc.checked || 0)}</strong><span>Acreditadas</span></div>
       <div><strong>${Number(acc.pending || 0)}</strong><span>Pendientes</span></div>
       <div><strong>${Number(acc.cancelled || 0)}</strong><span>Canceladas</span></div>
-      <div><strong>${reservations.confirmed || 0}</strong><span>Reservas confirmadas</span></div>
+      <div><strong>${reservations.confirmed || 0}</strong><span>Inscripciones confirmadas</span></div>
       <div><strong>${reservations.waitlisted || 0}</strong><span>En espera</span></div>
       <div><strong>${access.granted || 0}</strong><span>Accesos OK</span></div>
       <div><strong>${access.rejected || 0}</strong><span>Rechazos</span></div>
+      <div><strong>${Number(summary.attendance?.present || 0)}</strong><span>Asistencias</span></div>
+      <div><strong>${Number(summary.attendance?.eligible || 0)}</strong><span>Elegibles certificado</span></div>
+      <div><strong>${Number(summary.attendance?.average_percentage || 0)}%</strong><span>Participacion promedio</span></div>
     </div>
     <div class="summary-columns">
-      <div>
-        <h3>Por tipo</h3>
-        ${summary.by_type.map((row) => `
-          <div class="mini-row">
-            <strong>${row.type}</strong>
-            <span>${Number(row.checked || 0)}/${Number(row.active || 0)} acreditadas - ${Number(row.cancelled || 0)} canceladas</span>
-          </div>
-        `).join("") || `<p class="empty">Sin tipos registrados.</p>`}
-      </div>
       <div>
         <h3>Por actividad</h3>
         ${summary.by_activity.map((row) => `
@@ -478,6 +605,57 @@ async function loadSummary() {
           </div>
         `).join("") || `<p class="empty">Sin actividades registradas.</p>`}
       </div>
+    </div>
+  `;
+  $("#participantMetricsStatus").innerHTML = `
+    <div><strong>${participantMetrics.registered || 0}</strong><span>Registrados</span></div>
+    <div><strong>${participantMetrics.with_reservations || 0}</strong><span>Con inscripciones</span></div>
+    <div><strong>${participantMetrics.with_agenda || 0}</strong><span>Con agenda</span></div>
+    <div><strong>${participantMetrics.consent_email || 0}</strong><span>Email OK</span></div>
+    <div><strong>${participantMetrics.consent_whatsapp || 0}</strong><span>WhatsApp OK</span></div>
+    <div><strong>${participantMetrics.consent_both || 0}</strong><span>Ambos canales</span></div>
+  `;
+}
+
+async function loadMarketing() {
+  if (!state.eventId) return;
+  state.marketingDashboard = await api(`/api/marketing-dashboard?event_id=${state.eventId}`);
+  const data = state.marketingDashboard;
+  $("#marketingStatus").innerHTML = `
+    <div class="summary-grid">
+      <div><strong>${Number(data.totals?.visitors || 0)}</strong><span>Visitantes</span></div>
+      <div><strong>${Number(data.totals?.registrations || 0)}</strong><span>Inscripciones</span></div>
+      <div><strong>${Number(data.totals?.conversion_rate || 0)}%</strong><span>Conversion</span></div>
+      <div><strong>${Number(data.totals?.abandonment || 0)}</strong><span>Abandono</span></div>
+    </div>
+    <div class="summary-columns">
+      <div>
+        <h3>Por origen</h3>
+        ${(data.by_source || []).map((row) => `
+          <div class="mini-row">
+            <strong>${row.source || "sin origen"}</strong>
+            <span>${Number(row.visitors || 0)} visitas - ${Number(row.registrations || 0)} inscripciones - ${Number(row.conversion_rate || 0)}%</span>
+          </div>
+        `).join("") || `<p class="empty">Sin datos de origen todavia.</p>`}
+      </div>
+      <div>
+        <h3>Por dispositivo</h3>
+        ${(data.by_device || []).map((row) => `
+          <div class="mini-row">
+            <strong>${row.device_type || "sin dispositivo"}</strong>
+            <span>${Number(row.visitors || 0)} visitas - ${Number(row.registrations || 0)} inscripciones</span>
+          </div>
+        `).join("") || `<p class="empty">Sin datos de dispositivo todavia.</p>`}
+      </div>
+    </div>
+    <h3>QR mas efectivos</h3>
+    <div class="mini-list">
+      ${(data.qr_sources || []).map((row) => `
+        <div class="mini-row">
+          <strong>${row.source_detail || row.source}</strong>
+          <span>${Number(row.visitors || 0)} visitas - ${Number(row.registrations || 0)} inscripciones</span>
+        </div>
+      `).join("") || `<p class="empty">Sin QRs de captacion todavia.</p>`}
     </div>
   `;
 }
@@ -570,7 +748,7 @@ async function saveReservation(event) {
   data.actor = state.currentUser;
   try {
     const result = await api("/api/reservations", { method: "POST", body: JSON.stringify(data) });
-    $("#agendaAlert").innerHTML = `<div class="panel success">Reserva ${result.status === "confirmed" ? "confirmada" : "en lista de espera"}</div>`;
+    $("#agendaAlert").innerHTML = `<div class="panel success">Inscripcion ${result.status === "confirmed" ? "confirmada" : "en lista de espera"}</div>`;
     await Promise.all([loadAgenda(), loadAlerts(), loadSummary(), loadReadiness(), loadAudit()]);
   } catch (err) {
     $("#agendaAlert").innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -631,8 +809,33 @@ async function openActivityDetail(activityId) {
       <div><strong>${new Date(detail.activity.starts_at).toLocaleString()}</strong><span>${new Date(detail.activity.ends_at).toLocaleTimeString()}</span></div>
       <div><strong>${detail.activity.capacity || "sin limite"}</strong><span>Capacidad fisica</span></div>
       <div><strong>${detail.availability.label}</strong><span>Disponibilidad publica</span></div>
-      <div><strong>${Number(detail.stats.confirmed || 0)}</strong><span>Reservas</span></div>
+      <div><strong>${Number(detail.stats.confirmed || 0)}</strong><span>Inscripciones</span></div>
       <div><strong>${Number(detail.stats.waitlisted || 0)}</strong><span>Lista espera</span></div>
+      <div><strong>${Number(detail.attendance?.present || 0)}</strong><span>Presentes</span></div>
+      <div><strong>${Number(detail.attendance?.absent || 0)}</strong><span>Ausentes</span></div>
+      <div><strong>${Number(detail.attendance?.partial || 0)}</strong><span>Parciales</span></div>
+      <div><strong>${Number(detail.attendance?.eligible || 0)}</strong><span>Elegibles</span></div>
+      <div><strong>${Number(detail.attendance?.average_percentage || 0)}%</strong><span>Promedio</span></div>
+      <div><strong>${Number(detail.access_window?.minutes_before || 0)} min</strong><span>QR habilita antes</span></div>
+      <div><strong>${new Date(detail.access_window?.opens_at || detail.activity.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong><span>QR habilitado desde</span></div>
+      <div><strong>${Number(detail.access_window?.early_attempts || 0)}</strong><span>Intentos anticipados</span></div>
+      <div><strong>${Number(detail.access_window?.rejected || 0)}</strong><span>Rechazos actividad</span></div>
+    </div>
+    <h3>Asistencia</h3>
+    <div class="mini-list">
+      ${(detail.attendance_rows || []).map((row) => `
+        <div class="mini-row attendance-admin-row">
+          <div>
+            <strong>${row.first_name} ${row.last_name}</strong>
+            <span>${row.status} - ${Number(row.attendance_percentage || 0)}% - ${row.eligibility_status}</span>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="attendance-manual" data-id="${row.id}" data-status="Completa" data-percentage="100">Completa</button>
+            <button type="button" class="attendance-manual" data-id="${row.id}" data-status="Presente" data-percentage="100">Presente</button>
+            <button type="button" class="attendance-manual danger-button" data-id="${row.id}" data-status="Ausente" data-percentage="0">Ausente</button>
+          </div>
+        </div>
+      `).join("") || `<p class="empty">Sin asistencias registradas.</p>`}
     </div>
     <h3>Bolsas</h3>
     <div class="mini-list">
@@ -644,19 +847,30 @@ async function openActivityDetail(activityId) {
       `).join("")}
     </div>
   `;
+  $$(".attendance-manual").forEach((button) => button.addEventListener("click", () => updateAttendanceManual(button.dataset.id, button.dataset.status, button.dataset.percentage, activityId)));
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function updateAttendanceManual(id, status, percentage, activityId) {
+  const reason = prompt(`Motivo de correccion: ${status}`) || "";
+  await api("/api/attendance/manual", {
+    method: "POST",
+    body: JSON.stringify({ id, status, percentage, reason, actor: state.currentUser }),
+  });
+  $("#agendaAlert").innerHTML = `<div class="panel success">Asistencia corregida</div>`;
+  await Promise.all([openActivityDetail(activityId), loadAgenda(), loadSummary(), loadAudit()]);
+}
+
 async function changeReservationStatus(id, status) {
-  const label = status === "cancelled" ? "cancelar reserva" : "promover reserva";
+  const label = status === "cancelled" ? "cancelar inscripcion" : "promover inscripcion";
   if (!confirm(`Confirmar ${label}`)) return;
   try {
     const result = await api("/api/reservations/status", {
       method: "POST",
       body: JSON.stringify({ id, status, actor: state.currentUser }),
     });
-    const extra = result.promoted ? " y se promovio una reserva en espera" : "";
-    $("#agendaAlert").innerHTML = `<div class="panel success">Reserva actualizada${extra}</div>`;
+    const extra = result.promoted ? " y se promovio una inscripcion en espera" : "";
+    $("#agendaAlert").innerHTML = `<div class="panel success">Inscripcion actualizada${extra}</div>`;
     await Promise.all([loadAgenda(), loadAlerts(), loadSummary(), loadReadiness(), loadAudit(), loadSystemStatus()]);
   } catch (err) {
     $("#agendaAlert").innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -688,6 +902,32 @@ async function prepareRealEvent(event) {
   try {
     const result = await api("/api/prepare-event", { method: "POST", body: JSON.stringify(data) });
     notice.innerHTML = `<div class="panel success">Evento listo. Backup creado: ${result.backup}</div>`;
+    form.reset();
+    await loadEvents();
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function createDemoReal(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  const notice = $("#prepareNotice");
+  if (data.confirm !== "DEMO") {
+    notice.innerHTML = `<div class="panel danger">Escribi DEMO para confirmar.</div>`;
+    return;
+  }
+  if (!confirm("Esto crea backup, limpia datos operativos actuales y genera una demo completa. Confirmar demo.")) return;
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/demo-real", { method: "POST", body: JSON.stringify(data) });
+    notice.innerHTML = `
+      <div class="panel success">
+        Demo real creada: ${result.participants} participantes, ${result.spaces} salas, ${result.activities} actividades.
+        Backup previo: ${result.backup_before}. Backup demo: ${result.backup_after}.
+      </div>
+    `;
     form.reset();
     await loadEvents();
   } catch (err) {
@@ -735,6 +975,34 @@ async function validateAccess() {
     box.textContent = result.reason;
     $("#tokenInput").value = "";
     await loadEvents();
+  } catch (err) {
+    box.className = "access-result red";
+    box.textContent = err.message;
+  }
+}
+
+async function registerAttendanceExit() {
+  const token = $("#tokenInput").value.trim();
+  const activityId = $("#accessActivitySelect").value;
+  const box = $("#accessResult");
+  if (!token || !activityId) {
+    box.className = "access-result warn";
+    box.textContent = "Para egreso, ingresar token y elegir actividad";
+    return;
+  }
+  try {
+    const result = await api("/api/attendance/exit", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        actor: $("#operator").value || state.currentUser,
+        activity_id: activityId,
+      }),
+    });
+    box.className = "access-result green";
+    box.textContent = `Egreso registrado - ${result.percentage}% - ${result.eligibility_status}`;
+    $("#tokenInput").value = "";
+    await Promise.all([loadAgenda(), loadSummary(), loadAudit(), loadLogs()]);
   } catch (err) {
     box.className = "access-result red";
     box.textContent = err.message;
@@ -804,6 +1072,22 @@ async function saveUser(event) {
   await api("/api/users", { method: "POST", body: JSON.stringify(data) });
   form.reset();
   await Promise.all([loadUsers(), loadAudit()]);
+}
+
+async function sendDemoCommunication(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/communications/send", { method: "POST", body: JSON.stringify(data) });
+    $("#communicationNotice").innerHTML = `<div class="panel success">Envios registrados: ${result.sent}. Omitidos por consentimiento: ${result.skipped}.</div>`;
+    form.reset();
+    await Promise.all([loadCommunications(), loadAudit()]);
+  } catch (err) {
+    $("#communicationNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
 }
 
 function parseCsv(text) {
@@ -908,11 +1192,15 @@ function stopCameraScan() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  $$("nav button").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$("nav button").forEach((button) => button.addEventListener("click", () => {
+    setView(button.dataset.view);
+    const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
+    history.replaceState(null, "", url);
+  }));
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
     updateMetrics();
-    await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadReadiness(), loadAudit(), loadLogs()]);
+  await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
   });
   $("#currentUserSelect").addEventListener("change", (event) => {
     state.currentUser = event.target.value;
@@ -920,11 +1208,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("#eventForm").addEventListener("submit", createEvent);
   $("#prepareEventForm").addEventListener("submit", prepareRealEvent);
+  $("#demoRealForm").addEventListener("submit", createDemoReal);
   $("#registerForm").addEventListener("submit", registerPerson);
   $("#editAccreditationForm").addEventListener("submit", saveAccreditationEdit);
   $("#importForm").addEventListener("submit", importAccreditations);
   $("#importFile").addEventListener("change", loadImportFile);
   $("#userForm").addEventListener("submit", saveUser);
+  $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);
   $("#reservationForm").addEventListener("submit", saveReservation);
@@ -939,9 +1229,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#statusFilter").addEventListener("change", () => loadAccreditations());
   $("#typeFilter").addEventListener("change", () => loadAccreditations());
   $("#validateBtn").addEventListener("click", validateAccess);
+  $("#attendanceExitBtn").addEventListener("click", registerAttendanceExit);
   $("#cameraBtn").addEventListener("click", startCameraScan);
   $("#tokenInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") validateAccess();
   });
   await loadEvents();
+  const initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
+    setView(initialView);
+  }
 });

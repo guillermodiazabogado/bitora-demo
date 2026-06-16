@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timedelta
 import re
 from urllib.parse import parse_qs, urlparse
 
@@ -60,6 +61,20 @@ class AccessValidationService:
                 reservation = self.repository.confirmed_reservation(db, activity_id, acc["id"])
                 if not reservation:
                     result, reason, color = "rejected", "Sin reserva confirmada", "red"
+            if result == "granted":
+                duplicate = self.repository.granted_activity_access(db, activity_id, acc["id"])
+                if duplicate:
+                    try:
+                        duplicated_at = datetime.fromisoformat(str(duplicate["created_at"])).astimezone().strftime("%H:%M")
+                    except ValueError:
+                        duplicated_at = str(duplicate["created_at"])[11:16]
+                    result, reason, color = "rejected", f"Ya ingreso a esta actividad a las {duplicated_at}.", "yellow"
+            if result == "granted":
+                open_at, _open_minutes = self._activity_open_at(activity)
+                if self._local_now() < open_at:
+                    result = "rejected"
+                    reason = f"Acceso aun no habilitado. Se habilita a las {open_at.strftime('%H:%M')}."
+                    color = "yellow"
         elif acc["checked_in_at"] and int(acc["max_reentries"] or 0) == 0:
             result, reason, color = "rejected", "QR ya utilizado", "red"
         elif acc["checked_in_at"] and int(acc["max_reentries"] or 0) <= int(acc["access_count"] or 0):
@@ -75,9 +90,12 @@ class AccessValidationService:
             db,
             accreditation_id=acc["id"],
             event_id=acc["event_id"],
+            activity_id=activity_id or None,
             token=token,
             operator=operator,
             checkpoint=checkpoint,
+            access_context="activity_entry" if activity_id else "event_entry",
+            access_point=checkpoint,
             result=result,
             reason=reason,
             created_at=self._now(),
@@ -91,6 +109,19 @@ class AccessValidationService:
             {"event_id": acc["event_id"], "result": result, "reason": reason, "checkpoint": checkpoint, "activity_id": activity_id},
         )
         return {"result": result, "reason": reason, "color": color, "status_code": 200}
+
+    def _activity_open_at(self, activity) -> tuple[datetime, int]:
+        raw_activity_minutes = activity["access_open_minutes_before"]
+        raw_event_minutes = activity["event_access_open_minutes_before"]
+        minutes = raw_activity_minutes if raw_activity_minutes is not None and str(raw_activity_minutes) != "" else raw_event_minutes
+        minutes = max(0, int(minutes if minutes is not None else 10))
+        return datetime.fromisoformat(activity["starts_at"]) - timedelta(minutes=minutes), minutes
+
+    def _local_now(self) -> datetime:
+        current = datetime.fromisoformat(self._now())
+        if current.tzinfo:
+            return current.astimezone().replace(tzinfo=None)
+        return current
 
     def _now(self) -> str:
         if not self.now:
