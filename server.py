@@ -162,6 +162,9 @@ def init_db() -> None:
                 ends_at TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
                 capacity INTEGER NOT NULL DEFAULT 0,
+                activities_enabled INTEGER NOT NULL DEFAULT 1,
+                capacity_control_enabled INTEGER NOT NULL DEFAULT 1,
+                waitlist_enabled INTEGER NOT NULL DEFAULT 0,
                 activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
                 created_at TEXT NOT NULL
             );
@@ -552,6 +555,12 @@ def ensure_activity_access_window_columns(db: sqlite3.Connection) -> None:
     event_columns = [row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()]
     if "activity_access_open_minutes_before" not in event_columns:
         db.execute("ALTER TABLE events ADD COLUMN activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10")
+    if "activities_enabled" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN activities_enabled INTEGER NOT NULL DEFAULT 1")
+    if "capacity_control_enabled" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN capacity_control_enabled INTEGER NOT NULL DEFAULT 1")
+    if "waitlist_enabled" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN waitlist_enabled INTEGER NOT NULL DEFAULT 0")
 
     activity_columns = [row["name"] for row in db.execute("PRAGMA table_info(activities)").fetchall()]
     if "access_open_minutes_before" not in activity_columns:
@@ -1329,6 +1338,210 @@ def communication_log(
     return int(cur.lastrowid)
 
 
+def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | None:
+    event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
+    if not event:
+        return None
+    allowed_event_keys = [
+        "name", "description", "venue", "starts_at", "ends_at", "status", "capacity",
+        "activity_selection_mode", "permitir_reserva_actividades_desde_landing",
+        "permitir_reserva_actividades_desde_portal", "reserva_requiere_confirmacion",
+        "reserva_cooldown_segundos", "reserva_requiere_verificacion_simple",
+        "generar_certificados", "controlar_asistencia", "attendance_mode",
+        "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
+        "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
+        "activities_enabled", "capacity_control_enabled", "waitlist_enabled",
+    ]
+    return {
+        "version": "4.8",
+        "exported_at": now_iso(),
+        "event": {key: event.get(key) for key in allowed_event_keys if key in event},
+        "types": [dict(row) for row in db.execute("SELECT name, capacity, access_enabled FROM accreditation_types WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()],
+        "spaces": [dict(row) for row in db.execute("SELECT name, capacity, responsible, transition_minutes, status FROM spaces WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()],
+        "activities": [
+            dict(row)
+            for row in db.execute(
+                """
+                SELECT a.title, a.description, a.speaker, a.activity_type, a.starts_at, a.ends_at,
+                       a.capacity, a.reservation_mode, a.access_open_minutes_before,
+                       a.requiere_asistencia, a.porcentaje_minimo_asistencia, a.habilita_certificado,
+                       a.attendance_mode, a.status, s.name AS space_name
+                FROM activities a
+                JOIN spaces s ON s.id = a.space_id
+                WHERE a.event_id = ?
+                ORDER BY a.starts_at, a.id
+                """,
+                (event_id,),
+            ).fetchall()
+        ],
+        "capacity_bags": [
+            dict(row)
+            for row in db.execute(
+                """
+                SELECT b.name, b.code, b.assigned_capacity, b.priority, b.public_visible,
+                       b.public_registration, b.reception_enabled, b.release_enabled, b.status,
+                       a.title AS activity_title, s.name AS space_name
+                FROM capacity_bags b
+                JOIN activities a ON a.id = b.activity_id
+                JOIN spaces s ON s.id = a.space_id
+                WHERE b.event_id = ?
+                ORDER BY a.starts_at, b.priority, b.id
+                """,
+                (event_id,),
+            ).fetchall()
+        ],
+        "communication_templates": [
+            dict(row)
+            for row in db.execute(
+                "SELECT code, name, tipo, asunto, contenido, active FROM communication_templates WHERE event_id IN (0, ?) ORDER BY event_id, id",
+                (event_id,),
+            ).fetchall()
+        ],
+    }
+
+
+def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, status: str = "draft") -> int:
+    cur = db.execute(
+        """
+        INSERT INTO events (
+            name, description, venue, starts_at, ends_at, status, capacity,
+            activity_selection_mode, generar_certificados, controlar_asistencia,
+            attendance_mode, porcentaje_minimo_asistencia, captation_mode,
+            primary_action_label, secondary_action_label, whatsapp_number,
+            activity_access_open_minutes_before, activities_enabled,
+            capacity_control_enabled, waitlist_enabled, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(data.get("name") or "Evento").strip(),
+            str(data.get("description") or "").strip(),
+            str(data.get("venue") or "").strip(),
+            str(data.get("starts_at") or "").strip(),
+            str(data.get("ends_at") or "").strip(),
+            status,
+            int(data.get("capacity") or 0),
+            str(data.get("activity_selection_mode") or "optional_later").strip() or "optional_later",
+            1 if truthy(data.get("generar_certificados", True)) else 0,
+            1 if truthy(data.get("controlar_asistencia", True)) else 0,
+            str(data.get("attendance_mode") or "entry_only").strip() or "entry_only",
+            int(data.get("porcentaje_minimo_asistencia") or 80),
+            str(data.get("captation_mode") or "MIXTO").strip() or "MIXTO",
+            str(data.get("primary_action_label") or "").strip(),
+            str(data.get("secondary_action_label") or "").strip(),
+            str(data.get("whatsapp_number") or "").strip(),
+            max(0, int(data.get("activity_access_open_minutes_before") or 10)),
+            1 if truthy(data.get("activities_enabled", True)) else 0,
+            1 if truthy(data.get("capacity_control_enabled", True)) else 0,
+            1 if truthy(data.get("waitlist_enabled", False)) else 0,
+            now_iso(),
+        ),
+    )
+    event_id = int(cur.lastrowid)
+    audit(db, actor, "event.created", "event", event_id, {"source": "config"})
+    return event_id
+
+
+def import_event_structure(db: sqlite3.Connection, payload: dict, actor: str, name: str | None = None) -> dict:
+    event_data = dict(payload.get("event") or {})
+    if name:
+        event_data["name"] = name
+    event_data["name"] = event_data.get("name") or "Evento importado"
+    event_id = insert_event_from_config(db, event_data, actor, status=str(event_data.get("status") or "draft"))
+    created_at = now_iso()
+    db.execute("DELETE FROM accreditation_types WHERE event_id = ?", (event_id,))
+    for row in payload.get("types") or []:
+        db.execute(
+            "INSERT OR IGNORE INTO accreditation_types (event_id, name, capacity, access_enabled, created_at) VALUES (?, ?, ?, ?, ?)",
+            (event_id, row.get("name") or "General", int(row.get("capacity") or 0), 1 if truthy(row.get("access_enabled", True)) else 0, created_at),
+        )
+    if not payload.get("types"):
+        ensure_default_types(db, event_id)
+
+    space_map: dict[str, int] = {}
+    for row in payload.get("spaces") or []:
+        cur = db.execute(
+            """
+            INSERT INTO spaces (event_id, name, capacity, responsible, transition_minutes, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (event_id, row.get("name") or "Sala", int(row.get("capacity") or 0), row.get("responsible") or "", int(row.get("transition_minutes") or 15), row.get("status") or "active", created_at),
+        )
+        space_map[str(row.get("name") or "Sala")] = int(cur.lastrowid)
+    if not space_map:
+        ensure_default_spaces(db, event_id)
+        for row in db.execute("SELECT id, name FROM spaces WHERE event_id = ?", (event_id,)).fetchall():
+            space_map[row["name"]] = int(row["id"])
+
+    activity_map: dict[tuple[str, str], int] = {}
+    for row in payload.get("activities") or []:
+        space_name = str(row.get("space_name") or row.get("Sala") or "Auditorio principal")
+        if space_name not in space_map:
+            cur = db.execute(
+                "INSERT INTO spaces (event_id, name, capacity, responsible, transition_minutes, status, created_at) VALUES (?, ?, 0, '', 15, 'active', ?)",
+                (event_id, space_name, created_at),
+            )
+            space_map[space_name] = int(cur.lastrowid)
+        cur = db.execute(
+            """
+            INSERT INTO activities (
+                event_id, space_id, title, description, speaker, activity_type,
+                starts_at, ends_at, capacity, reservation_mode, requiere_asistencia,
+                porcentaje_minimo_asistencia, habilita_certificado, attendance_mode,
+                access_open_minutes_before, status, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                space_map[space_name],
+                row.get("title") or row.get("Actividad") or "Actividad",
+                row.get("description") or row.get("Descripcion") or "",
+                row.get("speaker") or row.get("Disertante") or "",
+                row.get("activity_type") or row.get("Tipo actividad") or "Charla",
+                row.get("starts_at") or "",
+                row.get("ends_at") or "",
+                int(row.get("capacity") or row.get("Capacidad") or 0),
+                row.get("reservation_mode") or "free",
+                1 if truthy(row.get("requiere_asistencia", True)) else 0,
+                int(row.get("porcentaje_minimo_asistencia") or 80),
+                1 if truthy(row.get("habilita_certificado", True)) else 0,
+                row.get("attendance_mode") or "",
+                row.get("access_open_minutes_before"),
+                row.get("status") or "published",
+                created_at,
+            ),
+        )
+        activity_map[(space_name, str(row.get("title") or row.get("Actividad") or "Actividad"))] = int(cur.lastrowid)
+
+    for row in payload.get("capacity_bags") or []:
+        activity_id = activity_map.get((str(row.get("space_name") or ""), str(row.get("activity_title") or "")))
+        if not activity_id:
+            continue
+        db.execute(
+            """
+            INSERT OR IGNORE INTO capacity_bags (
+                event_id, activity_id, name, code, assigned_capacity, priority,
+                public_visible, public_registration, reception_enabled, release_enabled,
+                status, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id, activity_id, row.get("name") or "Online", row.get("code") or "online",
+                int(row.get("assigned_capacity") or 0), int(row.get("priority") or 100),
+                1 if truthy(row.get("public_visible", False)) else 0,
+                1 if truthy(row.get("public_registration", False)) else 0,
+                1 if truthy(row.get("reception_enabled", True)) else 0,
+                1 if truthy(row.get("release_enabled", True)) else 0,
+                row.get("status") or "active", created_at,
+            ),
+        )
+    ensure_capacity_bags(db, event_id=event_id)
+    audit(db, actor, "event.structure_imported", "event", event_id, {"activities": len(payload.get("activities") or []), "spaces": len(payload.get("spaces") or [])})
+    return {"ok": True, "event_id": event_id, "activities": len(payload.get("activities") or []), "spaces": len(payload.get("spaces") or [])}
+
+
 def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     row = db.execute(
         """
@@ -1338,7 +1551,8 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
                e.name AS event_name, e.description AS event_description, e.venue, e.starts_at, e.ends_at,
                e.activity_selection_mode, e.permitir_reserva_actividades_desde_portal,
                e.reserva_requiere_confirmacion, e.reserva_cooldown_segundos,
-               e.reserva_requiere_verificacion_simple
+               e.reserva_requiere_verificacion_simple,
+               e.activities_enabled, e.capacity_control_enabled, e.waitlist_enabled
         FROM accreditations a
         JOIN people p ON p.id = a.person_id
         JOIN events e ON e.id = a.event_id
@@ -1351,20 +1565,23 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     data = dict(row)
     attendance_service().ensure_absences(db, int(data["event_id"]))
     release_available_certificates(db, int(data["event_id"]))
-    reservations = [
-        dict(r)
-        for r in db.execute(
-            """
-            SELECT r.*, a.title, a.starts_at, a.ends_at, a.activity_type, s.name AS space_name
-            FROM reservations r
-            JOIN activities a ON a.id = r.activity_id
-            JOIN spaces s ON s.id = a.space_id
-            WHERE r.accreditation_id = ?
-            ORDER BY a.starts_at
-            """,
-            (data["id"],),
-        ).fetchall()
-    ]
+    activities_enabled = int(data.get("activities_enabled") or 0) == 1
+    reservations = []
+    if activities_enabled:
+        reservations = [
+            dict(r)
+            for r in db.execute(
+                """
+                SELECT r.*, a.title, a.starts_at, a.ends_at, a.activity_type, s.name AS space_name
+                FROM reservations r
+                JOIN activities a ON a.id = r.activity_id
+                JOIN spaces s ON s.id = a.space_id
+                WHERE r.accreditation_id = ?
+                ORDER BY a.starts_at
+                """,
+                (data["id"],),
+            ).fetchall()
+        ]
     current_dt = datetime.now()
     next_activity = None
     current_activity = None
@@ -1388,29 +1605,30 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     }
     reserved_ids = set(active_reservations_by_activity)
     activities = []
-    for activity in db.execute(
-        """
-        SELECT a.*, s.name AS space_name
-        FROM activities a
-        JOIN spaces s ON s.id = a.space_id
-        WHERE a.event_id = ? AND a.status = 'published'
-        ORDER BY a.starts_at
-        """,
-        (data["event_id"],),
-    ).fetchall():
-        item = dict(activity)
-        availability = public_availability(db, item["id"])
-        item["public_availability"] = availability["label"]
-        item["public_availability_color"] = availability["color"]
-        item["public_remaining"] = availability["remaining"]
-        item["reserved"] = int(item["id"]) in reserved_ids
-        reservation = active_reservations_by_activity.get(int(item["id"]))
-        if reservation:
-            item["reservation_id"] = reservation["id"]
-            item["reservation_status"] = reservation["status"]
-            item["reservation_label"] = reservation_status_label(reservation["status"])
-        item.pop("capacity", None)
-        activities.append(item)
+    if activities_enabled:
+        for activity in db.execute(
+            """
+            SELECT a.*, s.name AS space_name
+            FROM activities a
+            JOIN spaces s ON s.id = a.space_id
+            WHERE a.event_id = ? AND a.status = 'published'
+            ORDER BY a.starts_at
+            """,
+            (data["event_id"],),
+        ).fetchall():
+            item = dict(activity)
+            availability = public_availability(db, item["id"])
+            item["public_availability"] = availability["label"]
+            item["public_availability_color"] = availability["color"]
+            item["public_remaining"] = availability["remaining"]
+            item["reserved"] = int(item["id"]) in reserved_ids
+            reservation = active_reservations_by_activity.get(int(item["id"]))
+            if reservation:
+                item["reservation_id"] = reservation["id"]
+                item["reservation_status"] = reservation["status"]
+                item["reservation_label"] = reservation_status_label(reservation["status"])
+            item.pop("capacity", None)
+            activities.append(item)
     preference = row_to_dict(
         db.execute(
             "SELECT * FROM participant_communication_preferences WHERE person_id = ?",
@@ -1449,22 +1667,24 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
             (data["event_id"],),
         ).fetchall()
     ]
-    attendances = [
-        dict(r)
-        for r in db.execute(
-            """
-            SELECT at.*, a.title, a.starts_at, a.ends_at, s.name AS space_name,
-                   ce.id AS certificate_id, ce.certificate_generated_at
-            FROM activity_attendance at
-            JOIN activities a ON a.id = at.activity_id
-            JOIN spaces s ON s.id = a.space_id
-            LEFT JOIN certificate_eligibility ce ON ce.activity_id = at.activity_id AND ce.accreditation_id = at.accreditation_id
-            WHERE at.accreditation_id = ?
-            ORDER BY a.starts_at
-            """,
-            (data["id"],),
-        ).fetchall()
-    ]
+    attendances = []
+    if activities_enabled:
+        attendances = [
+            dict(r)
+            for r in db.execute(
+                """
+                SELECT at.*, a.title, a.starts_at, a.ends_at, s.name AS space_name,
+                       ce.id AS certificate_id, ce.certificate_generated_at
+                FROM activity_attendance at
+                JOIN activities a ON a.id = at.activity_id
+                JOIN spaces s ON s.id = a.space_id
+                LEFT JOIN certificate_eligibility ce ON ce.activity_id = at.activity_id AND ce.accreditation_id = at.accreditation_id
+                WHERE at.accreditation_id = ?
+                ORDER BY a.starts_at
+                """,
+                (data["id"],),
+            ).fetchall()
+        ]
     data["portal_url"] = f"/p.html?token={data['token']}"
     data["qr_payload"] = data["token"]
     data["reservations"] = reservations
@@ -1498,6 +1718,9 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         "reserva_bloque_cada": 5,
         "reserva_bloque_segundos": 300,
         "reserva_requiere_verificacion_simple": int(data.get("reserva_requiere_verificacion_simple", 1) or 0),
+        "activities_enabled": int(data.get("activities_enabled") or 0),
+        "capacity_control_enabled": int(data.get("capacity_control_enabled") or 0),
+        "waitlist_enabled": int(data.get("waitlist_enabled") or 0),
     }
     return data
 
@@ -2083,6 +2306,8 @@ def public_static_path(path: str) -> bool:
         "/login.html",
         "/display.html",
         "/scan.html",
+        "/web.html",
+        "/web",
         "/e.html",
         "/p.html",
         "/styles.css",
@@ -2090,7 +2315,7 @@ def public_static_path(path: str) -> bool:
         "/app.js",
         "/jsQR.min.js",
         "/html5-qrcode.min.js",
-    } or clean.startswith("/p/") or clean.startswith("/api/")
+    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/api/")
 
 
 def public_api_get(path: str) -> bool:
@@ -2170,6 +2395,10 @@ class AppHandler(SimpleHTTPRequestHandler):
         clean = parsed.path
         if clean == "/":
             return str(STATIC_DIR / "index.html")
+        if clean == "/web":
+            return str(STATIC_DIR / "web.html")
+        if clean == "/reports-display":
+            return str(STATIC_DIR / "reports-display.html")
         if clean.startswith("/p/"):
             return str(STATIC_DIR / "p.html")
         target = STATIC_DIR / clean.lstrip("/")
@@ -2352,6 +2581,134 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json([dict(r) for r in rows])
                 return
 
+            if path == "/api/event-structure.json":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    payload = event_structure_payload(db, event_id)
+                    if not payload:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    session = self.session_user()
+                    audit(db, session["name"] if session else "system", "event.structure_exported", "event", event_id, {"event_id": event_id})
+                body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+                send_download(self, f"evento-{event_id}-estructura.json", "application/json; charset=utf-8", body)
+                return
+
+            if path == "/api/agenda.csv":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    rows = db.execute(
+                        """
+                        SELECT s.name AS sala, a.title AS actividad, substr(a.starts_at, 1, 10) AS fecha,
+                               substr(a.starts_at, 12, 5) AS hora_inicio, substr(a.ends_at, 12, 5) AS hora_fin,
+                               a.speaker AS disertante, a.description AS descripcion, a.capacity AS capacidad,
+                               a.activity_type AS tipo_actividad
+                        FROM activities a
+                        JOIN spaces s ON s.id = a.space_id
+                        WHERE a.event_id = ?
+                        ORDER BY a.starts_at, s.name
+                        """,
+                        (event_id,),
+                    ).fetchall()
+                    audit(db, (self.session_user() or {}).get("name", "system"), "agenda.exported", "event", event_id, {"count": len(rows)})
+                out = BytesIO()
+                writer = csv.writer(_TextWriter(out))
+                writer.writerow(["Sala", "Actividad", "Fecha", "Hora inicio", "Hora fin", "Disertante", "Descripcion", "Capacidad", "Tipo actividad"])
+                for row in rows:
+                    writer.writerow([row[key] for key in row.keys()])
+                send_download(self, f"evento-{event_id}-agenda.csv", "text/csv; charset=utf-8", out.getvalue())
+                return
+
+            if path == "/api/reports/visual-summary":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
+                    if not event:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    accreditation_status_counts = [dict(r) for r in db.execute(
+                        """
+                        SELECT
+                          CASE
+                            WHEN status = 'cancelled' THEN 'Canceladas'
+                            WHEN checked_in_at IS NOT NULL THEN 'Acreditadas'
+                            ELSE 'Pendientes'
+                          END AS label,
+                          COUNT(*) AS value
+                        FROM accreditations
+                        WHERE event_id = ?
+                        GROUP BY label
+                        """,
+                        (event_id,),
+                    ).fetchall()]
+                    by_type = [dict(r) for r in db.execute("SELECT type AS label, COUNT(*) AS value FROM accreditations WHERE event_id = ? AND status <> 'cancelled' GROUP BY type ORDER BY value DESC", (event_id,)).fetchall()]
+                    access_by_time = [dict(r) for r in db.execute(
+                        """
+                        SELECT substr(created_at, 1, 13) || ':00' AS label, COUNT(*) AS value
+                        FROM access_logs
+                        WHERE event_id = ? AND result = 'granted'
+                        GROUP BY label
+                        ORDER BY label
+                        LIMIT 24
+                        """,
+                        (event_id,),
+                    ).fetchall()]
+                    rejection_reasons = [dict(r) for r in db.execute("SELECT reason AS label, COUNT(*) AS value FROM access_logs WHERE event_id = ? AND result = 'rejected' GROUP BY reason ORDER BY value DESC LIMIT 8", (event_id,)).fetchall()]
+                    activity_occupancy = [dict(r) for r in db.execute(
+                        """
+                        SELECT a.title AS label,
+                               SUM(CASE WHEN r.status = 'confirmed' THEN 1 ELSE 0 END) AS value,
+                               a.capacity
+                        FROM activities a
+                        LEFT JOIN reservations r ON r.activity_id = a.id
+                        WHERE a.event_id = ? AND a.status <> 'cancelled'
+                        GROUP BY a.id
+                        ORDER BY value DESC, a.starts_at
+                        LIMIT 8
+                        """,
+                        (event_id,),
+                    ).fetchall()]
+                    source_counts = [dict(r) for r in db.execute("SELECT COALESCE(NULLIF(source, ''), 'sin origen') AS label, COUNT(*) AS value FROM accreditations WHERE event_id = ? GROUP BY label ORDER BY value DESC LIMIT 8", (event_id,)).fetchall()]
+                    device_counts = [dict(r) for r in db.execute("SELECT COALESCE(NULLIF(device_type, ''), 'sin dispositivo') AS label, COUNT(*) AS value FROM accreditations WHERE event_id = ? GROUP BY label ORDER BY value DESC", (event_id,)).fetchall()]
+                    communication_status_counts = [dict(r) for r in db.execute("SELECT estado AS label, COUNT(*) AS value FROM communication_logs WHERE event_id = ? GROUP BY estado", (event_id,)).fetchall()]
+                    operator_activity = [dict(r) for r in db.execute(
+                        """
+                        SELECT operator AS label, COUNT(*) AS value
+                        FROM access_logs
+                        WHERE event_id = ? AND datetime(created_at) >= datetime('now', '-15 minutes')
+                        GROUP BY operator
+                        ORDER BY value DESC
+                        LIMIT 8
+                        """,
+                        (event_id,),
+                    ).fetchall()]
+                    totals = dict(db.execute(
+                        """
+                        SELECT COUNT(*) AS registered,
+                               SUM(CASE WHEN checked_in_at IS NOT NULL AND status <> 'cancelled' THEN 1 ELSE 0 END) AS checked,
+                               SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+                        FROM accreditations
+                        WHERE event_id = ?
+                        """,
+                        (event_id,),
+                    ).fetchone())
+                    audit(db, (self.session_user() or {}).get("name", "system"), "reports.visual_opened", "event", event_id, {"event_id": event_id})
+                self.send_json({
+                    "event": {key: event.get(key) for key in ("id", "name", "venue", "activities_enabled", "capacity_control_enabled", "waitlist_enabled")},
+                    "generated_at": now_iso(),
+                    "totals": totals,
+                    "accreditation_status_counts": accreditation_status_counts,
+                    "by_type": by_type,
+                    "access_by_time": access_by_time,
+                    "rejection_reasons": rejection_reasons,
+                    "activity_occupancy": activity_occupancy,
+                    "source_counts": source_counts,
+                    "device_counts": device_counts,
+                    "communication_status_counts": communication_status_counts,
+                    "operator_activity": operator_activity,
+                })
+                return
+
             if path == "/api/event":
                 event_id = int(query.get("event_id", ["0"])[0])
                 with connect() as db:
@@ -2360,25 +2717,27 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not event:
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
-                    activities = [
-                        dict(r)
-                        for r in db.execute(
-                            """
-                            SELECT a.*, s.name AS space_name
-                            FROM activities a
-                            JOIN spaces s ON s.id = a.space_id
-                            WHERE a.event_id = ? AND a.status = 'published'
-                            ORDER BY a.starts_at
-                            """,
-                            (event_id,),
-                        ).fetchall()
-                    ]
-                    for activity in activities:
-                        availability = public_availability(db, activity["id"])
-                        activity["public_availability"] = availability["label"]
-                        activity["public_availability_color"] = availability["color"]
-                        activity["public_remaining"] = availability["remaining"]
-                        activity.pop("capacity", None)
+                    activities = []
+                    if int(event.get("activities_enabled") or 0) == 1:
+                        activities = [
+                            dict(r)
+                            for r in db.execute(
+                                """
+                                SELECT a.*, s.name AS space_name
+                                FROM activities a
+                                JOIN spaces s ON s.id = a.space_id
+                                WHERE a.event_id = ? AND a.status = 'published'
+                                ORDER BY a.starts_at
+                                """,
+                                (event_id,),
+                            ).fetchall()
+                        ]
+                        for activity in activities:
+                            availability = public_availability(db, activity["id"])
+                            activity["public_availability"] = availability["label"]
+                            activity["public_availability_color"] = availability["color"]
+                            activity["public_remaining"] = availability["remaining"]
+                            activity.pop("capacity", None)
                     types = [
                         dict(r)
                         for r in db.execute(
@@ -3884,9 +4243,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
-                            activity_access_open_minutes_before, created_at
+                            activity_access_open_minutes_before, activities_enabled,
+                            capacity_control_enabled, waitlist_enabled, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             data.get("name", "").strip(),
@@ -3906,6 +4266,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                             data.get("secondary_action_label", "").strip(),
                             data.get("whatsapp_number", "").strip(),
                             max(0, int(data.get("activity_access_open_minutes_before") or 10)),
+                            1 if truthy(data.get("activities_enabled", True)) else 0,
+                            1 if truthy(data.get("capacity_control_enabled", True)) else 0,
+                            1 if truthy(data.get("waitlist_enabled", False)) else 0,
                             now_iso(),
                         ),
                     )
@@ -3949,9 +4312,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
-                            activity_access_open_minutes_before, created_at
+                            activity_access_open_minutes_before, activities_enabled,
+                            capacity_control_enabled, waitlist_enabled, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             name,
@@ -3970,6 +4334,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                             data.get("secondary_action_label", "").strip(),
                             data.get("whatsapp_number", "").strip(),
                             max(0, int(data.get("activity_access_open_minutes_before") or 10)),
+                            1 if truthy(data.get("activities_enabled", True)) else 0,
+                            1 if truthy(data.get("capacity_control_enabled", True)) else 0,
+                            1 if truthy(data.get("waitlist_enabled", True)) else 0,
                             now_iso(),
                         ),
                     )
@@ -4032,6 +4399,119 @@ class AppHandler(SimpleHTTPRequestHandler):
                     },
                     201,
                 )
+                return
+
+            if path == "/api/events/clone":
+                actor = data.get("actor", "Admin")
+                source_event_id = int(data.get("source_event_id") or 0)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    payload = event_structure_payload(db, source_event_id)
+                    if not payload:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Evento origen inexistente"}, 404)
+                        return
+                    result = import_event_structure(db, payload, actor, name=str(data.get("name") or f"{payload['event'].get('name', 'Evento')} copia"))
+                    audit(db, actor, "event.cloned", "event", result["event_id"], {"source_event_id": source_event_id})
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if path == "/api/event-structure/import":
+                actor = data.get("actor", "Admin")
+                payload = data.get("structure") or data
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = import_event_structure(db, payload, actor, name=data.get("name"))
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if path == "/api/agenda/import":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = data.get("rows") or []
+                if not rows and data.get("csv"):
+                    rows = list(csv.DictReader(str(data.get("csv") or "").splitlines()))
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o agenda"}, 400)
+                    return
+                summary = {"created": 0, "updated": 0, "errors": []}
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    for index, row in enumerate(rows, start=1):
+                        try:
+                            room = str(row.get("Sala") or row.get("sala") or row.get("space") or "").strip()
+                            title = str(row.get("Actividad") or row.get("actividad") or row.get("title") or "").strip()
+                            date = str(row.get("Fecha") or row.get("fecha") or row.get("date") or "").strip()
+                            start_time = str(row.get("Hora inicio") or row.get("hora_inicio") or row.get("start") or "").strip()
+                            end_time = str(row.get("Hora fin") or row.get("hora_fin") or row.get("end") or "").strip()
+                            if not room or not title or not date or not start_time or not end_time:
+                                raise ValueError("faltan sala, actividad, fecha u hora")
+                            starts_at = f"{date}T{start_time}"
+                            ends_at = f"{date}T{end_time}"
+                            space = db.execute("SELECT * FROM spaces WHERE event_id = ? AND name = ?", (event_id, room)).fetchone()
+                            if not space:
+                                cur_space = db.execute(
+                                    "INSERT INTO spaces (event_id, name, capacity, responsible, transition_minutes, status, created_at) VALUES (?, ?, 0, '', 15, 'active', ?)",
+                                    (event_id, room, now_iso()),
+                                )
+                                space_id = int(cur_space.lastrowid)
+                            else:
+                                space_id = int(space["id"])
+                            existing = db.execute(
+                                "SELECT * FROM activities WHERE event_id = ? AND space_id = ? AND title = ? AND starts_at = ?",
+                                (event_id, space_id, title, starts_at),
+                            ).fetchone()
+                            conflict = validate_activity_schedule(db, event_id, space_id, starts_at, ends_at, exclude_activity_id=int(existing["id"]) if existing else None)
+                            if conflict:
+                                raise ValueError(conflict)
+                            values = {
+                                "description": str(row.get("Descripcion") or row.get("Descripción") or row.get("descripcion") or "").strip(),
+                                "speaker": str(row.get("Disertante") or row.get("disertante") or "").strip(),
+                                "activity_type": str(row.get("Tipo actividad") or row.get("tipo_actividad") or "Charla").strip() or "Charla",
+                                "capacity": int(row.get("Capacidad") or row.get("capacidad") or 0),
+                            }
+                            if existing:
+                                db.execute(
+                                    """
+                                    UPDATE activities
+                                    SET description = ?, speaker = ?, activity_type = ?, starts_at = ?, ends_at = ?, capacity = ?
+                                    WHERE id = ?
+                                    """,
+                                    (values["description"], values["speaker"], values["activity_type"], starts_at, ends_at, values["capacity"], existing["id"]),
+                                )
+                                summary["updated"] += 1
+                            else:
+                                db.execute(
+                                    """
+                                    INSERT INTO activities (
+                                        event_id, space_id, title, description, speaker, activity_type,
+                                        starts_at, ends_at, capacity, reservation_mode, status, created_at
+                                    )
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'free', 'published', ?)
+                                    """,
+                                    (event_id, space_id, title, values["description"], values["speaker"], values["activity_type"], starts_at, ends_at, values["capacity"], now_iso()),
+                                )
+                                summary["created"] += 1
+                        except Exception as exc:
+                            summary["errors"].append({"row": index, "error": str(exc)})
+                    ensure_capacity_bags(db, event_id=event_id)
+                    audit(db, actor, "agenda.imported", "event", event_id, summary)
+                    db.execute("COMMIT")
+                self.send_json({"ok": not summary["errors"], **summary})
                 return
 
             if path == "/api/types":

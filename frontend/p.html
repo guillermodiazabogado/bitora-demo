@@ -324,6 +324,7 @@
 
     function render(data) {
       portal = data;
+      const activitiesEnabled = Number(data.reservation_config?.activities_enabled ?? data.activities_enabled ?? 1) === 1;
       document.title = `${data.first_name} ${data.last_name} - ${data.event_name}`;
       $("#eventName").textContent = data.event_name;
       $("#personName").textContent = `${data.first_name} ${data.last_name}`;
@@ -341,6 +342,13 @@
       $("#downloadImageBtn").download = `${data.token}-credencial.png`;
       $("#downloadPdfBtn").href = `/api/credential.pdf?token=${encodeURIComponent(data.qr_payload)}`;
       $("#downloadPdfBtn").download = `${data.token}-credencial.pdf`;
+      $("#printAgendaBtn").classList.toggle("hidden", !activitiesEnabled);
+      $("#actividades").classList.toggle("hidden", !activitiesEnabled);
+      $(".next-activity-card").classList.toggle("hidden", !activitiesEnabled);
+      $(".event-mode-card").classList.toggle("hidden", !activitiesEnabled);
+      $("#agenda").classList.toggle("hidden", !activitiesEnabled);
+      $("#reservas").classList.toggle("hidden", !activitiesEnabled);
+      $("#asistencias").classList.toggle("hidden", !activitiesEnabled);
 
       $("#nextActivity").innerHTML = renderActivityHighlight(data.next_activity, "No tienes actividades inscriptas.");
       $("#eventMode").innerHTML = `

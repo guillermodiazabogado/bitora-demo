@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sala de Control BITORA</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="control-room-body dark">
+  <main class="control-room">
+    <header class="control-room-head">
+      <div>
+        <span class="badge">Sala de Control</span>
+        <h1 id="roomTitle">BITORA</h1>
+      </div>
+      <div>
+        <time id="roomClock"></time>
+        <span id="roomRefreshLabel"></span>
+      </div>
+    </header>
+    <section id="roomGrid" class="control-room-grid"></section>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get("event_id") || "0";
+    const refresh = Math.max(5, Number(params.get("refresh") || 10));
+    const blocks = new Set((params.get("blocks") || "kpis,status,types,access,activities,rejections,marketing,communications").split(",").filter(Boolean));
+    document.body.classList.toggle("light", params.get("theme") === "light");
+    document.body.classList.toggle("dark", params.get("theme") !== "light");
+    const $ = (selector) => document.querySelector(selector);
+
+    function sum(rows) {
+      return (rows || []).reduce((acc, row) => acc + Number(row.value || 0), 0);
+    }
+
+    function bars(title, rows, className = "") {
+      const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+      return `<article class="control-card ${className}">
+        <h2>${title}</h2>
+        <div class="bar-list">
+          ${(rows || []).map((row) => `
+            <div class="bar-row">
+              <span>${row.label || "sin dato"}</span>
+              <strong>${Number(row.value || 0)}</strong>
+              <i style="--w:${Math.max(4, Math.round(Number(row.value || 0) / max * 100))}%"></i>
+            </div>
+          `).join("") || `<p>Sin datos</p>`}
+        </div>
+      </article>`;
+    }
+
+    function donut(rows) {
+      const total = Math.max(sum(rows), 1);
+      let angle = 0;
+      const colors = ["#168a53", "#1f6feb", "#c77d14", "#c42014", "#7b8794"];
+      const stops = (rows || []).map((row, index) => {
+        const start = angle;
+        angle += Number(row.value || 0) / total * 360;
+        return `${colors[index % colors.length]} ${start}deg ${angle}deg`;
+      }).join(", ");
+      return `<article class="control-card">
+        <h2>Estado de acreditaciones</h2>
+        <div class="donut-wrap">
+          <div class="donut" style="background: conic-gradient(${stops || "#7b8794 0deg 360deg"})"><strong>${total}</strong></div>
+          <div class="legend">${(rows || []).map((row, index) => `<span><i style="background:${colors[index % colors.length]}"></i>${row.label}: ${row.value}</span>`).join("")}</div>
+        </div>
+      </article>`;
+    }
+
+    function kpis(data) {
+      const totals = data.totals || {};
+      const registered = Number(totals.registered || 0);
+      const checked = Number(totals.checked || 0);
+      const percent = registered ? Math.round(checked / registered * 100) : 0;
+      return `<article class="control-card kpi-card wide">
+        <h2>${data.event?.name || "Evento"}</h2>
+        <div class="kpi-grid">
+          <div><strong>${registered}</strong><span>Inscriptos</span></div>
+          <div><strong>${checked}</strong><span>Acreditados</span></div>
+          <div><strong>${Math.max(registered - checked, 0)}</strong><span>Pendientes</span></div>
+          <div><strong>${percent}%</strong><span>Avance</span></div>
+        </div>
+      </article>`;
+    }
+
+    function line(title, rows) {
+      const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+      return `<article class="control-card wide">
+        <h2>${title}</h2>
+        <div class="sparkline">
+          ${(rows || []).map((row) => `<span style="--h:${Math.max(8, Number(row.value || 0) / max * 100)}%" title="${row.label}: ${row.value}"></span>`).join("") || `<p>Sin datos</p>`}
+        </div>
+      </article>`;
+    }
+
+    async function load() {
+      const response = await fetch(`/api/reports/visual-summary?event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      $("#roomTitle").textContent = data.event?.name || "BITORA";
+      $("#roomRefreshLabel").textContent = `Actualiza cada ${refresh}s`;
+      const cards = [];
+      if (blocks.has("kpis")) cards.push(kpis(data));
+      if (blocks.has("status")) cards.push(donut(data.accreditation_status_counts));
+      if (blocks.has("types")) cards.push(bars("Inscripciones por tipo", data.by_type));
+      if (blocks.has("access")) cards.push(line("Accesos por hora", data.access_by_time));
+      if (blocks.has("activities")) cards.push(bars("Actividades con mas inscriptos", data.activity_occupancy));
+      if (blocks.has("rejections")) cards.push(bars("Motivos de rechazo", data.rejection_reasons, "warn-card"));
+      if (blocks.has("marketing")) cards.push(bars("Origen de inscripcion", data.source_counts));
+      if (blocks.has("communications")) cards.push(bars("Comunicaciones", data.communication_status_counts));
+      cards.push(bars("Operadores activos", data.operator_activity));
+      $("#roomGrid").innerHTML = cards.join("");
+    }
+
+    function tick() {
+      $("#roomClock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+    tick();
+    setInterval(tick, 1000);
+    load();
+    setInterval(load, refresh * 1000);
+  </script>
+</body>
+</html>

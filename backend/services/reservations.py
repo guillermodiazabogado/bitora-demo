@@ -29,6 +29,9 @@ class ReservationService:
         acc = self.repository.accreditation_for_reservation(db, event_id, accreditation_id)
         if not acc:
             return {"ok": False, "error": "Acreditacion no valida", "status_code": 404}
+        event = db.execute("SELECT activities_enabled, waitlist_enabled FROM events WHERE id = ?", (event_id,)).fetchone()
+        if event and not int(event["activities_enabled"] or 0):
+            return {"ok": False, "error": "Este evento no utiliza inscripciones a actividades", "status_code": 409}
         activity = self.repository.activity_for_reservation(db, event_id, activity_id)
         if not activity:
             return {"ok": False, "error": "Actividad no valida", "status_code": 404}
@@ -47,6 +50,8 @@ class ReservationService:
                     "title": activity["title"],
                 }
         bag = self.capacity_service.pick_bucket(db, event_id, activity_id, source)
+        if not bag and event and not int(event["waitlist_enabled"] or 0):
+            return {"ok": False, "error": "Cupo completo", "status_code": 409}
         status = "confirmed" if bag else "waitlisted"
         reservation_id = self.repository.insert_reservation(
             db,

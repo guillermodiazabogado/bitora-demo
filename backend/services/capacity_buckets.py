@@ -68,6 +68,17 @@ class CapacityBucketService:
 
     def public_availability(self, db, activity_id: int) -> dict:
         self.ensure_for_event(db, activity_id=activity_id)
+        activity = db.execute(
+            """
+            SELECT a.capacity, e.capacity_control_enabled
+            FROM activities a
+            JOIN events e ON e.id = a.event_id
+            WHERE a.id = ?
+            """,
+            (activity_id,),
+        ).fetchone()
+        if activity and not int(activity["capacity_control_enabled"] or 0):
+            return {"capacity": 0, "used": 0, "remaining": 0, "label": "Inscripcion abierta", "color": "green"}
         capacity = int(
             self.repository.scalar(
                 db,
@@ -105,6 +116,9 @@ class CapacityBucketService:
 
     def pick_bucket(self, db, event_id: int, activity_id: int, source: str):
         self.ensure_for_event(db, event_id=event_id, activity_id=activity_id)
+        event = db.execute("SELECT capacity_control_enabled FROM events WHERE id = ?", (event_id,)).fetchone()
+        if event and not int(event["capacity_control_enabled"] or 0):
+            return {"id": None}
         activity = db.execute("SELECT capacity FROM activities WHERE id = ?", (activity_id,)).fetchone()
         physical_capacity = int(activity["capacity"] or 0) if activity else 0
         source_filter = "public_registration = 1" if source == "public" else "reception_enabled = 1"

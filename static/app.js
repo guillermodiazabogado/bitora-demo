@@ -65,6 +65,9 @@ async function loadEvents() {
   state.events = await api("/api/events");
   const select = $("#eventSelect");
   select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  if ($("#cloneEventSelect")) {
+    $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  }
   state.eventId = Number(select.value || state.events[0]?.id || 0);
   updateMetrics();
   await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
@@ -86,6 +89,33 @@ function currentEvent() {
   return state.events.find((event) => Number(event.id) === Number(state.eventId));
 }
 
+function eventFeature(name, fallback = true) {
+  const event = currentEvent();
+  if (!event || event[name] === undefined || event[name] === null) return fallback;
+  return Number(event[name]) === 1;
+}
+
+function renderFeatureVisibility() {
+  const activitiesOn = eventFeature("activities_enabled", true);
+  const capacityOn = eventFeature("capacity_control_enabled", true);
+  const waitlistOn = eventFeature("waitlist_enabled", false);
+  document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn);
+  $("#agenda")?.classList.toggle("hidden", !activitiesOn);
+  $("#displayConfigForm")?.closest(".panel")?.classList.toggle("hidden", !activitiesOn);
+  $("#publicDisplayLink")?.classList.toggle("hidden", !activitiesOn);
+  $$(".capacity-feature").forEach((node) => node.classList.toggle("hidden", !capacityOn));
+  $$(".waitlist-feature").forEach((node) => node.classList.toggle("hidden", !waitlistOn));
+}
+
+function updateControlRoomLink() {
+  const blocks = $$(".visual-block-picker input:checked").map((input) => input.value).join(",");
+  const refresh = $("#controlRoomRefresh")?.value || "10";
+  const theme = $("#controlRoomDark")?.checked ? "dark" : "light";
+  if ($("#controlRoomLink")) {
+    $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&blocks=${encodeURIComponent(blocks)}` : "#";
+  }
+}
+
 function updateMetrics() {
   const event = currentEvent();
   const total = Number(event?.accreditation_count || 0);
@@ -101,10 +131,14 @@ function updateMetrics() {
   $("#exportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
   $("#reportsExportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
   $("#reportsExportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
+  $("#exportStructureLink").href = state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#";
+  $("#exportAgendaLink").href = state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#";
   $("#publicEventLink").href = state.eventId ? `/e.html?event_id=${state.eventId}` : "#";
   $("#publicDisplayLink").href = state.eventId ? `/display.html?event_id=${state.eventId}` : "#";
   $("#backupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
   $("#reportsBackupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
+  updateControlRoomLink();
+  renderFeatureVisibility();
 }
 
 async function loadAccreditations() {
@@ -427,11 +461,12 @@ async function loadAgenda() {
 }
 
 function activityCapacityLabel(row) {
+  if (!eventFeature("capacity_control_enabled", true)) return "Sin control de cupos";
   const confirmed = Number(row.confirmed_count || 0);
   const waitlist = Number(row.waitlist_count || 0);
   const capacity = Number(row.capacity || 0);
   const base = capacity ? `${confirmed}/${capacity}` : `${confirmed}/sin limite`;
-  return waitlist ? `${base} + ${waitlist} espera` : base;
+  return waitlist && eventFeature("waitlist_enabled", false) ? `${base} + ${waitlist} espera` : base;
 }
 
 function renderDisplayConfig() {
@@ -581,31 +616,39 @@ async function loadSummary() {
   const acc = summary.accreditation || {};
   const reservations = Object.fromEntries(summary.reservations.map((row) => [row.status, Number(row.total || 0)]));
   const access = Object.fromEntries(summary.access.map((row) => [row.result, Number(row.total || 0)]));
-  $("#summaryStatus").innerHTML = `
-    <div class="summary-grid">
-      <div><strong>${Number(acc.active || 0)}</strong><span>Activas</span></div>
-      <div><strong>${Number(acc.checked || 0)}</strong><span>Acreditadas</span></div>
-      <div><strong>${Number(acc.pending || 0)}</strong><span>Pendientes</span></div>
-      <div><strong>${Number(acc.cancelled || 0)}</strong><span>Canceladas</span></div>
+  const activitiesOn = eventFeature("activities_enabled", true);
+  const waitlistOn = eventFeature("waitlist_enabled", false);
+  const reservationCards = activitiesOn ? `
       <div><strong>${reservations.confirmed || 0}</strong><span>Inscripciones confirmadas</span></div>
-      <div><strong>${reservations.waitlisted || 0}</strong><span>En espera</span></div>
-      <div><strong>${access.granted || 0}</strong><span>Accesos OK</span></div>
-      <div><strong>${access.rejected || 0}</strong><span>Rechazos</span></div>
-      <div><strong>${Number(summary.attendance?.present || 0)}</strong><span>Asistencias</span></div>
-      <div><strong>${Number(summary.attendance?.eligible || 0)}</strong><span>Elegibles certificado</span></div>
-      <div><strong>${Number(summary.attendance?.average_percentage || 0)}%</strong><span>Participacion promedio</span></div>
-    </div>
+      ${waitlistOn ? `<div><strong>${reservations.waitlisted || 0}</strong><span>En espera</span></div>` : ""}
+    ` : "";
+  const activitySummary = activitiesOn ? `
     <div class="summary-columns">
       <div>
         <h3>Por actividad</h3>
         ${summary.by_activity.map((row) => `
           <div class="mini-row">
             <strong>${row.title}</strong>
-            <span>${row.space_name} - ${Number(row.confirmed || 0)} confirmadas - ${Number(row.waitlisted || 0)} espera</span>
+            <span>${row.space_name} - ${Number(row.confirmed || 0)} confirmadas${waitlistOn ? ` - ${Number(row.waitlisted || 0)} espera` : ""}</span>
           </div>
         `).join("") || `<p class="empty">Sin actividades registradas.</p>`}
       </div>
     </div>
+  ` : `<p class="empty">Este evento opera sin gestion de actividades.</p>`;
+  $("#summaryStatus").innerHTML = `
+    <div class="summary-grid">
+      <div><strong>${Number(acc.active || 0)}</strong><span>Activas</span></div>
+      <div><strong>${Number(acc.checked || 0)}</strong><span>Acreditadas</span></div>
+      <div><strong>${Number(acc.pending || 0)}</strong><span>Pendientes</span></div>
+      <div><strong>${Number(acc.cancelled || 0)}</strong><span>Canceladas</span></div>
+      ${reservationCards}
+      <div><strong>${access.granted || 0}</strong><span>Accesos OK</span></div>
+      <div><strong>${access.rejected || 0}</strong><span>Rechazos</span></div>
+      <div><strong>${Number(summary.attendance?.present || 0)}</strong><span>Asistencias</span></div>
+      <div><strong>${Number(summary.attendance?.eligible || 0)}</strong><span>Elegibles certificado</span></div>
+      <div><strong>${Number(summary.attendance?.average_percentage || 0)}%</strong><span>Participacion promedio</span></div>
+    </div>
+    ${activitySummary}
   `;
   $("#participantMetricsStatus").innerHTML = `
     <div><strong>${participantMetrics.registered || 0}</strong><span>Registrados</span></div>
@@ -935,6 +978,55 @@ async function createDemoReal(event) {
   }
 }
 
+async function cloneEventFromTemplate(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.actor = state.currentUser;
+  data.copy_all = form.elements.copy_all.checked;
+  try {
+    const result = await api("/api/events/clone", { method: "POST", body: JSON.stringify(data) });
+    $("#templatesNotice").innerHTML = `<div class="panel success">Evento clonado. ID ${result.event_id}</div>`;
+    form.reset();
+    await loadEvents();
+  } catch (err) {
+    $("#templatesNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function importEventStructure(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    const structure = JSON.parse(form.elements.structure_json.value || "{}");
+    const result = await api("/api/event-structure/import", {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, name: form.elements.name.value, structure }),
+    });
+    $("#templatesNotice").innerHTML = `<div class="panel success">Estructura importada. ID ${result.event_id}</div>`;
+    form.reset();
+    await loadEvents();
+  } catch (err) {
+    $("#templatesNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function importAgenda(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    const result = await api("/api/agenda/import", {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, event_id: state.eventId, csv: form.elements.csv.value }),
+    });
+    const errors = result.errors?.length ? ` Errores: ${result.errors.length}` : "";
+    $("#templatesNotice").innerHTML = `<div class="panel ${result.ok ? "success" : "danger"}">Agenda: ${result.created} creadas, ${result.updated} actualizadas.${errors}</div>`;
+    await Promise.all([loadAgenda(), loadReadiness(), loadAudit()]);
+  } catch (err) {
+    $("#templatesNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
 async function registerPerson(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1200,7 +1292,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
     updateMetrics();
-  await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
+    await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
   });
   $("#currentUserSelect").addEventListener("change", (event) => {
     state.currentUser = event.target.value;
@@ -1209,6 +1301,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#eventForm").addEventListener("submit", createEvent);
   $("#prepareEventForm").addEventListener("submit", prepareRealEvent);
   $("#demoRealForm").addEventListener("submit", createDemoReal);
+  $("#cloneEventForm").addEventListener("submit", cloneEventFromTemplate);
+  $("#importStructureForm").addEventListener("submit", importEventStructure);
+  $("#importAgendaForm").addEventListener("submit", importAgenda);
+  $("#controlRoomRefresh").addEventListener("change", updateControlRoomLink);
+  $("#controlRoomDark").addEventListener("change", updateControlRoomLink);
+  $$(".visual-block-picker input").forEach((input) => input.addEventListener("change", updateControlRoomLink));
   $("#registerForm").addEventListener("submit", registerPerson);
   $("#editAccreditationForm").addEventListener("submit", saveAccreditationEdit);
   $("#importForm").addEventListener("submit", importAccreditations);

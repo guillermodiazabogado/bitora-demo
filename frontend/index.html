@@ -126,6 +126,18 @@
               <input name="ends_at" type="datetime-local">
             </div>
             <input name="capacity" type="number" min="0" placeholder="Cupo general">
+            <select name="activities_enabled">
+              <option value="1">Gestion de actividades activada</option>
+              <option value="0">Sin actividades</option>
+            </select>
+            <select name="capacity_control_enabled">
+              <option value="1">Control de cupos activado</option>
+              <option value="0">Sin control de cupos</option>
+            </select>
+            <select name="waitlist_enabled">
+              <option value="0">Lista de espera desactivada</option>
+              <option value="1">Lista de espera activada</option>
+            </select>
             <select name="activity_selection_mode">
               <option value="optional_later">Actividades opcionales posteriores</option>
               <option value="registration_only">Solo inscripcion</option>
@@ -166,6 +178,18 @@
                 <input name="ends_at" type="datetime-local">
               </div>
               <input name="capacity" type="number" min="0" placeholder="Cupo general">
+              <select name="activities_enabled">
+                <option value="1">Gestion de actividades activada</option>
+                <option value="0">Sin actividades</option>
+              </select>
+              <select name="capacity_control_enabled">
+                <option value="1">Control de cupos activado</option>
+                <option value="0">Sin control de cupos</option>
+              </select>
+              <select name="waitlist_enabled">
+                <option value="0">Lista de espera desactivada</option>
+                <option value="1">Lista de espera activada</option>
+              </select>
               <select name="activity_selection_mode">
                 <option value="optional_later">Actividades opcionales posteriores</option>
                 <option value="registration_only">Solo inscripcion</option>
@@ -210,6 +234,55 @@
         </aside>
 
         <section class="content">
+          <div class="panel control-room-panel">
+            <h2>Sala de Control</h2>
+            <p class="empty">Vista visual en tiempo real para segundo monitor, sin datos personales sensibles.</p>
+            <div class="actions">
+              <a id="controlRoomLink" class="button" href="#" target="_blank">Abrir Sala de Control</a>
+              <select id="controlRoomRefresh">
+                <option value="5">Actualizar cada 5s</option>
+                <option value="10" selected>Actualizar cada 10s</option>
+                <option value="30">Actualizar cada 30s</option>
+                <option value="60">Actualizar cada 60s</option>
+              </select>
+              <label class="toggle"><input id="controlRoomDark" type="checkbox" checked> Modo oscuro</label>
+            </div>
+            <div class="visual-block-picker">
+              <label><input type="checkbox" value="kpis" checked> KPI acreditaciones</label>
+              <label><input type="checkbox" value="status" checked> Torta estados</label>
+              <label><input type="checkbox" value="types" checked> Barras por tipo</label>
+              <label><input type="checkbox" value="access" checked> Accesos por hora</label>
+              <label><input type="checkbox" value="activities" checked> Ranking actividades</label>
+              <label><input type="checkbox" value="rejections" checked> Rechazos</label>
+              <label><input type="checkbox" value="marketing" checked> Captacion</label>
+              <label><input type="checkbox" value="communications" checked> Comunicaciones</label>
+            </div>
+          </div>
+          <div class="panel templates-panel">
+            <h2>Plantillas y Agenda</h2>
+            <div class="template-actions">
+              <form id="cloneEventForm" class="stack">
+                <select name="source_event_id" id="cloneEventSelect"></select>
+                <input name="name" placeholder="Nombre del nuevo evento">
+                <label class="toggle"><input name="copy_all" type="checkbox" checked> Copiar todo lo estructural</label>
+                <button>Crear desde evento existente</button>
+              </form>
+              <div class="stack">
+                <a id="exportStructureLink" class="button ghost" href="#">Exportar estructura</a>
+                <a id="exportAgendaLink" class="button ghost" href="#">Exportar agenda</a>
+              </div>
+              <form id="importStructureForm" class="stack">
+                <textarea name="structure_json" placeholder="Pegar estructura JSON exportada"></textarea>
+                <input name="name" placeholder="Nombre para el evento importado">
+                <button>Importar estructura</button>
+              </form>
+              <form id="importAgendaForm" class="stack">
+                <textarea name="csv" placeholder="Sala,Actividad,Fecha,Hora inicio,Hora fin&#10;Auditorio,Charla demo,2026-07-01,10:00,11:00"></textarea>
+                <button>Importar agenda</button>
+              </form>
+            </div>
+            <div id="templatesNotice" class="result"></div>
+          </div>
           <div class="panel system-panel">
             <h2>Estado del sistema</h2>
             <div id="systemStatus" class="system-status"></div>
