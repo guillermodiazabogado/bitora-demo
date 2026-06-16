@@ -16,15 +16,21 @@
       <time id="displayClock"></time>
     </header>
     <section id="displayMessage" class="display-message hidden"></section>
+    <div id="displayCarouselStatus" class="display-carousel-status hidden"></div>
     <section id="displayContent" class="display-content"></section>
   </main>
   <script>
     const params = new URLSearchParams(location.search);
     const eventId = params.get("event_id") || "0";
     let refreshSeconds = 10;
+    let displayRows = [];
+    let displayConfig = {};
+    let carouselPage = 0;
+    let carouselTimer = null;
 
     const $ = (selector) => document.querySelector(selector);
     const fmtTime = (value) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const fmtClock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
     function stateClass(text) {
       if (text.includes("Completa") || text.includes("Cancelada")) return "red";
@@ -44,6 +50,51 @@
           <em class="${stateClass(row.availability)}">${row.availability}</em>
         </article>
       `).join("");
+    }
+
+    function airportPageSize() {
+      const head = $(".display-head")?.offsetHeight || 92;
+      const message = $("#displayMessage").classList.contains("hidden") ? 0 : ($("#displayMessage").offsetHeight || 0);
+      const status = $("#displayCarouselStatus").classList.contains("hidden") ? 0 : ($("#displayCarouselStatus").offsetHeight || 0);
+      const available = Math.max(window.innerHeight - head - message - status - 104, 300);
+      return Math.max(4, Math.floor(available / 91));
+    }
+
+    function carouselSlice(rows) {
+      const pageSize = airportPageSize();
+      const pages = Math.max(Math.ceil(rows.length / pageSize), 1);
+      if (carouselPage >= pages) carouselPage = 0;
+      const start = carouselPage * pageSize;
+      $("#displayCarouselStatus").classList.toggle("hidden", pages <= 1);
+      $("#displayCarouselStatus").textContent = pages > 1 ? `Pagina ${carouselPage + 1} de ${pages} - ${rows.length} charlas seleccionadas` : "";
+      return rows.slice(start, start + pageSize);
+    }
+
+    function renderCarousel() {
+      if (displayConfig.paused) return;
+      const rows = displayRows || [];
+      if (displayConfig.mode === "now") {
+        $("#displayCarouselStatus").classList.add("hidden");
+        $("#displayContent").innerHTML = renderNow(rows);
+      } else if (displayConfig.mode === "room") {
+        $("#displayCarouselStatus").classList.add("hidden");
+        $("#displayContent").innerHTML = renderRoom(rows);
+      } else {
+        $("#displayContent").innerHTML = renderAirport(carouselSlice(rows));
+      }
+    }
+
+    function scheduleCarousel() {
+      clearInterval(carouselTimer);
+      carouselTimer = null;
+      if ((displayConfig.mode || "airport") !== "airport") return;
+      const pageSize = airportPageSize();
+      if ((displayRows || []).length <= pageSize) return;
+      carouselTimer = setInterval(() => {
+        const pages = Math.max(Math.ceil(displayRows.length / airportPageSize()), 1);
+        carouselPage = (carouselPage + 1) % pages;
+        renderCarousel();
+      }, Math.max(6, Math.min(refreshSeconds, 12)) * 1000);
     }
 
     function renderNow(rows) {
@@ -77,19 +128,19 @@
     async function loadDisplay() {
       const response = await fetch(`/api/public-display?event_id=${encodeURIComponent(eventId)}`);
       const data = await response.json();
-      refreshSeconds = Number(data.config.refresh_seconds || 10);
-      $("#displayClock").textContent = new Date().toLocaleTimeString();
-      if (data.config.message) {
+      displayConfig = data.config || {};
+      refreshSeconds = Number(displayConfig.refresh_seconds || 10);
+      if (displayConfig.message) {
         $("#displayMessage").classList.remove("hidden");
-        $("#displayMessage").textContent = data.config.message;
+        $("#displayMessage").textContent = displayConfig.message;
       } else {
         $("#displayMessage").classList.add("hidden");
       }
-      if (data.config.paused) return;
-      const rows = data.activities || [];
-      if (data.config.mode === "now") $("#displayContent").innerHTML = renderNow(rows);
-      else if (data.config.mode === "room") $("#displayContent").innerHTML = renderRoom(rows);
-      else $("#displayContent").innerHTML = renderAirport(rows);
+      if (displayConfig.paused) return;
+      displayRows = data.activities || [];
+      carouselPage = 0;
+      renderCarousel();
+      scheduleCarousel();
     }
 
     async function loop() {
@@ -97,6 +148,16 @@
       setTimeout(loop, refreshSeconds * 1000);
     }
 
+    function updateClock() {
+      $("#displayClock").textContent = fmtClock();
+    }
+
+    window.addEventListener("resize", () => {
+      renderCarousel();
+      scheduleCarousel();
+    });
+    updateClock();
+    setInterval(updateClock, 1000);
     loop();
   </script>
 </body>

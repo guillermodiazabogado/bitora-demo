@@ -3142,6 +3142,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                 event_id = int(query.get("event_id", ["0"])[0])
                 with connect() as db:
                     config = ensure_public_display_config(db, event_id)
+                    selected_rows = db.execute(
+                        """
+                        SELECT activity_id
+                        FROM public_display_items
+                        WHERE event_id = ? AND visible = 1
+                        ORDER BY sort_order, activity_id
+                        """,
+                        (event_id,),
+                    ).fetchall()
                     rows = db.execute(
                         """
                         SELECT a.*, s.name AS space_name, i.sort_order, i.visible
@@ -3180,7 +3189,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "availability_color": availability["color"],
                         }
                         activities.append(item)
-                self.send_json({"config": config, "activities": activities})
+                self.send_json({
+                    "config": config,
+                    "activities": activities,
+                    "selected_activity_ids": [int(row["activity_id"]) for row in selected_rows],
+                    "has_selection": bool(selected_rows),
+                })
                 return
 
             if path == "/api/portal":
@@ -4311,6 +4325,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                             event_id,
                         ),
                     )
+                    if "activity_ids" in data:
+                        activity_ids = []
+                        for raw_id in data.get("activity_ids") or []:
+                            try:
+                                activity_ids.append(int(raw_id))
+                            except (TypeError, ValueError):
+                                continue
+                        activity_ids = list(dict.fromkeys(activity_ids))
+                        db.execute("UPDATE public_display_items SET visible = 0 WHERE event_id = ?", (event_id,))
+                        for sort_order, activity_id in enumerate(activity_ids, start=1):
+                            db.execute(
+                                """
+                                INSERT INTO public_display_items (event_id, activity_id, sort_order, visible, created_at)
+                                VALUES (?, ?, ?, 1, ?)
+                                ON CONFLICT(event_id, activity_id)
+                                DO UPDATE SET visible = 1, sort_order = excluded.sort_order
+                                """,
+                                (event_id, activity_id, sort_order, now_iso()),
+                            )
                     audit(db, actor, "public_display.config_saved", "event", event_id, data)
                 self.send_json({"ok": True})
                 return

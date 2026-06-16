@@ -382,7 +382,11 @@ async function loadAgenda() {
   state.activities = activities;
   state.reservations = reservations;
   state.bags = bags;
-  state.displayConfig = display.config;
+  state.displayConfig = {
+    ...(display.config || {}),
+    selected_activity_ids: display.selected_activity_ids || [],
+    has_selection: Boolean(display.has_selection),
+  };
   state.attendanceDashboard = attendanceDashboard;
   renderDisplayConfig();
   $("#spaceSelect").innerHTML = spaces.map((row) => `<option value="${row.id}">${row.name}</option>`).join("");
@@ -433,6 +437,21 @@ function renderDisplayConfig() {
   $("#displayRefresh").value = state.displayConfig.refresh_seconds || 10;
   $("#displayPaused").checked = Number(state.displayConfig.paused || 0) === 1;
   $("#displayMessageInput").value = state.displayConfig.message || "";
+  const selected = new Set((state.displayConfig.selected_activity_ids || []).map(Number));
+  const picker = $("#displayActivityPicker");
+  if (!picker) return;
+  picker.innerHTML = state.activities.map((row) => {
+    const checked = selected.has(Number(row.id)) ? "checked" : "";
+    return `
+      <label class="display-activity-option">
+        <input type="checkbox" value="${row.id}" ${checked}>
+        <span>
+          <strong>${row.title}</strong>
+          <small>${new Date(row.starts_at).toLocaleString()} - ${row.space_name}</small>
+        </span>
+      </label>
+    `;
+  }).join("") || `<p class="empty">Todavia no hay charlas cargadas.</p>`;
 }
 
 function renderCapacityBags() {
@@ -768,6 +787,7 @@ async function saveDisplayConfig(event) {
   data.event_id = state.eventId;
   data.actor = state.currentUser;
   data.paused = form.elements.paused.checked;
+  data.activity_ids = $$("#displayActivityPicker input:checked").map((input) => Number(input.value));
   try {
     await api("/api/public-display/config", { method: "POST", body: JSON.stringify(data) });
     await loadAgenda();
