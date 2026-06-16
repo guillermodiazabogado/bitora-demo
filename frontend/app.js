@@ -111,8 +111,12 @@ function updateControlRoomLink() {
   const blocks = $$(".visual-block-picker input:checked").map((input) => input.value).join(",");
   const refresh = $("#controlRoomRefresh")?.value || "10";
   const theme = $("#controlRoomDark")?.checked ? "dark" : "light";
+  const compact = $("#controlRoomCompact")?.checked ? "1" : "0";
+  const rotate = $("#controlRoomRotate")?.value || "0";
+  const maxRooms = $("#controlRoomMaxRooms")?.value || "6";
+  const maxAlerts = $("#controlRoomMaxAlerts")?.value || "4";
   if ($("#controlRoomLink")) {
-    $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&blocks=${encodeURIComponent(blocks)}` : "#";
+    $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&compact=${compact}&rotate=${rotate}&max_rooms=${maxRooms}&max_alerts=${maxAlerts}&blocks=${encodeURIComponent(blocks)}` : "#";
   }
 }
 
@@ -133,6 +137,7 @@ function updateMetrics() {
   $("#reportsExportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
   $("#exportStructureLink").href = state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#";
   $("#exportAgendaLink").href = state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#";
+  $("#exportAgendaIcsLink").href = state.eventId ? `/api/agenda.ics?event_id=${state.eventId}` : "#";
   $("#publicEventLink").href = state.eventId ? `/e.html?event_id=${state.eventId}` : "#";
   $("#publicDisplayLink").href = state.eventId ? `/display.html?event_id=${state.eventId}` : "#";
   $("#backupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
@@ -611,6 +616,7 @@ async function loadSystemStatus() {
 async function loadSummary() {
   if (!state.eventId) return;
   state.summary = await api(`/api/summary?event_id=${state.eventId}`);
+  const visualSummary = await api(`/api/reports/visual-summary?event_id=${state.eventId}`);
   const participantMetrics = await api(`/api/participant-metrics?event_id=${state.eventId}`);
   const summary = state.summary;
   const acc = summary.accreditation || {};
@@ -658,6 +664,13 @@ async function loadSummary() {
     <div><strong>${participantMetrics.consent_whatsapp || 0}</strong><span>WhatsApp OK</span></div>
     <div><strong>${participantMetrics.consent_both || 0}</strong><span>Ambos canales</span></div>
   `;
+  const alerts = (visualSummary.operational_alerts || []).slice(0, 6);
+  $("#operationalAlerts").innerHTML = alerts.map((row) => `
+    <div class="mini-row alert-${row.level || "yellow"}">
+      <strong>${row.title}</strong>
+      <span>${row.message}</span>
+    </div>
+  `).join("") || `<p class="empty">Sin alertas operativas.</p>`;
 }
 
 async function loadMarketing() {
@@ -1014,14 +1027,22 @@ async function importEventStructure(event) {
 async function importAgenda(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const payload = {
+    actor: state.currentUser,
+    event_id: state.eventId,
+    csv: form.elements.csv.value,
+    ics: form.elements.ics.value,
+  };
   try {
-    const result = await api("/api/agenda/import", {
-      method: "POST",
-      body: JSON.stringify({ actor: state.currentUser, event_id: state.eventId, csv: form.elements.csv.value }),
-    });
-    const errors = result.errors?.length ? ` Errores: ${result.errors.length}` : "";
-    $("#templatesNotice").innerHTML = `<div class="panel ${result.ok ? "success" : "danger"}">Agenda: ${result.created} creadas, ${result.updated} actualizadas.${errors}</div>`;
-    await Promise.all([loadAgenda(), loadReadiness(), loadAudit()]);
+    if (event.submitter?.name === "preview") {
+      const result = await api("/api/agenda/preview", { method: "POST", body: JSON.stringify(payload) });
+      $("#templatesNotice").innerHTML = `<div class="panel ${result.errors?.length ? "warn" : "success"}">Previsualizacion: ${result.found} encontradas, ${result.valid} validas, ${result.conflicts} conflictos, ${result.errors.length} errores.</div>`;
+    } else {
+      const result = await api("/api/agenda/import", { method: "POST", body: JSON.stringify(payload) });
+      const errors = result.errors?.length ? ` Errores: ${result.errors.length}` : "";
+      $("#templatesNotice").innerHTML = `<div class="panel ${result.ok ? "success" : "danger"}">Agenda: ${result.created} creadas, ${result.updated} actualizadas.${errors}</div>`;
+      await Promise.all([loadAgenda(), loadReadiness(), loadAudit()]);
+    }
   } catch (err) {
     $("#templatesNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
@@ -1306,6 +1327,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#importAgendaForm").addEventListener("submit", importAgenda);
   $("#controlRoomRefresh").addEventListener("change", updateControlRoomLink);
   $("#controlRoomDark").addEventListener("change", updateControlRoomLink);
+  $("#controlRoomCompact").addEventListener("change", updateControlRoomLink);
+  $("#controlRoomRotate").addEventListener("change", updateControlRoomLink);
+  $("#controlRoomMaxRooms").addEventListener("input", updateControlRoomLink);
+  $("#controlRoomMaxAlerts").addEventListener("input", updateControlRoomLink);
   $$(".visual-block-picker input").forEach((input) => input.addEventListener("change", updateControlRoomLink));
   $("#registerForm").addEventListener("submit", registerPerson);
   $("#editAccreditationForm").addEventListener("submit", saveAccreditationEdit);

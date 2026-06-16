@@ -2807,7 +2807,8 @@ code,
 .control-room-body {
   background: #071018;
   color: #eaf4f7;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .control-room-body.light {
@@ -2816,9 +2817,12 @@ code,
 }
 
 .control-room {
+  box-sizing: border-box;
+  height: 100vh;
   margin: 0 auto;
   max-width: 1440px;
-  padding: 28px;
+  overflow: hidden;
+  padding: 18px 24px;
 }
 
 .control-room-head {
@@ -2826,18 +2830,19 @@ code,
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 22px;
+  height: 72px;
+  margin-bottom: 14px;
 }
 
 .control-room-head h1 {
   color: inherit;
-  font-size: 34px;
+  font-size: clamp(24px, 2.2vw, 34px);
   margin: 8px 0 0;
 }
 
 .control-room-head time {
   display: block;
-  font-size: 28px;
+  font-size: clamp(22px, 2vw, 28px);
   font-weight: 800;
   text-align: right;
 }
@@ -2848,8 +2853,11 @@ code,
 
 .control-room-grid {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+  grid-auto-rows: minmax(132px, 1fr);
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: calc(100vh - 104px);
+  overflow: hidden;
 }
 
 .control-card {
@@ -2857,9 +2865,9 @@ code,
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
-  min-height: 180px;
+  min-height: 0;
   overflow: hidden;
-  padding: 18px;
+  padding: 14px;
 }
 
 .control-room-body.light .control-card {
@@ -2874,8 +2882,8 @@ code,
 
 .control-card h2 {
   color: inherit;
-  font-size: 18px;
-  margin: 0 0 14px;
+  font-size: 16px;
+  margin: 0 0 10px;
 }
 
 .kpi-grid {
@@ -2896,7 +2904,7 @@ code,
 
 .kpi-grid strong {
   display: block;
-  font-size: 34px;
+  font-size: clamp(24px, 2.4vw, 34px);
   line-height: 1;
 }
 
@@ -2940,24 +2948,24 @@ code,
   align-items: center;
   display: grid;
   gap: 18px;
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: 120px 1fr;
 }
 
 .donut {
   align-items: center;
   border-radius: 50%;
   display: flex;
-  height: 160px;
+  height: 118px;
   justify-content: center;
   position: relative;
-  width: 160px;
+  width: 118px;
 }
 
 .donut::after {
   background: #071018;
   border-radius: 50%;
   content: "";
-  inset: 38px;
+  inset: 28px;
   position: absolute;
 }
 
@@ -2988,7 +2996,7 @@ code,
   align-items: end;
   display: flex;
   gap: 8px;
-  height: 150px;
+  height: 108px;
 }
 
 .sparkline span {
@@ -2997,6 +3005,131 @@ code,
   flex: 1;
   height: var(--h);
   min-width: 8px;
+}
+
+.alert-list,
+.room-grid,
+.heatmap-list {
+  display: grid;
+  gap: 8px;
+}
+
+.alert-item {
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 5px solid #c77d14;
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.alert-item.red {
+  border-left-color: #c42014;
+}
+
+.alert-item.green {
+  border-left-color: #168a53;
+}
+
+.alert-item span,
+.room-tile small,
+.room-tile em {
+  color: #9fb7c1;
+}
+
+.room-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-tile {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.room-tile span {
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.room-tile.green {
+  border-left: 6px solid #168a53;
+}
+
+.room-tile.yellow {
+  border-left: 6px solid #c77d14;
+}
+
+.room-tile.red {
+  border-left: 6px solid #c42014;
+}
+
+.heatmap-list span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.heatmap-list b {
+  border-radius: 999px;
+  display: inline-block;
+  height: 14px;
+  width: 14px;
+}
+
+.heatmap-list .green b {
+  background: #168a53;
+}
+
+.heatmap-list .yellow b {
+  background: #c77d14;
+}
+
+.heatmap-list .red b {
+  background: #c42014;
+}
+
+.compact-room .control-room {
+  padding: 12px 16px;
+}
+
+.compact-room .control-room-head {
+  height: 58px;
+  margin-bottom: 8px;
+}
+
+.compact-room .control-room-grid {
+  gap: 8px;
+  grid-auto-rows: minmax(106px, 1fr);
+  height: calc(100vh - 78px);
+}
+
+.compact-room .control-card {
+  padding: 10px;
+}
+
+.compact-room .room-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.compact-room .room-tile span {
+  font-size: 22px;
+}
+
+.mini-row.alert-red {
+  border-left-color: #c42014;
+}
+
+.mini-row.alert-yellow {
+  border-left-color: #c77d14;
+}
+
+.mini-row.alert-green {
+  border-left-color: #168a53;
 }
 
 @media (max-width: 820px) {

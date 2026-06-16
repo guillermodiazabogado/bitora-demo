@@ -65,6 +65,10 @@
             <h2>Resumen operativo</h2>
             <div id="summaryStatus" class="summary-status"></div>
           </div>
+          <div class="panel summary-panel">
+            <h2>Alertas operativas</h2>
+            <div id="operationalAlerts" class="mini-list"></div>
+          </div>
           <div class="panel">
             <h2>Pantalla publica</h2>
             <form id="displayConfigForm" class="display-config-form">
@@ -246,9 +250,21 @@
                 <option value="60">Actualizar cada 60s</option>
               </select>
               <label class="toggle"><input id="controlRoomDark" type="checkbox" checked> Modo oscuro</label>
+              <label class="toggle"><input id="controlRoomCompact" type="checkbox"> Compacto</label>
+              <select id="controlRoomRotate">
+                <option value="0">Sin rotacion</option>
+                <option value="15">Rotar cada 15s</option>
+                <option value="30">Rotar cada 30s</option>
+                <option value="60">Rotar cada 60s</option>
+              </select>
+              <input id="controlRoomMaxRooms" type="number" min="2" max="12" value="6" placeholder="Max salas">
+              <input id="controlRoomMaxAlerts" type="number" min="1" max="10" value="4" placeholder="Max alertas">
             </div>
             <div class="visual-block-picker">
               <label><input type="checkbox" value="kpis" checked> KPI acreditaciones</label>
+              <label><input type="checkbox" value="alerts" checked> Alertas</label>
+              <label><input type="checkbox" value="rooms" checked> Ocupacion salas</label>
+              <label><input type="checkbox" value="heatmap" checked> Mapa calor</label>
               <label><input type="checkbox" value="status" checked> Torta estados</label>
               <label><input type="checkbox" value="types" checked> Barras por tipo</label>
               <label><input type="checkbox" value="access" checked> Accesos por hora</label>
@@ -270,6 +286,7 @@
               <div class="stack">
                 <a id="exportStructureLink" class="button ghost" href="#">Exportar estructura</a>
                 <a id="exportAgendaLink" class="button ghost" href="#">Exportar agenda</a>
+                <a id="exportAgendaIcsLink" class="button ghost" href="#">Exportar agenda ICS</a>
               </div>
               <form id="importStructureForm" class="stack">
                 <textarea name="structure_json" placeholder="Pegar estructura JSON exportada"></textarea>
@@ -278,6 +295,8 @@
               </form>
               <form id="importAgendaForm" class="stack">
                 <textarea name="csv" placeholder="Sala,Actividad,Fecha,Hora inicio,Hora fin&#10;Auditorio,Charla demo,2026-07-01,10:00,11:00"></textarea>
+                <textarea name="ics" placeholder="O pegar calendario ICS de Google, Outlook o Apple"></textarea>
+                <button name="preview" value="1" type="submit" class="ghost">Previsualizar agenda</button>
                 <button>Importar agenda</button>
               </form>
             </div>

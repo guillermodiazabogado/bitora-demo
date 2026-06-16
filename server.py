@@ -1542,6 +1542,109 @@ def import_event_structure(db: sqlite3.Connection, payload: dict, actor: str, na
     return {"ok": True, "event_id": event_id, "activities": len(payload.get("activities") or []), "spaces": len(payload.get("spaces") or [])}
 
 
+def normalize_import_time(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if len(raw) == 8 and raw.isdigit():
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}T00:00"
+    if len(raw) >= 15 and raw[8] == "T":
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}T{raw[9:11]}:{raw[11:13]}"
+    if "T" in raw:
+        return raw[:16].replace("Z", "")
+    return raw
+
+
+def parse_ics_agenda(text: str) -> list[dict]:
+    rows: list[dict] = []
+    event: dict[str, str] | None = None
+    for line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if not line:
+            continue
+        if line.startswith("BEGIN:VEVENT"):
+            event = {}
+            continue
+        if line.startswith("END:VEVENT"):
+            if event:
+                start = normalize_import_time(event.get("DTSTART", ""))
+                end = normalize_import_time(event.get("DTEND", ""))
+                rows.append(
+                    {
+                        "Sala": event.get("LOCATION", "").replace("\\,", ","),
+                        "Actividad": event.get("SUMMARY", "").replace("\\,", ","),
+                        "Fecha": start[:10],
+                        "Hora inicio": start[11:16],
+                        "Hora fin": end[11:16],
+                        "Descripcion": event.get("DESCRIPTION", "").replace("\\n", "\n").replace("\\,", ","),
+                    }
+                )
+            event = None
+            continue
+        if event is None or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.split(";", 1)[0].upper()
+        if key in {"SUMMARY", "DESCRIPTION", "LOCATION", "DTSTART", "DTEND"}:
+            event[key] = value.strip()
+    return rows
+
+
+def agenda_rows_from_payload(data: dict) -> list[dict]:
+    rows = data.get("rows") or []
+    if rows:
+        return rows if isinstance(rows, list) else []
+    if data.get("ics"):
+        return parse_ics_agenda(str(data.get("ics") or ""))
+    if data.get("csv"):
+        return list(csv.DictReader(str(data.get("csv") or "").splitlines()))
+    return []
+
+
+def preview_agenda_rows(db: sqlite3.Connection, event_id: int, rows: list[dict]) -> dict:
+    summary = {"found": len(rows), "valid": 0, "conflicts": 0, "errors": []}
+    for index, row in enumerate(rows, start=1):
+        try:
+            room = str(row.get("Sala") or row.get("sala") or row.get("space") or "").strip()
+            title = str(row.get("Actividad") or row.get("actividad") or row.get("title") or "").strip()
+            date = str(row.get("Fecha") or row.get("fecha") or row.get("date") or "").strip()
+            start_time = str(row.get("Hora inicio") or row.get("hora_inicio") or row.get("start") or "").strip()
+            end_time = str(row.get("Hora fin") or row.get("hora_fin") or row.get("end") or "").strip()
+            if not room or not title or not date or not start_time or not end_time:
+                raise ValueError("faltan sala, actividad, fecha u hora")
+            starts_at = f"{date}T{start_time}"
+            ends_at = f"{date}T{end_time}"
+            space = db.execute("SELECT * FROM spaces WHERE event_id = ? AND name = ?", (event_id, room)).fetchone()
+            space_id = int(space["id"]) if space else 0
+            existing = db.execute(
+                "SELECT * FROM activities WHERE event_id = ? AND title = ? AND starts_at = ?",
+                (event_id, title, starts_at),
+            ).fetchone()
+            conflict = None
+            if space_id:
+                conflict = validate_activity_schedule(db, event_id, space_id, starts_at, ends_at, exclude_activity_id=int(existing["id"]) if existing else None)
+            if conflict:
+                summary["conflicts"] += 1
+                summary["errors"].append({"row": index, "error": conflict})
+            else:
+                summary["valid"] += 1
+        except Exception as exc:
+            summary["errors"].append({"row": index, "error": str(exc)})
+    return summary
+
+
+def ics_escape(value: object) -> str:
+    return str(value or "").replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
+
+
+def ics_datetime(value: object) -> str:
+    text = str(value or "")
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
+        return dt.strftime("%Y%m%dT%H%M%S")
+    except ValueError:
+        return text.replace("-", "").replace(":", "")
+
+
 def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     row = db.execute(
         """
@@ -2619,6 +2722,39 @@ class AppHandler(SimpleHTTPRequestHandler):
                 send_download(self, f"evento-{event_id}-agenda.csv", "text/csv; charset=utf-8", out.getvalue())
                 return
 
+            if path == "/api/agenda.ics":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    rows = db.execute(
+                        """
+                        SELECT e.name AS event_name, s.name AS sala, a.title, a.description, a.starts_at, a.ends_at
+                        FROM activities a
+                        JOIN events e ON e.id = a.event_id
+                        JOIN spaces s ON s.id = a.space_id
+                        WHERE a.event_id = ? AND a.status <> 'cancelled'
+                        ORDER BY a.starts_at, s.name
+                        """,
+                        (event_id,),
+                    ).fetchall()
+                    audit(db, (self.session_user() or {}).get("name", "system"), "agenda.ics_exported", "event", event_id, {"count": len(rows)})
+                lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BITORA//Agenda//ES", "CALSCALE:GREGORIAN"]
+                for row in rows:
+                    lines.extend(
+                        [
+                            "BEGIN:VEVENT",
+                            f"UID:bitora-{event_id}-{ics_escape(row['title'])}-{ics_datetime(row['starts_at'])}",
+                            f"SUMMARY:{ics_escape(row['title'])}",
+                            f"DESCRIPTION:{ics_escape(row['description'])}",
+                            f"LOCATION:{ics_escape(row['sala'])}",
+                            f"DTSTART:{ics_datetime(row['starts_at'])}",
+                            f"DTEND:{ics_datetime(row['ends_at'])}",
+                            "END:VEVENT",
+                        ]
+                    )
+                lines.append("END:VCALENDAR")
+                send_download(self, f"evento-{event_id}-agenda.ics", "text/calendar; charset=utf-8", ("\r\n".join(lines) + "\r\n").encode("utf-8"))
+                return
+
             if path == "/api/reports/visual-summary":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -2682,6 +2818,82 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchall()]
+                    occupancy_rows = [
+                        dict(r)
+                        for r in db.execute(
+                            """
+                            SELECT s.id, s.name AS room,
+                                   COALESCE(NULLIF(s.capacity, 0), SUM(COALESCE(NULLIF(a.capacity, 0), 0)), 0) AS capacity,
+                                   COUNT(DISTINCT CASE WHEN r.status = 'confirmed' THEN r.id END) AS registered,
+                                   COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) AS present
+                            FROM spaces s
+                            LEFT JOIN activities a ON a.space_id = s.id AND a.status <> 'cancelled'
+                            LEFT JOIN reservations r ON r.activity_id = a.id
+                            LEFT JOIN activity_attendance at ON at.activity_id = a.id
+                            WHERE s.event_id = ? AND s.status <> 'cancelled'
+                            GROUP BY s.id
+                            ORDER BY s.name
+                            """,
+                            (event_id,),
+                        ).fetchall()
+                    ]
+                    occupancy_by_room = []
+                    low_threshold = int(query.get("occupancy_low_threshold", ["30"])[0] or 30)
+                    for row in occupancy_rows:
+                        capacity = int(row.get("capacity") or 0)
+                        present = int(row.get("present") or 0)
+                        registered = int(row.get("registered") or 0)
+                        percentage = int(round((present / capacity * 100), 0)) if capacity else 0
+                        if percentage > 60:
+                            color = "green"
+                        elif percentage >= low_threshold:
+                            color = "yellow"
+                        else:
+                            color = "red"
+                        occupancy_by_room.append(
+                            {
+                                "room": row["room"],
+                                "capacity": capacity,
+                                "registered": registered,
+                                "present": present,
+                                "percentage": percentage,
+                                "color": color,
+                                "low": capacity > 0 and percentage < low_threshold,
+                            }
+                        )
+                    room_ranking = sorted(occupancy_by_room, key=lambda item: item["percentage"], reverse=True)
+                    room_heatmap = [{"room": item["room"], "color": item["color"], "percentage": item["percentage"]} for item in room_ranking]
+                    attendance_vs_capacity = [
+                        {
+                            "room": item["room"],
+                            "capacity": item["capacity"],
+                            "registered": item["registered"],
+                            "present": item["present"],
+                            "attendance_percentage": item["percentage"],
+                        }
+                        for item in room_ranking
+                    ]
+                    critical_activities = [
+                        dict(r)
+                        for r in db.execute(
+                            """
+                            SELECT a.title, s.name AS room, a.capacity,
+                                   COUNT(DISTINCT CASE WHEN r.status = 'confirmed' THEN r.id END) AS registered,
+                                   COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) AS present
+                            FROM activities a
+                            JOIN spaces s ON s.id = a.space_id
+                            LEFT JOIN reservations r ON r.activity_id = a.id
+                            LEFT JOIN activity_attendance at ON at.activity_id = a.id
+                            WHERE a.event_id = ? AND a.status <> 'cancelled'
+                            GROUP BY a.id
+                            HAVING COALESCE(a.capacity, 0) > 0
+                               AND ROUND(COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) * 100.0 / a.capacity, 0) < ?
+                            ORDER BY present ASC, a.starts_at
+                            LIMIT 8
+                            """,
+                            (event_id, low_threshold),
+                        ).fetchall()
+                    ]
                     totals = dict(db.execute(
                         """
                         SELECT COUNT(*) AS registered,
@@ -2692,16 +2904,50 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone())
+                    operational_alerts = []
+                    for item in occupancy_by_room:
+                        if item["low"]:
+                            operational_alerts.append({"type": "occupancy_low", "level": "red", "title": "Ocupacion baja", "message": f"{item['room']}: {item['percentage']}% - {item['present']} presentes / {item['capacity']} capacidad"})
+                    for item in critical_activities:
+                        present = int(item.get("present") or 0)
+                        capacity = int(item.get("capacity") or 0)
+                        percentage = int(round(present / capacity * 100, 0)) if capacity else 0
+                        title = "Actividad sin asistentes" if present == 0 else "Actividad critica"
+                        operational_alerts.append({"type": "critical_activity", "level": "yellow" if present else "red", "title": title, "message": f"{item['title']} - {item['room']} - {percentage}%"})
+                    rejected_recent = int(sum(int(row.get("value") or 0) for row in rejection_reasons))
+                    if rejected_recent >= 5:
+                        operational_alerts.append({"type": "qr_rejections", "level": "yellow", "title": "Rechazos QR elevados", "message": f"{rejected_recent} rechazos registrados"})
+                    if int(event.get("waitlist_enabled") or 0):
+                        waitlisted_total = int(db.execute("SELECT COUNT(*) AS c FROM reservations WHERE event_id = ? AND status = 'waitlisted'", (event_id,)).fetchone()["c"])
+                        if waitlisted_total >= 10:
+                            operational_alerts.append({"type": "waitlist_high", "level": "yellow", "title": "Lista de espera alta", "message": f"{waitlisted_total} personas en espera"})
+                    communication_errors = int(db.execute("SELECT COUNT(*) AS c FROM communication_logs WHERE event_id = ? AND estado IN ('error', 'fallido')", (event_id,)).fetchone()["c"])
+                    if communication_errors:
+                        operational_alerts.append({"type": "communication_error", "level": "yellow", "title": "Errores de comunicacion", "message": f"{communication_errors} envios con error"})
+                    avg_occupancy = int(round(sum(item["percentage"] for item in occupancy_by_room) / len(occupancy_by_room), 0)) if occupancy_by_room else 100
+                    registered_total = int(totals.get("registered") or 0)
+                    checked_total = int(totals.get("checked") or 0)
+                    attendance_score = int(round(checked_total / registered_total * 100, 0)) if registered_total else 100
+                    rejection_penalty = min(30, rejected_recent * 3)
+                    alert_penalty = min(40, len(operational_alerts) * 8)
+                    event_health = max(0, min(100, int(round((avg_occupancy + attendance_score) / 2 - rejection_penalty - alert_penalty, 0))))
                     audit(db, (self.session_user() or {}).get("name", "system"), "reports.visual_opened", "event", event_id, {"event_id": event_id})
                 self.send_json({
                     "event": {key: event.get(key) for key in ("id", "name", "venue", "activities_enabled", "capacity_control_enabled", "waitlist_enabled")},
                     "generated_at": now_iso(),
                     "totals": totals,
+                    "event_health": event_health,
+                    "operational_alerts": operational_alerts,
                     "accreditation_status_counts": accreditation_status_counts,
                     "by_type": by_type,
                     "access_by_time": access_by_time,
                     "rejection_reasons": rejection_reasons,
                     "activity_occupancy": activity_occupancy,
+                    "occupancy_by_room": occupancy_by_room,
+                    "room_heatmap": room_heatmap,
+                    "room_ranking": room_ranking,
+                    "critical_activities": critical_activities,
+                    "attendance_vs_capacity": attendance_vs_capacity,
                     "source_counts": source_counts,
                     "device_counts": device_counts,
                     "communication_status_counts": communication_status_counts,
@@ -4435,12 +4681,26 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result, 201)
                 return
 
+            if path == "/api/agenda/preview":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = agenda_rows_from_payload(data)
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o agenda"}, 400)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    summary = preview_agenda_rows(db, event_id, rows)
+                    audit(db, actor, "agenda.previewed", "event", event_id, summary)
+                self.send_json({"ok": True, **summary})
+                return
+
             if path == "/api/agenda/import":
                 actor = data.get("actor", "Admin")
                 event_id = int(data.get("event_id") or 0)
-                rows = data.get("rows") or []
-                if not rows and data.get("csv"):
-                    rows = list(csv.DictReader(str(data.get("csv") or "").splitlines()))
+                rows = agenda_rows_from_payload(data)
                 if not event_id or not isinstance(rows, list):
                     self.send_json({"error": "Faltan evento o agenda"}, 400)
                     return

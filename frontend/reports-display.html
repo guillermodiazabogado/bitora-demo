@@ -13,7 +13,7 @@
         <span class="badge">Sala de Control</span>
         <h1 id="roomTitle">BITORA</h1>
       </div>
-      <div>
+      <div class="control-room-status">
         <time id="roomClock"></time>
         <span id="roomRefreshLabel"></span>
       </div>
@@ -24,32 +24,48 @@
     const params = new URLSearchParams(location.search);
     const eventId = params.get("event_id") || "0";
     const refresh = Math.max(5, Number(params.get("refresh") || 10));
-    const blocks = new Set((params.get("blocks") || "kpis,status,types,access,activities,rejections,marketing,communications").split(",").filter(Boolean));
+    const rotate = Number(params.get("rotate") || 0);
+    const maxRooms = Math.max(2, Number(params.get("max_rooms") || 6));
+    const maxAlerts = Math.max(1, Number(params.get("max_alerts") || 4));
+    const compact = params.get("compact") === "1";
+    const defaultBlocks = "kpis,alerts,rooms,heatmap,status,access,activities,rejections";
+    const blocks = new Set((params.get("blocks") || defaultBlocks).split(",").filter(Boolean));
     document.body.classList.toggle("light", params.get("theme") === "light");
     document.body.classList.toggle("dark", params.get("theme") !== "light");
+    document.body.classList.toggle("compact-room", compact);
     const $ = (selector) => document.querySelector(selector);
+    let rotatePage = 0;
 
     function sum(rows) {
       return (rows || []).reduce((acc, row) => acc + Number(row.value || 0), 0);
     }
 
+    function pageRows(rows, size) {
+      const list = rows || [];
+      if (!rotate || list.length <= size) return list.slice(0, size);
+      const pages = Math.max(1, Math.ceil(list.length / size));
+      const start = (rotatePage % pages) * size;
+      return list.slice(start, start + size);
+    }
+
     function bars(title, rows, className = "") {
-      const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+      const max = Math.max(...(rows || []).map((row) => Number(row.value || row.percentage || 0)), 1);
       return `<article class="control-card ${className}">
         <h2>${title}</h2>
         <div class="bar-list">
-          ${(rows || []).map((row) => `
-            <div class="bar-row">
-              <span>${row.label || "sin dato"}</span>
-              <strong>${Number(row.value || 0)}</strong>
-              <i style="--w:${Math.max(4, Math.round(Number(row.value || 0) / max * 100))}%"></i>
-            </div>
-          `).join("") || `<p>Sin datos</p>`}
+          ${(rows || []).map((row) => {
+            const value = Number(row.value ?? row.percentage ?? 0);
+            return `<div class="bar-row">
+              <span>${row.label || row.room || row.title || "sin dato"}</span>
+              <strong>${value}${row.percentage !== undefined ? "%" : ""}</strong>
+              <i style="--w:${Math.max(4, Math.round(value / max * 100))}%"></i>
+            </div>`;
+          }).join("") || `<p>Sin datos</p>`}
         </div>
       </article>`;
     }
 
-    function donut(rows) {
+    function donut(rows, title = "Estado de acreditaciones") {
       const total = Math.max(sum(rows), 1);
       let angle = 0;
       const colors = ["#168a53", "#1f6feb", "#c77d14", "#c42014", "#7b8794"];
@@ -59,7 +75,7 @@
         return `${colors[index % colors.length]} ${start}deg ${angle}deg`;
       }).join(", ");
       return `<article class="control-card">
-        <h2>Estado de acreditaciones</h2>
+        <h2>${title}</h2>
         <div class="donut-wrap">
           <div class="donut" style="background: conic-gradient(${stops || "#7b8794 0deg 360deg"})"><strong>${total}</strong></div>
           <div class="legend">${(rows || []).map((row, index) => `<span><i style="background:${colors[index % colors.length]}"></i>${row.label}: ${row.value}</span>`).join("")}</div>
@@ -71,14 +87,15 @@
       const totals = data.totals || {};
       const registered = Number(totals.registered || 0);
       const checked = Number(totals.checked || 0);
-      const percent = registered ? Math.round(checked / registered * 100) : 0;
+      const access15 = (data.operator_activity || []).reduce((acc, row) => acc + Number(row.value || 0), 0);
+      const alerts = (data.operational_alerts || []).length;
       return `<article class="control-card kpi-card wide">
         <h2>${data.event?.name || "Evento"}</h2>
         <div class="kpi-grid">
-          <div><strong>${registered}</strong><span>Inscriptos</span></div>
-          <div><strong>${checked}</strong><span>Acreditados</span></div>
-          <div><strong>${Math.max(registered - checked, 0)}</strong><span>Pendientes</span></div>
-          <div><strong>${percent}%</strong><span>Avance</span></div>
+          <div><strong>${Number(data.event_health || 0)}%</strong><span>Salud del evento</span></div>
+          <div><strong>${checked}</strong><span>Acreditados presentes</span></div>
+          <div><strong>${access15}</strong><span>Accesos 15 min</span></div>
+          <div><strong>${alerts}</strong><span>Alertas activas</span></div>
         </div>
       </article>`;
     }
@@ -93,21 +110,62 @@
       </article>`;
     }
 
+    function alerts(rows) {
+      return `<article class="control-card alert-card">
+        <h2>Alertas operativas</h2>
+        <div class="alert-list">
+          ${(rows || []).slice(0, maxAlerts).map((row) => `
+            <div class="alert-item ${row.level || "yellow"}">
+              <strong>${row.title}</strong>
+              <span>${row.message}</span>
+            </div>
+          `).join("") || `<p>Sin alertas operativas</p>`}
+        </div>
+      </article>`;
+    }
+
+    function rooms(rows) {
+      return `<article class="control-card wide">
+        <h2>Ocupacion por salas</h2>
+        <div class="room-grid">
+          ${pageRows(rows || [], maxRooms).map((row) => `
+            <div class="room-tile ${row.color}">
+              <strong>${row.room}</strong>
+              <span>${row.percentage}%</span>
+              <small>${row.present} presentes / ${row.capacity} capacidad</small>
+              ${row.low ? `<em>Ocupacion baja</em>` : ""}
+            </div>
+          `).join("") || `<p>Sin salas activas</p>`}
+        </div>
+      </article>`;
+    }
+
+    function heatmap(rows) {
+      return `<article class="control-card">
+        <h2>Mapa de calor</h2>
+        <div class="heatmap-list">
+          ${(rows || []).slice(0, maxRooms).map((row) => `<span class="${row.color}"><b></b>${row.room} ${row.percentage}%</span>`).join("") || `<p>Sin datos</p>`}
+        </div>
+      </article>`;
+    }
+
     async function load() {
       const response = await fetch(`/api/reports/visual-summary?event_id=${encodeURIComponent(eventId)}`);
       const data = await response.json();
       $("#roomTitle").textContent = data.event?.name || "BITORA";
-      $("#roomRefreshLabel").textContent = `Actualiza cada ${refresh}s`;
+      $("#roomRefreshLabel").textContent = `Actualiza cada ${refresh}s${rotate ? ` - rota cada ${rotate}s` : ""}`;
       const cards = [];
       if (blocks.has("kpis")) cards.push(kpis(data));
+      if (blocks.has("alerts")) cards.push(alerts(data.operational_alerts));
+      if (blocks.has("rooms")) cards.push(rooms(data.room_ranking));
+      if (blocks.has("heatmap")) cards.push(heatmap(data.room_heatmap));
       if (blocks.has("status")) cards.push(donut(data.accreditation_status_counts));
-      if (blocks.has("types")) cards.push(bars("Inscripciones por tipo", data.by_type));
-      if (blocks.has("access")) cards.push(line("Accesos por hora", data.access_by_time));
-      if (blocks.has("activities")) cards.push(bars("Actividades con mas inscriptos", data.activity_occupancy));
+      if (blocks.has("access")) cards.push(line("Flujo de ingresos", data.access_by_time));
+      if (blocks.has("activities")) cards.push(bars("Actividades criticas", data.critical_activities));
       if (blocks.has("rejections")) cards.push(bars("Motivos de rechazo", data.rejection_reasons, "warn-card"));
+      if (blocks.has("types")) cards.push(bars("Inscripciones por tipo", data.by_type));
       if (blocks.has("marketing")) cards.push(bars("Origen de inscripcion", data.source_counts));
       if (blocks.has("communications")) cards.push(bars("Comunicaciones", data.communication_status_counts));
-      cards.push(bars("Operadores activos", data.operator_activity));
       $("#roomGrid").innerHTML = cards.join("");
     }
 
@@ -118,6 +176,7 @@
     setInterval(tick, 1000);
     load();
     setInterval(load, refresh * 1000);
+    if (rotate) setInterval(() => { rotatePage += 1; load(); }, rotate * 1000);
   </script>
 </body>
 </html>
