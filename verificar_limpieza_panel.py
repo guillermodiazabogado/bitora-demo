@@ -60,7 +60,8 @@ def check_sources() -> None:
 
     assert_true('data-view="reports"' in index and '<section id="reports"' in index, "No existe pestaña/seccion Reportes")
 
-    dashboard = section(index, "dashboard", "reports")
+    dashboard = section(index, "dashboard", "configure")
+    configure = section(index, "configure", "reports")
     reports = section(index, "reports", "register")
     moved_labels = [
         "Estado del sistema",
@@ -76,6 +77,7 @@ def check_sources() -> None:
     assert_true("marketingStatus" not in dashboard and "marketingStatus" in reports, "Marketing no fue movido a Reportes")
 
     assert_true("Tipos y cupos" not in dashboard, "Tipos y cupos sigue visible en Panel Operativo")
+    assert_true("Tipos y cupos" in configure, "Tipos y cupos no aparece en Configurar Evento")
     assert_true("Cupo general" not in dashboard, "Configuracion de cupo general sigue visible en Panel Operativo")
     assert_true("Por tipo" not in app_js, "Resumen operativo sigue mostrando Por tipo")
 
@@ -95,7 +97,7 @@ def check_sources() -> None:
     combined_ui = "\n".join([index, app_js, public_js, portal])
     for phrase in old_visible_phrases:
         assert_true(phrase not in combined_ui, f"Texto visible antiguo encontrado: {phrase}")
-    assert_true("Inscripciones</h2>" in index, "Agenda no usa Inscripciones")
+    assert_true("Gestion de inscripciones</h2>" in index, "Inscribir no usa Gestion de inscripciones")
     assert_true("Mis inscripciones" in portal, "Portal no usa Mis inscripciones")
 
     assert_true("copy-portal-link" not in public_js, "Landing publica conserva accion de copiar intermedia")

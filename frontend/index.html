@@ -23,6 +23,7 @@
       <button data-view="reception">Recepcion</button>
       <button data-view="agenda">Agenda</button>
       <button data-view="access">Acceso</button>
+      <button data-view="configure">Configurar Evento</button>
       <button data-view="reports">Reportes</button>
       <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
@@ -39,11 +40,8 @@
         <div class="actions">
           <button id="refreshBtn">Actualizar</button>
           <a id="publicDisplayLink" class="button" href="#" target="_blank">Pantalla publica</a>
-          <a id="exportAttendancesLink" class="button ghost" href="#">Asistencias CSV</a>
-          <a id="exportCertificatesLink" class="button ghost" href="#">Elegibles CSV</a>
-          <a id="exportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
-          <a id="exportJsonLink" class="button ghost" href="#">Exportar JSON</a>
           <a id="backupLink" class="button ghost" href="/api/backup">Backup</a>
+          <button type="button" class="ghost" data-view-target="configure">Configurar Evento</button>
         </div>
       </div>
 
@@ -52,7 +50,7 @@
           <h2>Evento activo</h2>
           <select id="eventSelect"></select>
           <a id="publicEventLink" class="button ghost full-link" href="#" target="_blank">Abrir landing publica</a>
-          <p class="empty">Usa este panel para controlar la operacion en vivo. La configuracion y el seguimiento analitico estan en Reportes.</p>
+          <p class="empty">Usa este panel para controlar la operacion en vivo. Configuracion y reportes viven en secciones separadas.</p>
         </aside>
 
         <section class="content">
@@ -106,15 +104,13 @@
       </div>
     </section>
 
-    <section id="reports" class="view">
+    <section id="configure" class="view">
       <div class="section-head">
         <div>
-          <h1>Reportes</h1>
-          <p>Analitica, seguimiento tecnico y configuracion avanzada del evento.</p>
+          <h1>Configurar Evento</h1>
+          <p>Datos generales, reglas, modulos, cupos, plantillas e importacion de agenda.</p>
         </div>
         <div class="actions">
-          <a id="reportsExportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
-          <a id="reportsExportJsonLink" class="button ghost" href="#">Exportar JSON</a>
           <a id="reportsBackupLink" class="button ghost" href="/api/backup">Backup</a>
         </div>
       </div>
@@ -238,42 +234,6 @@
         </aside>
 
         <section class="content">
-          <div class="panel control-room-panel">
-            <h2>Sala de Control</h2>
-            <p class="empty">Vista visual en tiempo real para segundo monitor, sin datos personales sensibles.</p>
-            <div class="actions">
-              <a id="controlRoomLink" class="button" href="#" target="_blank">Abrir Sala de Control</a>
-              <select id="controlRoomRefresh">
-                <option value="5">Actualizar cada 5s</option>
-                <option value="10" selected>Actualizar cada 10s</option>
-                <option value="30">Actualizar cada 30s</option>
-                <option value="60">Actualizar cada 60s</option>
-              </select>
-              <label class="toggle"><input id="controlRoomDark" type="checkbox" checked> Modo oscuro</label>
-              <label class="toggle"><input id="controlRoomCompact" type="checkbox"> Compacto</label>
-              <select id="controlRoomRotate">
-                <option value="0">Sin rotacion</option>
-                <option value="15">Rotar cada 15s</option>
-                <option value="30">Rotar cada 30s</option>
-                <option value="60">Rotar cada 60s</option>
-              </select>
-              <input id="controlRoomMaxRooms" type="number" min="2" max="12" value="6" placeholder="Max salas">
-              <input id="controlRoomMaxAlerts" type="number" min="1" max="10" value="4" placeholder="Max alertas">
-            </div>
-            <div class="visual-block-picker">
-              <label><input type="checkbox" value="kpis" checked> KPI acreditaciones</label>
-              <label><input type="checkbox" value="alerts" checked> Alertas</label>
-              <label><input type="checkbox" value="rooms" checked> Ocupacion salas</label>
-              <label><input type="checkbox" value="heatmap" checked> Mapa calor</label>
-              <label><input type="checkbox" value="status" checked> Torta estados</label>
-              <label><input type="checkbox" value="types" checked> Barras por tipo</label>
-              <label><input type="checkbox" value="access" checked> Accesos por hora</label>
-              <label><input type="checkbox" value="activities" checked> Ranking actividades</label>
-              <label><input type="checkbox" value="rejections" checked> Rechazos</label>
-              <label><input type="checkbox" value="marketing" checked> Captacion</label>
-              <label><input type="checkbox" value="communications" checked> Comunicaciones</label>
-            </div>
-          </div>
           <div class="panel templates-panel">
             <h2>Plantillas y Agenda</h2>
             <div class="template-actions">
@@ -302,26 +262,6 @@
             </div>
             <div id="templatesNotice" class="result"></div>
           </div>
-          <div class="panel system-panel">
-            <h2>Estado del sistema</h2>
-            <div id="systemStatus" class="system-status"></div>
-          </div>
-          <div class="panel network-panel">
-            <h2>Red local</h2>
-            <div id="networkStatus" class="network-status"></div>
-          </div>
-          <div class="panel marketing-panel">
-            <h2>Marketing y conversion</h2>
-            <div id="marketingStatus" class="summary-status"></div>
-          </div>
-          <div class="panel participant-metrics-panel">
-            <h2>Experiencia participante</h2>
-            <div id="participantMetricsStatus" class="summary-grid"></div>
-          </div>
-          <div class="panel readiness-panel">
-            <h2>Checklist previa al evento</h2>
-            <div id="readinessStatus" class="readiness-status"></div>
-          </div>
           <div class="panel types-panel">
             <h2>Tipos y cupos</h2>
             <div id="typesList" class="types-list"></div>
@@ -336,11 +276,85 @@
       </div>
     </section>
 
+    <section id="reports" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Reportes</h1>
+          <p>Analitica, sala de control, metricas, graficos e indicadores del evento.</p>
+        </div>
+        <div class="actions">
+          <a id="reportsExportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
+          <a id="reportsExportJsonLink" class="button ghost" href="#">Exportar JSON</a>
+        </div>
+      </div>
+      <div class="content">
+        <div class="panel control-room-panel">
+          <h2>Sala de Control</h2>
+          <p class="empty">Vista visual en tiempo real para segundo monitor, sin datos personales sensibles.</p>
+          <div class="actions">
+            <a id="controlRoomLink" class="button" href="#" target="_blank">Abrir Sala de Control</a>
+            <select id="controlRoomRefresh">
+              <option value="5">Actualizar cada 5s</option>
+              <option value="10" selected>Actualizar cada 10s</option>
+              <option value="30">Actualizar cada 30s</option>
+              <option value="60">Actualizar cada 60s</option>
+            </select>
+            <label class="toggle"><input id="controlRoomDark" type="checkbox" checked> Modo oscuro</label>
+            <label class="toggle"><input id="controlRoomCompact" type="checkbox" checked> Compacto</label>
+            <select id="controlRoomRotate">
+              <option value="0">Sin rotacion</option>
+              <option value="15">Rotar cada 15s</option>
+              <option value="30">Rotar cada 30s</option>
+              <option value="60">Rotar cada 60s</option>
+            </select>
+            <input id="controlRoomMaxRooms" type="number" min="2" max="12" value="6" placeholder="Max salas">
+            <input id="controlRoomMaxAlerts" type="number" min="1" max="10" value="4" placeholder="Max alertas">
+          </div>
+          <div class="visual-block-picker">
+            <label><input type="checkbox" value="kpis" checked> KPI acreditaciones</label>
+            <label><input type="checkbox" value="alerts" checked> Alertas</label>
+            <label><input type="checkbox" value="rooms" checked> Ocupacion salas</label>
+            <label><input type="checkbox" value="heatmap" checked> Mapa calor</label>
+            <label><input type="checkbox" value="status" checked> Torta estados</label>
+            <label><input type="checkbox" value="types" checked> Barras por tipo</label>
+            <label><input type="checkbox" value="access" checked> Accesos por hora</label>
+            <label><input type="checkbox" value="activities" checked> Ranking actividades</label>
+            <label><input type="checkbox" value="rejections" checked> Rechazos</label>
+            <label><input type="checkbox" value="marketing" checked> Captacion</label>
+            <label><input type="checkbox" value="communications" checked> Comunicaciones</label>
+          </div>
+        </div>
+        <div class="panel marketing-panel">
+          <h2>Marketing y conversion</h2>
+          <div id="marketingStatus" class="summary-status"></div>
+        </div>
+        <div class="panel participant-metrics-panel">
+          <h2>Experiencia participante</h2>
+          <div id="participantMetricsStatus" class="summary-grid"></div>
+        </div>
+        <div class="panel readiness-panel">
+          <h2>Checklist previa al evento</h2>
+          <div id="readinessStatus" class="readiness-status"></div>
+        </div>
+        <div class="panel system-panel">
+          <h2>Estado del sistema</h2>
+          <div id="systemStatus" class="system-status"></div>
+        </div>
+        <div class="panel network-panel">
+          <h2>Red local</h2>
+          <div id="networkStatus" class="network-status"></div>
+        </div>
+      </div>
+    </section>
+
     <section id="register" class="view">
       <div class="section-head">
         <div>
           <h1>Inscripcion</h1>
-          <p>Crea una acreditacion con token unico.</p>
+          <p>Crea acreditaciones y administra inscripciones a actividades.</p>
+        </div>
+        <div class="actions">
+          <a id="exportReservationsLink" class="button ghost" href="#">Exportar inscripciones</a>
         </div>
       </div>
       <form id="registerForm" class="panel form-grid">
@@ -354,6 +368,15 @@
         <button>Inscribir y emitir credencial</button>
       </form>
       <div id="registerResult" class="result"></div>
+      <div class="panel reservation-panel">
+        <h2>Gestion de inscripciones</h2>
+        <form id="reservationForm" class="reservation-form">
+          <select name="accreditation_id" id="reservationAccreditationSelect" required></select>
+          <select name="activity_id" id="reservationActivitySelect" required></select>
+          <button>Inscribir</button>
+        </form>
+        <div id="reservationsList" class="reservation-list"></div>
+      </div>
     </section>
 
     <section id="reception" class="view">
@@ -413,7 +436,6 @@
           <h1>Agenda</h1>
           <p>Espacios, actividades y transicion minima por sala.</p>
         </div>
-        <a id="exportReservationsLink" class="button ghost" href="#">Exportar inscripciones</a>
       </div>
       <div class="layout">
         <aside class="panel">
@@ -469,15 +491,6 @@
             <button>Agregar actividad</button>
           </form>
           <div id="agendaAlert" class="result"></div>
-          <div class="panel reservation-panel">
-            <h2>Inscripciones</h2>
-            <form id="reservationForm" class="reservation-form">
-              <select name="accreditation_id" id="reservationAccreditationSelect" required></select>
-              <select name="activity_id" id="reservationActivitySelect" required></select>
-              <button>Inscribir</button>
-            </form>
-            <div id="reservationsList" class="reservation-list"></div>
-          </div>
           <div class="panel">
             <h2>Bolsas de disponibilidad</h2>
             <div id="capacityBagsList" class="bags-list"></div>

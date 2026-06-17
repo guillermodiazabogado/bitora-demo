@@ -102,24 +102,30 @@
 
     function line(title, rows) {
       const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+      const points = (rows || []).slice(-12).map((row, index, list) => {
+        const x = list.length <= 1 ? 50 : (index / (list.length - 1)) * 100;
+        const y = 100 - (Number(row.value || 0) / max) * 88 - 6;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ");
       return `<article class="control-card wide">
         <h2>${title}</h2>
-        <div class="sparkline">
-          ${(rows || []).map((row) => `<span style="--h:${Math.max(8, Number(row.value || 0) / max * 100)}%" title="${row.label}: ${row.value}"></span>`).join("") || `<p>Sin datos</p>`}
+        <div class="line-chart">
+          ${points ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="${title}">
+            <polyline points="${points}" vector-effect="non-scaling-stroke"></polyline>
+          </svg>
+          <div class="line-axis">${(rows || []).slice(-4).map((row) => `<span>${row.label || ""}</span>`).join("")}</div>` : `<p>Sin datos</p>`}
         </div>
       </article>`;
     }
 
     function alerts(rows) {
+      const count = (rows || []).length;
+      const status = count > 0 ? "red" : "green";
       return `<article class="control-card alert-card">
         <h2>Alertas operativas</h2>
-        <div class="alert-list">
-          ${(rows || []).slice(0, maxAlerts).map((row) => `
-            <div class="alert-item ${row.level || "yellow"}">
-              <strong>${row.title}</strong>
-              <span>${row.message}</span>
-            </div>
-          `).join("") || `<p>Sin alertas operativas</p>`}
+        <div class="alarm-counter ${status}">
+          <strong>${count}</strong>
+          <span>${count ? "Alarmas activas" : "Sin alarmas activas"}</span>
         </div>
       </article>`;
     }
@@ -127,13 +133,15 @@
     function rooms(rows) {
       return `<article class="control-card wide">
         <h2>Ocupacion por salas</h2>
-        <div class="room-grid">
+        <div class="room-progress-list">
           ${pageRows(rows || [], maxRooms).map((row) => `
-            <div class="room-tile ${row.color}">
-              <strong>${row.room}</strong>
-              <span>${row.percentage}%</span>
+            <div class="room-progress ${row.color}">
+              <div>
+                <strong>${row.room}</strong>
+                <span>${row.percentage}%</span>
+              </div>
+              <i><b style="--w:${Math.max(0, Math.min(100, Number(row.percentage || 0)))}%"></b></i>
               <small>${row.present} presentes / ${row.capacity} capacidad</small>
-              ${row.low ? `<em>Ocupacion baja</em>` : ""}
             </div>
           `).join("") || `<p>Sin salas activas</p>`}
         </div>
@@ -162,7 +170,7 @@
       if (blocks.has("status")) cards.push(donut(data.accreditation_status_counts));
       if (blocks.has("access")) cards.push(line("Flujo de ingresos", data.access_by_time));
       if (blocks.has("activities")) cards.push(bars("Actividades criticas", data.critical_activities));
-      if (blocks.has("rejections")) cards.push(bars("Motivos de rechazo", data.rejection_reasons, "warn-card"));
+      if (blocks.has("rejections")) cards.push(bars("Motivos de rechazo", data.rejection_reasons, "warn-card rejection-card"));
       if (blocks.has("types")) cards.push(bars("Inscripciones por tipo", data.by_type));
       if (blocks.has("marketing")) cards.push(bars("Origen de inscripcion", data.source_counts));
       if (blocks.has("communications")) cards.push(bars("Comunicaciones", data.communication_status_counts));

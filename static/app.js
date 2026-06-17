@@ -28,6 +28,11 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
+function setHref(selector, href) {
+  const node = $(selector);
+  if (node) node.href = href;
+}
+
 function applyAppConfig(config) {
   if (!config?.demo || document.querySelector(".demo-ribbon")) return;
   const ribbon = document.createElement("div");
@@ -127,21 +132,21 @@ function updateMetrics() {
   $("#mTotal").textContent = total;
   $("#mIn").textContent = checked;
   $("#mPending").textContent = Math.max(total - checked, 0);
-  $("#exportLink").href = state.eventId ? `/api/export.csv?event_id=${state.eventId}` : "#";
-  $("#exportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
-  $("#exportReservationsLink").href = state.eventId ? `/api/reservations.csv?event_id=${state.eventId}` : "#";
-  $("#exportAttendancesLink").href = state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#";
-  $("#exportCertificatesLink").href = state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#";
-  $("#exportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
-  $("#reportsExportCaptationLink").href = state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#";
-  $("#reportsExportJsonLink").href = state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#";
-  $("#exportStructureLink").href = state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#";
-  $("#exportAgendaLink").href = state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#";
-  $("#exportAgendaIcsLink").href = state.eventId ? `/api/agenda.ics?event_id=${state.eventId}` : "#";
-  $("#publicEventLink").href = state.eventId ? `/e.html?event_id=${state.eventId}` : "#";
-  $("#publicDisplayLink").href = state.eventId ? `/display.html?event_id=${state.eventId}` : "#";
-  $("#backupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
-  $("#reportsBackupLink").href = state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup";
+  setHref("#exportLink", state.eventId ? `/api/export.csv?event_id=${state.eventId}` : "#");
+  setHref("#exportJsonLink", state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#");
+  setHref("#exportReservationsLink", state.eventId ? `/api/reservations.csv?event_id=${state.eventId}` : "#");
+  setHref("#exportAttendancesLink", state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#");
+  setHref("#exportCertificatesLink", state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#");
+  setHref("#exportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsExportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsExportJsonLink", state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#");
+  setHref("#exportStructureLink", state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#");
+  setHref("#exportAgendaLink", state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#");
+  setHref("#exportAgendaIcsLink", state.eventId ? `/api/agenda.ics?event_id=${state.eventId}` : "#");
+  setHref("#publicEventLink", state.eventId ? `/e.html?event_id=${state.eventId}` : "#");
+  setHref("#publicDisplayLink", state.eventId ? `/display.html?event_id=${state.eventId}` : "#");
+  setHref("#backupLink", state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup");
+  setHref("#reportsBackupLink", state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup");
   updateControlRoomLink();
   renderFeatureVisibility();
 }
@@ -490,8 +495,6 @@ async function loadAgenda() {
       </div>
       <span class="pill">${activityCapacityLabel(row)}</span>
       <button type="button" class="display-toggle" data-id="${row.id}">Pantalla</button>
-      <a class="button ghost" href="/api/reservations.csv?event_id=${state.eventId}&activity_id=${row.id}">Inscripciones CSV</a>
-      <a class="button ghost" href="/api/attendances.csv?event_id=${state.eventId}&activity_id=${row.id}">Asistencias CSV</a>
     </article>
   `}).join("") || `<p class="empty">Todavia no hay actividades cargadas.</p>`;
   renderReservationSelectors();
@@ -1365,6 +1368,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     setView(button.dataset.view);
     const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
     history.replaceState(null, "", url);
+  }));
+  $$("[data-view-target]").forEach((button) => button.addEventListener("click", () => {
+    const target = button.dataset.viewTarget;
+    setView(target);
+    history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
