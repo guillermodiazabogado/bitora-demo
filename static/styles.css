@@ -2832,9 +2832,16 @@ code,
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  height: clamp(48px, 6.3vh, 64px);
+  height: clamp(58px, 7.2vh, 72px);
   margin-bottom: clamp(8px, 0.9vh, 12px);
   overflow: hidden;
+}
+
+.control-room-head .badge {
+  display: block;
+  font-size: 12px;
+  line-height: 1;
+  margin-bottom: 4px;
 }
 
 .control-room-head h1 {
@@ -2865,12 +2872,20 @@ code,
   grid-auto-rows: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-template-rows: repeat(3, minmax(0, 1fr));
-  height: calc(100vh - clamp(76px, 8.5vh, 100px));
+  height: calc(100vh - clamp(86px, 9.2vh, 108px));
   overflow: hidden;
 }
 
+.control-room-grid .control-card:nth-child(9):nth-last-child(3) {
+  grid-column: 1 / span 2;
+}
+
+.control-room-grid .control-card:nth-child(10):nth-last-child(2) {
+  grid-column: 3 / span 1;
+}
+
 .control-room-grid .control-card:nth-child(11):last-child {
-  grid-column: span 2;
+  grid-column: 4 / span 1;
 }
 
 .control-card {
