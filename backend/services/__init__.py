@@ -13,5 +13,6 @@ __all__ = [
     "WhatsAppService",
 ]
 from .diagnostics import DiagnosticsService, RuntimeMetrics
+from .whatsapp import MetaCloudWhatsAppProvider, WhatsAppProvider, create_whatsapp_provider
 
-__all__ = ["DiagnosticsService", "RuntimeMetrics"]
+__all__ = ["DiagnosticsService", "RuntimeMetrics", "WhatsAppProvider", "MetaCloudWhatsAppProvider", "create_whatsapp_provider"]

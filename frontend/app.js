@@ -1603,6 +1603,19 @@ async function sendTestEmail(event) {
   }
 }
 
+async function sendTestWhatsApp(event) {
+  event.preventDefault();
+  const data = formData(event.currentTarget);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/communications/whatsapp/test", { method: "POST", body: JSON.stringify(data) });
+    $("#whatsappTestNotice").innerHTML = `<div class="panel success">WhatsApp en cola. Job ${result.queue_id}.</div>`;
+  } catch (err) {
+    $("#whatsappTestNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
 async function testAssistant(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1764,6 +1777,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#userForm").addEventListener("submit", saveUser);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
+  $("#whatsappTestForm")?.addEventListener("submit", sendTestWhatsApp);
   $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);

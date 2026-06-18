@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from backend.jobs import Job, default_queue
 from backend.services.email import EmailProvider, EmailSendResult, create_email_provider
+from backend.services.whatsapp import WhatsAppProvider, WhatsAppSendResult, create_whatsapp_provider
 
 
 class NotificationService:
@@ -30,8 +31,14 @@ class EmailService:
 
 
 class WhatsAppService:
+    def __init__(self, provider: WhatsAppProvider | None = None) -> None:
+        self.provider = provider or create_whatsapp_provider()
+
     def send(self, phone: str, message: str, metadata: dict | None = None) -> Job:
         return default_queue.enqueue(
             "whatsapp.send",
             {"phone": phone, "message": message, "metadata": metadata or {}},
         )
+
+    def deliver(self, phone: str, message: str) -> WhatsAppSendResult:
+        return self.provider.send_message(to=phone, message=message)
