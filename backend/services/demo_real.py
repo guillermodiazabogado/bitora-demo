@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 
@@ -30,6 +30,7 @@ class DemoRealService:
         self._create_display(db, event_id, activities)
         self._create_announcements(db, event_id)
         self._create_communications(db, event_id, accreditations)
+        peak_summary = self._simulate_peak_operations(db, event_id, spaces, activities, accreditations)
         examples = self.examples(db, event_id)
         return {
             "event_id": event_id,
@@ -38,6 +39,7 @@ class DemoRealService:
             "spaces": len(spaces),
             "activities": len(activities),
             "reservations": reservation_summary,
+            "peak": peak_summary,
             "examples": examples,
             "actor": actor,
         }
@@ -113,7 +115,7 @@ class DemoRealService:
         cur = db.execute(
             """
             INSERT INTO events (name, description, venue, starts_at, ends_at, status, capacity, activity_selection_mode, created_at)
-            VALUES (?, ?, ?, ?, ?, 'published', 650, 'optional_later', ?)
+            VALUES (?, ?, ?, ?, ?, 'published', 1000, 'optional_later', ?)
             """,
             (
                 self.EVENT_NAME,
@@ -253,9 +255,9 @@ class DemoRealService:
     def _create_participants(self, db: sqlite3.Connection, event_id: int) -> list[dict]:
         first_names = ["Ana", "Luis", "Marta", "Diego", "Sofia", "Carlos", "Valeria", "Pablo", "Lucia", "Jorge"]
         last_names = ["Perez", "Gomez", "Diaz", "Rojas", "Silva", "Farias", "Mendez", "Arias", "Castro", "Vega"]
-        types = ["General"] * 360 + ["VIP"] * 45 + ["Prensa"] * 35 + ["Staff"] * 30 + ["Sponsor"] * 20 + ["Disertante"] * 10
+        types = ["General"] * 700 + ["VIP"] * 120 + ["Prensa"] * 80 + ["Staff"] * 50 + ["Sponsor"] * 35 + ["Disertante"] * 15
         accreditations: list[dict] = []
-        for i in range(500):
+        for i in range(1000):
             first = first_names[i % len(first_names)]
             last = f"{last_names[(i // len(first_names)) % len(last_names)]} {i + 1:03d}"
             email = f"participante{i + 1:03d}@demo.local"
@@ -271,8 +273,8 @@ class DemoRealService:
             token = self._unique_token(db)
             acc_type = types[i]
             status = "cancelled" if i % 31 == 0 else "active"
-            checked_in_at = self.now() if status == "active" and i % 4 == 0 else None
-            checked_in_by = "Recepcion Demo" if checked_in_at else None
+            checked_in_at = None
+            checked_in_by = None
             cur = db.execute(
                 """
                 INSERT INTO accreditations (event_id, person_id, type, token, status, checked_in_at, checked_in_by, access_count, created_at)
@@ -374,8 +376,163 @@ class DemoRealService:
                 (event_id, acc["person_id"], acc["id"], "email" if acc["id"] % 2 else "whatsapp", self.now()),
             )
 
+    def _simulate_peak_operations(
+        self,
+        db: sqlite3.Connection,
+        event_id: int,
+        spaces: dict[str, int],
+        activities: list[dict],
+        accreditations: list[dict],
+    ) -> dict:
+        active = [row for row in accreditations if row["status"] != "cancelled"]
+        entered = active[:650]
+        operators = [f"Terminal QR {idx:02d}" for idx in range(1, 31)]
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        access_times: list[datetime] = []
+
+        windows = [
+            (400, now - timedelta(hours=3, minutes=30), now - timedelta(minutes=61)),
+            (130, now - timedelta(minutes=60), now - timedelta(minutes=16)),
+            (120, now - timedelta(minutes=10), now - timedelta(seconds=20)),
+        ]
+        for amount, start, end in windows:
+            span_seconds = max(1, int((end - start).total_seconds()))
+            for index in range(amount):
+                ratio = index / max(amount - 1, 1)
+                curve = ratio * ratio
+                access_times.append(start + timedelta(seconds=int(span_seconds * curve)))
+        access_times.sort()
+
+        for index, (acc, stamp) in enumerate(zip(entered, access_times)):
+            operator = operators[index % len(operators)]
+            stamp_iso = self._iso_at(stamp)
+            db.execute(
+                """
+                UPDATE accreditations
+                SET checked_in_at = ?, checked_in_by = ?, access_count = 1
+                WHERE id = ?
+                """,
+                (stamp_iso, operator, acc["id"]),
+            )
+            db.execute(
+                """
+                INSERT INTO access_logs (
+                    accreditation_id, event_id, activity_id, token, operator,
+                    checkpoint, access_point, access_context, result, reason, created_at
+                )
+                VALUES (?, ?, NULL, ?, ?, ?, ?, 'event_entry', 'granted', 'Acceso concedido', ?)
+                """,
+                (acc["id"], event_id, acc["token"], operator, f"Acceso {index % 10 + 1}", operator, stamp_iso),
+            )
+
+        rejection_reasons = [
+            "QR repetido",
+            "QR anticipado",
+            "Sin inscripcion a actividad",
+            "Acreditacion cancelada",
+            "Sala incorrecta",
+            "QR invalido",
+        ]
+        for index in range(20):
+            acc = active[(650 + index) % len(active)]
+            stamp = now - timedelta(minutes=14) + timedelta(seconds=index * 40)
+            reason = rejection_reasons[index % len(rejection_reasons)]
+            token = acc["token"] if reason != "QR invalido" else f"QR-INVALIDO-{index:02d}"
+            db.execute(
+                """
+                INSERT INTO access_logs (
+                    accreditation_id, event_id, activity_id, token, operator,
+                    checkpoint, access_point, access_context, result, reason, created_at
+                )
+                VALUES (?, ?, NULL, ?, ?, ?, ?, 'event_entry', 'rejected', ?, ?)
+                """,
+                (
+                    acc["id"] if reason != "QR invalido" else None,
+                    event_id,
+                    token,
+                    operators[index % len(operators)],
+                    f"Acceso {index % 10 + 1}",
+                    operators[index % len(operators)],
+                    reason,
+                    self._iso_at(stamp),
+                ),
+            )
+
+        public_activities = [row for row in activities if row["status"] != "cancelled"]
+        attendance_targets = [260, 95, 32, 22, 0, 18]
+        cursor = 0
+        attendance_total = 0
+        for activity, target in zip(public_activities, attendance_targets):
+            capacity = int(activity["capacity"] or 0)
+            target = min(target, capacity, len(active) - cursor)
+            for _ in range(max(0, target)):
+                acc = active[cursor % len(active)]
+                cursor += 1
+                reservation = db.execute(
+                    "SELECT id FROM reservations WHERE activity_id = ? AND accreditation_id = ? LIMIT 1",
+                    (activity["id"], acc["id"]),
+                ).fetchone()
+                stamp = now - timedelta(minutes=25, seconds=cursor * 3)
+                db.execute(
+                    """
+                    INSERT OR IGNORE INTO activity_attendance (
+                        event_id, activity_id, accreditation_id, reservation_id,
+                        entry_at, entry_operator, exit_at, exit_operator,
+                        attended_minutes, attendance_percentage, status,
+                        eligibility_status, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, NULL, '', 45, 100, 'Completa', 'Elegible', ?, ?)
+                    """,
+                    (
+                        event_id,
+                        activity["id"],
+                        acc["id"],
+                        reservation["id"] if reservation else None,
+                        self._iso_at(stamp),
+                        operators[cursor % len(operators)],
+                        self._iso_at(stamp),
+                        self._iso_at(stamp),
+                    ),
+                )
+                db.execute(
+                    """
+                    INSERT OR IGNORE INTO certificate_eligibility (
+                        event_id, activity_id, accreditation_id, porcentaje,
+                        elegible, estado, fecha_calculo, certificate_generated_at
+                    )
+                    VALUES (?, ?, ?, 100, 1, 'Elegible', ?, ?)
+                    """,
+                    (event_id, activity["id"], acc["id"], self._iso_at(stamp), self._iso_at(now)),
+                )
+                attendance_total += 1
+
+        for title, content in [
+            ("Pico operativo activo", "Ingreso alto en los ultimos 15 minutos con multiples terminales."),
+            ("Terminal a revisar", "Terminal QR 27 sin confirmacion manual de supervisor."),
+            ("Rechazos QR elevados", "Se detectaron rechazos mezclados con accesos validos durante el pico."),
+        ]:
+            db.execute(
+                "INSERT INTO participant_announcements (event_id, title, content, status, created_at) VALUES (?, ?, ?, 'published', ?)",
+                (event_id, title, content, self._iso_at(now)),
+            )
+
+        return {
+            "entered": len(entered),
+            "last_60_minutes": 250,
+            "last_15_minutes": 120,
+            "active_terminals": len(operators),
+            "recent_rejections": 20,
+            "attendance_records": attendance_total,
+        }
+
     def _unique_token(self, db: sqlite3.Connection) -> str:
         token = self.make_token()
         while db.execute("SELECT 1 FROM accreditations WHERE token = ?", (token,)).fetchone():
             token = self.make_token()
         return token
+
+    @staticmethod
+    def _iso_at(value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat(timespec="seconds")

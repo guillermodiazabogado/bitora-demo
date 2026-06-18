@@ -80,7 +80,8 @@ def main() -> None:
     assert_true("Plantillas y Agenda" in configure, "Plantillas y Agenda no esta en Configurar")
     assert_true("Tipos y cupos" in configure, "Tipos y cupos no esta en Configurar")
     assert_true("Configuracion del evento" not in reports and "Plantillas y Agenda" not in reports, "Reportes mezcla configuracion")
-    assert_true("Gestion de inscripciones" in register and "reservationForm" in register, "Inscripciones no esta en Inscribir")
+    assert_true("Gestion de participantes" in register and 'id="accreditations"' in register, "Gestion completa de participantes no esta en Inscribir")
+    assert_true("Gestion de inscripciones" not in register and "reservationForm" not in register, "Inscribir conserva bloque viejo de inscripciones")
     assert_true("reservationForm" not in agenda and "Exportar inscripciones" not in agenda, "Agenda conserva gestion de inscripciones")
     assert_true("Inscripciones CSV" not in app and "Asistencias CSV" not in app, "Agenda conserva exportaciones operativas por actividad")
 
@@ -101,6 +102,8 @@ def main() -> None:
     assert_true(".control-room-grid .control-card:nth-child(11):last-child" in css, "Grilla no completa hueco visual con 11 tarjetas")
     assert_true("roomClock" in room and "setInterval(tick, 1000)" in room, "Hora en tiempo real no esta activa")
     assert_true("roomGrid" in room and "control-card" in room, "Graficos/tarjetas no renderizan en contenedores")
+    assert_true("kpi-health" in room and "Salud operativa" in room and "healthClass" in room, "Salud operativa no usa KPI visual")
+    assert_true(".kpi-health" in css and ".kpi-health.bad" in css and ".kpi-grid > div" in css, "CSS de salud operativa no evita desborde")
     assert_true("room-progress-list" in room and "style=\"--w:" in room, "Ocupacion de salas no usa barras/progreso")
     assert_true("line-chart" in room and "<polyline" in room, "Flujo de ingreso no usa grafico de lineas")
     assert_true("heatmap-list" in room, "Mapa de calor no se mantiene")

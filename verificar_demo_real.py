@@ -64,7 +64,7 @@ def main() -> None:
         result = req(base, "POST", "/api/demo-real", {"actor": "Admin", "confirm": "DEMO"}, 201)
         event_id = result["event_id"]
         assert_true(result["event_name"] == DemoRealService.EVENT_NAME, "Evento demo incorrecto")
-        assert_true(result["participants"] == 500, "No creo 500 participantes")
+        assert_true(result["participants"] == 1000, "No creo 1000 participantes")
         assert_true(result["spaces"] == 5, "No creo 5 espacios")
         assert_true(result["activities"] == 20, "No creo 20 actividades")
 
@@ -79,12 +79,12 @@ def main() -> None:
         assert_true(any(row["status"] == "cancelled" for row in activities), "No hay actividad cancelada")
         assert_true(any("demorada" in row["title"].lower() for row in activities), "No hay actividad demorada")
 
-        accreditations = req(base, "GET", f"/api/accreditations?event_id={event_id}&limit=600")
-        assert_true(len(accreditations) == 500, "Acreditaciones incompletas")
+        accreditations = req(base, "GET", f"/api/accreditations?event_id={event_id}&limit=1200")
+        assert_true(len(accreditations) == 1000, "Acreditaciones incompletas")
         assert_true(any(row["checked_in_at"] for row in accreditations), "No hay acreditados")
         assert_true(any(row["status"] == "cancelled" for row in accreditations), "No hay cancelados")
         tokens = {row["token"] for row in accreditations}
-        assert_true(len(tokens) == 500, "Tokens duplicados")
+        assert_true(len(tokens) == 1000, "Tokens duplicados")
 
         reservations = req(base, "GET", f"/api/reservations?event_id={event_id}")
         assert_true(any(row["status"] == "confirmed" for row in reservations), "No hay reservas confirmadas")

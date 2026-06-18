@@ -40,8 +40,8 @@
         <div class="actions">
           <button id="refreshBtn">Actualizar</button>
           <a id="publicDisplayLink" class="button" href="#" target="_blank">Pantalla publica</a>
-          <a id="backupLink" class="button ghost" href="/api/backup">Backup</a>
-          <button type="button" class="ghost" data-view-target="configure">Configurar Evento</button>
+          <a id="backupLink" class="button action-backup" href="/api/backup">Backup</a>
+          <button type="button" class="action-config" data-view-target="configure">Configurar Evento</button>
         </div>
       </div>
 
@@ -222,14 +222,14 @@
               <button class="danger-button">Crear base limpia</button>
             </form>
           </details>
-          <details class="prepare-box">
-            <summary>Crear Demo Real</summary>
+          <div class="prepare-box demo-loader-box">
+            <h2>Demo avanzada 1000</h2>
+            <p>Carga una demo completa con 1000 participantes, 5 salas, 20 actividades, reservas, lista de espera, pantalla publica, comunicaciones demo y pico operativo con 30 terminales QR activas.</p>
             <form id="demoRealForm" class="stack">
-              <p>Genera 500 participantes simulados, 5 salas, 20 actividades, inscripciones, listas de espera, pantalla publica y comunicaciones demo.</p>
-              <input name="confirm" placeholder="Escribir DEMO para confirmar" required>
-              <button class="danger-button">Crear demo real</button>
+              <input name="confirm" value="DEMO" placeholder="Escribir DEMO para confirmar" required>
+              <button class="danger-button">Cargar demo 1000 con pico operativo</button>
             </form>
-          </details>
+          </div>
           <div id="prepareNotice" class="result"></div>
         </aside>
 
@@ -237,40 +237,79 @@
           <div class="panel templates-panel">
             <h2>Plantillas y Agenda</h2>
             <div class="template-actions">
-              <form id="cloneEventForm" class="stack">
-                <select name="source_event_id" id="cloneEventSelect"></select>
-                <input name="name" placeholder="Nombre del nuevo evento">
-                <label class="toggle"><input name="copy_all" type="checkbox" checked> Copiar todo lo estructural</label>
-                <button>Crear desde evento existente</button>
-              </form>
-              <div class="stack">
-                <a id="exportStructureLink" class="button ghost" href="#">Exportar estructura</a>
-                <a id="exportAgendaLink" class="button ghost" href="#">Exportar agenda</a>
-                <a id="exportAgendaIcsLink" class="button ghost" href="#">Exportar agenda ICS</a>
+              <div class="template-card">
+                <h3>Crear desde evento</h3>
+                <form id="cloneEventForm" class="stack">
+                  <select name="source_event_id" id="cloneEventSelect"></select>
+                  <input name="name" placeholder="Nombre del nuevo evento">
+                  <label class="toggle"><input name="copy_all" type="checkbox" checked> Copiar todo lo estructural</label>
+                  <button>Crear desde evento existente</button>
+                </form>
               </div>
-              <form id="importStructureForm" class="stack">
-                <textarea name="structure_json" placeholder="Pegar estructura JSON exportada"></textarea>
-                <input name="name" placeholder="Nombre para el evento importado">
-                <button>Importar estructura</button>
-              </form>
-              <form id="importAgendaForm" class="stack">
-                <textarea name="csv" placeholder="Sala,Actividad,Fecha,Hora inicio,Hora fin&#10;Auditorio,Charla demo,2026-07-01,10:00,11:00"></textarea>
-                <textarea name="ics" placeholder="O pegar calendario ICS de Google, Outlook o Apple"></textarea>
-                <button name="preview" value="1" type="submit" class="ghost">Previsualizar agenda</button>
-                <button>Importar agenda</button>
-              </form>
+              <div class="template-card">
+                <h3>Exportar planillas</h3>
+                <div class="template-export-list">
+                  <a id="exportStructureLink" class="button ghost" href="#">Exportar estructura</a>
+                  <a id="exportAgendaLink" class="button ghost" href="#">Exportar agenda</a>
+                  <a id="exportAgendaIcsLink" class="button ghost" href="#">Exportar agenda ICS</a>
+                </div>
+              </div>
+              <div class="template-card">
+                <h3>Importar estructura</h3>
+                <form id="importStructureForm" class="stack">
+                  <textarea name="structure_json" placeholder="Pegar estructura JSON exportada"></textarea>
+                  <input name="name" placeholder="Nombre para el evento importado">
+                  <button>Importar estructura</button>
+                </form>
+              </div>
+              <div class="template-card template-card-wide">
+                <h3>Importar agenda</h3>
+                <form id="importAgendaForm" class="template-agenda-form">
+                  <textarea name="csv" placeholder="Sala,Actividad,Fecha,Hora inicio,Hora fin&#10;Auditorio,Charla demo,2026-07-01,10:00,11:00"></textarea>
+                  <textarea name="ics" placeholder="O pegar calendario ICS de Google, Outlook o Apple"></textarea>
+                  <div class="template-agenda-actions">
+                    <button name="preview" value="1" type="submit" class="ghost">Previsualizar agenda</button>
+                    <button>Importar agenda</button>
+                  </div>
+                </form>
+              </div>
             </div>
             <div id="templatesNotice" class="result"></div>
+          </div>
+          <div class="panel landing-config-panel">
+            <h2>Landing del Evento</h2>
+            <p class="empty">Personaliza la imagen principal de la landing publica. Si no cargas imagen, BITORA usa automaticamente un fondo institucional arena.</p>
+            <div class="landing-config-grid">
+              <div>
+                <div id="landingPreview" class="landing-preview">
+                  <strong>Fondo BITORA por defecto</strong>
+                  <span>Arena #D2B89A · 16:9 · zona segura central</span>
+                </div>
+                <div id="landingImageMeta" class="file-name">Sin imagen personalizada</div>
+              </div>
+              <form id="landingImageForm" class="stack">
+                <label class="file-picker">
+                  <span>Subir o reemplazar imagen</span>
+                  <input id="landingImageFile" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                </label>
+                <div class="help-list">
+                  <span>Resolucion recomendada: 1920 x 1080</span>
+                  <span>Formato: 16:9</span>
+                  <span>Zona segura central. Evitar textos importantes en bordes.</span>
+                  <span>Formatos: JPG, JPEG, PNG, WEBP. Maximo 3 MB.</span>
+                </div>
+                <button>Guardar imagen de landing</button>
+                <button id="deleteLandingImageBtn" class="ghost" type="button">Eliminar imagen</button>
+              </form>
+            </div>
+            <div class="future-options">
+              Preparado para futuras opciones: logo del evento, colores del evento, banner mobile y video de portada.
+            </div>
+            <div id="landingConfigNotice" class="result"></div>
           </div>
           <div class="panel types-panel">
             <h2>Tipos y cupos</h2>
             <div id="typesList" class="types-list"></div>
-          </div>
-          <div id="demoRealPanel" class="panel hidden">
-            <h2>Participantes demo para probar</h2>
-            <div id="demoParticipants" class="demo-participants"></div>
-            <h2>Guia de prueba demo</h2>
-            <ol id="demoGuide" class="demo-guide"></ol>
           </div>
         </section>
       </div>
@@ -282,46 +321,106 @@
           <h1>Reportes</h1>
           <p>Analitica, sala de control, metricas, graficos e indicadores del evento.</p>
         </div>
-        <div class="actions">
-          <a id="reportsExportCaptationLink" class="button ghost" href="#">Captacion CSV</a>
-          <a id="reportsExportJsonLink" class="button ghost" href="#">Exportar JSON</a>
-        </div>
       </div>
       <div class="content">
         <div class="panel control-room-panel">
-          <h2>Sala de Control</h2>
-          <p class="empty">Vista visual en tiempo real para segundo monitor, sin datos personales sensibles.</p>
-          <div class="actions">
+          <div class="report-panel-head">
+            <div>
+              <h2>Sala de Control</h2>
+              <p>Configura la pantalla de monitoreo en tiempo real para un segundo monitor.</p>
+            </div>
             <a id="controlRoomLink" class="button" href="#" target="_blank">Abrir Sala de Control</a>
-            <select id="controlRoomRefresh">
-              <option value="5">Actualizar cada 5s</option>
-              <option value="10" selected>Actualizar cada 10s</option>
-              <option value="30">Actualizar cada 30s</option>
-              <option value="60">Actualizar cada 60s</option>
-            </select>
-            <label class="toggle"><input id="controlRoomDark" type="checkbox" checked> Modo oscuro</label>
-            <label class="toggle"><input id="controlRoomCompact" type="checkbox" checked> Compacto</label>
-            <select id="controlRoomRotate">
-              <option value="0">Sin rotacion</option>
-              <option value="15">Rotar cada 15s</option>
-              <option value="30">Rotar cada 30s</option>
-              <option value="60">Rotar cada 60s</option>
-            </select>
-            <input id="controlRoomMaxRooms" type="number" min="2" max="12" value="6" placeholder="Max salas">
-            <input id="controlRoomMaxAlerts" type="number" min="1" max="10" value="4" placeholder="Max alertas">
           </div>
+          <div class="control-room-settings">
+            <label>
+              <span>Actualizacion</span>
+              <select id="controlRoomRefresh">
+                <option value="5">Cada 5 segundos</option>
+                <option value="10" selected>Cada 10 segundos</option>
+                <option value="30">Cada 30 segundos</option>
+                <option value="60">Cada 60 segundos</option>
+              </select>
+            </label>
+            <label>
+              <span>Rotacion de contenido</span>
+              <select id="controlRoomRotate">
+                <option value="0">Sin rotacion</option>
+                <option value="15">Cada 15 segundos</option>
+                <option value="30">Cada 30 segundos</option>
+                <option value="60">Cada 60 segundos</option>
+              </select>
+            </label>
+            <label>
+              <span>Salas visibles</span>
+              <input id="controlRoomMaxRooms" type="number" min="2" max="12" value="6">
+            </label>
+            <label>
+              <span>Alertas visibles</span>
+              <input id="controlRoomMaxAlerts" type="number" min="1" max="10" value="4">
+            </label>
+          </div>
+          <div class="control-room-modes">
+            <label><input id="controlRoomDark" type="checkbox" checked><span>Modo oscuro</span></label>
+            <label><input id="controlRoomCompact" type="checkbox" checked><span>Modo compacto</span></label>
+          </div>
+          <h3 class="report-subtitle">Bloques visibles</h3>
           <div class="visual-block-picker">
-            <label><input type="checkbox" value="kpis" checked> KPI acreditaciones</label>
-            <label><input type="checkbox" value="alerts" checked> Alertas</label>
-            <label><input type="checkbox" value="rooms" checked> Ocupacion salas</label>
-            <label><input type="checkbox" value="heatmap" checked> Mapa calor</label>
-            <label><input type="checkbox" value="status" checked> Torta estados</label>
-            <label><input type="checkbox" value="types" checked> Barras por tipo</label>
-            <label><input type="checkbox" value="access" checked> Accesos por hora</label>
-            <label><input type="checkbox" value="activities" checked> Ranking actividades</label>
-            <label><input type="checkbox" value="rejections" checked> Rechazos</label>
-            <label><input type="checkbox" value="marketing" checked> Captacion</label>
-            <label><input type="checkbox" value="communications" checked> Comunicaciones</label>
+            <label><input type="checkbox" value="kpis" checked><span>Resumen operativo</span></label>
+            <label><input type="checkbox" value="alerts" checked><span>Alertas</span></label>
+            <label><input type="checkbox" value="rooms" checked><span>Ocupacion de salas</span></label>
+            <label><input type="checkbox" value="heatmap" checked><span>Mapa de calor</span></label>
+            <label><input type="checkbox" value="status" checked><span>Estado acreditaciones</span></label>
+            <label><input type="checkbox" value="types" checked><span>Inscripciones por tipo</span></label>
+            <label><input type="checkbox" value="access" checked><span>Flujo de ingresos</span></label>
+            <label><input type="checkbox" value="activities" checked><span>Actividades criticas</span></label>
+            <label><input type="checkbox" value="rejections" checked><span>Motivos de rechazo</span></label>
+            <label><input type="checkbox" value="marketing" checked><span>Origen de inscripcion</span></label>
+            <label><input type="checkbox" value="communications" checked><span>Comunicaciones</span></label>
+          </div>
+        </div>
+        <div class="panel report-downloads-panel">
+          <div class="report-panel-head">
+            <div>
+              <h2>Reportes disponibles</h2>
+              <p>Descargas operativas para produccion, control y cierre del evento.</p>
+            </div>
+          </div>
+          <div class="report-download-grid">
+            <a id="reportsExecutivePdfLink" class="report-download report-download-featured" href="#">
+              <strong>Resumen ejecutivo</strong>
+              <span>Informe visual con KPI, ocupacion, actividades, rechazos, captacion y alertas.</span>
+              <b>PDF</b>
+            </a>
+            <a id="reportsAccreditationsLink" class="report-download" href="#">
+              <strong>Acreditados</strong>
+              <span>Base completa, estados y datos de contacto.</span>
+              <b>CSV</b>
+            </a>
+            <a id="reportsReservationsLink" class="report-download" href="#">
+              <strong>Reservas</strong>
+              <span>Participantes inscriptos por actividad y sala.</span>
+              <b>CSV</b>
+            </a>
+            <a id="reportsAttendancesLink" class="report-download" href="#">
+              <strong>Asistencias</strong>
+              <span>Ingresos, egresos, minutos y porcentaje.</span>
+              <b>CSV</b>
+            </a>
+            <a id="reportsEligibilityLink" class="report-download" href="#">
+              <strong>Elegibles para certificado</strong>
+              <span>Participantes que cumplen la asistencia minima.</span>
+              <b>CSV</b>
+            </a>
+            <a id="reportsExportCaptationLink" class="report-download" href="#">
+              <strong>Captacion y conversion</strong>
+              <span>Origen, dispositivo y recorrido de inscripcion.</span>
+              <b>CSV</b>
+            </a>
+            <a id="reportsExportJsonLink" class="report-download" href="#">
+              <strong>Exportacion integral</strong>
+              <span>Datos estructurados del evento para respaldo o analisis.</span>
+              <b>JSON</b>
+            </a>
           </div>
         </div>
         <div class="panel marketing-panel">
@@ -351,9 +450,11 @@
       <div class="section-head">
         <div>
           <h1>Inscripcion</h1>
-          <p>Crea acreditaciones y administra inscripciones a actividades.</p>
+          <p>Crea acreditaciones y administra la base completa de participantes.</p>
         </div>
         <div class="actions">
+          <button id="printFilteredBtn" type="button">Imprimir filtrados</button>
+          <a id="exportLink" class="button" href="#">Exportar CSV</a>
           <a id="exportReservationsLink" class="button ghost" href="#">Exportar inscripciones</a>
         </div>
       </div>
@@ -368,14 +469,46 @@
         <button>Inscribir y emitir credencial</button>
       </form>
       <div id="registerResult" class="result"></div>
-      <div class="panel reservation-panel">
-        <h2>Gestion de inscripciones</h2>
-        <form id="reservationForm" class="reservation-form">
-          <select name="accreditation_id" id="reservationAccreditationSelect" required></select>
-          <select name="activity_id" id="reservationActivitySelect" required></select>
-          <button>Inscribir</button>
+      <div class="panel">
+        <h2>Gestion de participantes</h2>
+        <div class="reception-tools">
+          <input id="searchInput" class="search" placeholder="Buscar por nombre, DNI, empresa, email o token">
+          <select id="statusFilter" aria-label="Filtrar por estado">
+            <option value="">Todos</option>
+            <option value="pending">Pendientes</option>
+            <option value="checked">Acreditados</option>
+            <option value="cancelled">Cancelados</option>
+          </select>
+          <select id="typeFilter" aria-label="Filtrar por tipo">
+            <option value="">Todos los tipos</option>
+          </select>
+        </div>
+        <div id="receptionNotice" class="result"></div>
+        <details class="import-box">
+          <summary>Importar acreditados CSV</summary>
+          <form id="importForm" class="stack">
+            <label class="file-picker">
+              <span>Seleccionar CSV</span>
+              <input id="importFile" type="file" accept=".csv,text/csv">
+            </label>
+            <div id="importFileName" class="file-name">Sin archivo seleccionado</div>
+            <textarea id="importCsv" placeholder="nombre,apellido,email,telefono,dni,empresa,tipo&#10;Ana,Perez,ana@example.com,549...,123,Empresa,General"></textarea>
+            <button>Importar acreditados</button>
+          </form>
+          <div id="importResult" class="result"></div>
+        </details>
+        <form id="editAccreditationForm" class="panel form-grid hidden">
+          <input name="id" type="hidden">
+          <input name="first_name" placeholder="Nombre" required>
+          <input name="last_name" placeholder="Apellido" required>
+          <input name="email" type="email" placeholder="Email" required>
+          <input name="phone" placeholder="Telefono">
+          <input name="dni" placeholder="DNI">
+          <input name="company" placeholder="Empresa">
+          <select name="type" id="editTypeSelect"></select>
+          <button>Guardar cambios</button>
         </form>
-        <div id="reservationsList" class="reservation-list"></div>
+        <div id="accreditations" class="table"></div>
       </div>
     </section>
 
@@ -383,51 +516,18 @@
       <div class="section-head">
         <div>
           <h1>Recepcion</h1>
-          <p>Busqueda rapida por nombre, DNI, empresa, email o token.</p>
-        </div>
-        <div class="actions">
-          <button id="printFilteredBtn" type="button">Imprimir filtrados</button>
-          <a id="exportLink" class="button" href="#">Exportar CSV</a>
+          <p>Busqueda rapida y acciones de mostrador sin listado completo.</p>
         </div>
       </div>
-      <div class="reception-tools">
-        <input id="searchInput" class="search" placeholder="Buscar acreditado">
-        <select id="statusFilter" aria-label="Filtrar por estado">
-          <option value="">Todos</option>
-          <option value="pending">Pendientes</option>
-          <option value="checked">Acreditados</option>
-          <option value="cancelled">Cancelados</option>
-        </select>
-        <select id="typeFilter" aria-label="Filtrar por tipo">
-          <option value="">Todos los tipos</option>
-        </select>
+      <div class="panel">
+        <h2>Atencion rapida</h2>
+        <div class="quick-reception-grid">
+          <input id="quickReceptionSearch" class="search" placeholder="Buscar participante">
+          <input id="quickReceptionToken" class="search" placeholder="Pegar token o QR">
+          <button id="quickReceptionValidate" type="button">Acreditar token</button>
+        </div>
+        <div id="quickReceptionResult" class="quick-results"></div>
       </div>
-      <div id="receptionNotice" class="result"></div>
-      <details class="import-box">
-        <summary>Importar acreditados CSV</summary>
-        <form id="importForm" class="stack">
-          <label class="file-picker">
-            <span>Seleccionar CSV</span>
-            <input id="importFile" type="file" accept=".csv,text/csv">
-          </label>
-          <div id="importFileName" class="file-name">Sin archivo seleccionado</div>
-          <textarea id="importCsv" placeholder="nombre,apellido,email,telefono,dni,empresa,tipo&#10;Ana,Perez,ana@example.com,549...,123,Empresa,General"></textarea>
-          <button>Importar acreditados</button>
-        </form>
-        <div id="importResult" class="result"></div>
-      </details>
-      <form id="editAccreditationForm" class="panel form-grid hidden">
-        <input name="id" type="hidden">
-        <input name="first_name" placeholder="Nombre" required>
-        <input name="last_name" placeholder="Apellido" required>
-        <input name="email" type="email" placeholder="Email" required>
-        <input name="phone" placeholder="Telefono">
-        <input name="dni" placeholder="DNI">
-        <input name="company" placeholder="Empresa">
-        <select name="type" id="editTypeSelect"></select>
-        <button>Guardar cambios</button>
-      </form>
-      <div id="accreditations" class="table"></div>
     </section>
 
     <section id="agenda" class="view">

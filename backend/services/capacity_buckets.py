@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from backend.database import is_postgres_connection
 from backend.repositories import SQLiteRepository
 
 
@@ -128,6 +129,7 @@ class CapacityBucketService:
             FROM capacity_bags
             WHERE event_id = ? AND activity_id = ? AND status = 'active' AND {source_filter}
             ORDER BY priority, id
+            {"FOR UPDATE" if is_postgres_connection(db) else ""}
             """,
             (event_id, activity_id),
         ).fetchall()

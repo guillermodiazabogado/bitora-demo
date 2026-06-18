@@ -7,8 +7,13 @@ from .capacity_buckets import CapacityBucketRepository
 from .communications import CommunicationRepository
 from .events import EventRepository
 from .participants import ParticipantRepository
+from .postgres import PostgresRepository
 from .reservations import ReservationRepository
 from .sqlite import SQLiteRepository
+
+
+def create_repository(engine: str = "sqlite"):
+    return PostgresRepository() if engine == "postgres" else SQLiteRepository()
 
 __all__ = [
     "AccessRepository",
@@ -20,6 +25,8 @@ __all__ = [
     "CommunicationRepository",
     "EventRepository",
     "ParticipantRepository",
+    "PostgresRepository",
     "ReservationRepository",
     "SQLiteRepository",
+    "create_repository",
 ]

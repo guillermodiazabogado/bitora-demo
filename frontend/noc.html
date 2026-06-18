@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Centro de Operaciones</title>
+  <link rel="stylesheet" href="/styles.css?v=20260618-6600">
+</head>
+<body class="noc-body">
+  <main class="noc-screen">
+    <header class="noc-head">
+      <div><span>BITORA NOC</span><h1 id="nocEvent">Centro de Operaciones</h1></div>
+      <div class="noc-clock"><strong id="nocClock">--:--:--</strong><small id="nocStatus">Actualizando</small></div>
+    </header>
+    <section class="noc-grid">
+      <article class="noc-card noc-general"><h2>Estado general</h2><div id="nocGeneral"></div></article>
+      <article class="noc-card"><h2>Accesos en tiempo real</h2><div id="nocAccess"></div></article>
+      <article class="noc-card"><h2>Acreditaciones</h2><div id="nocAccreditations"></div></article>
+      <article class="noc-card noc-rooms"><h2>Ocupacion de salas</h2><div id="nocRooms"></div></article>
+      <article class="noc-card"><h2>Alertas operativas</h2><div id="nocAlerts"></div></article>
+      <article class="noc-card"><h2>Motivos de rechazo</h2><div id="nocRejections"></div></article>
+      <article class="noc-card"><h2>Flujo de ingreso</h2><div id="nocFlow" class="noc-sparkline"></div></article>
+      <article class="noc-card"><h2>Terminales y operadores</h2><div id="nocTerminals"></div></article>
+      <article class="noc-card"><h2>Comunicaciones</h2><div id="nocCommunications"></div></article>
+      <article class="noc-card noc-infra"><h2>Infraestructura</h2><div id="nocInfrastructure"></div></article>
+    </section>
+  </main>
+  <script src="/noc.js?v=20260618-6600"></script>
+</body>
+</html>

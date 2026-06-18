@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import base64
 import hashlib
 import hmac
 import os
@@ -11,6 +12,8 @@ import socket
 import sqlite3
 import threading
 import time
+import random
+import re
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from html import escape
@@ -20,15 +23,31 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageDraw, ImageFont
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
-from backend.database import load_database_config
-from backend.repositories import SQLiteRepository
+from backend.database import connect_database, integrity_error_types, load_database_config, run_postgres_migrations
+from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
 from backend.services.attendance import AttendanceService
 from backend.services.audit import AuditService
-from backend.services.backup import BackupService
+from backend.services.backup import BackupService, PostgresBackupService
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.demo_real import DemoRealService
+from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
+from backend.services.email import DemoEmailProvider, create_email_provider
+from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
 from backend.services.reservations import ReservationService
@@ -45,9 +64,12 @@ STATIC_DIR = FRONTEND_DIR if FRONTEND_DIR.exists() else LEGACY_STATIC_DIR
 BACKUP_DIR = ROOT / "backups"
 DB_LOCK = threading.Lock()
 BACKUP_STOP = threading.Event()
+WORKER: JobWorker | None = None
+SIMULATOR_STOP = threading.Event()
+SIMULATOR_THREAD: threading.Thread | None = None
 AUTO_BACKUP_MINUTES = int(os.environ.get("QR_AUTO_BACKUP_MINUTES", "10"))
 BACKUP_KEEP_LAST = int(os.environ.get("QR_BACKUP_KEEP_LAST", "24"))
-APP_VERSION = "5.0-qa2-ready"
+APP_VERSION = "6.7-operations-simulator-ready"
 APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development")).strip().lower() or "development"
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
@@ -59,7 +81,9 @@ ADMIN_ROLES = {"Super Admin"}
 CONFIG_ROLES = {"Super Admin", "Productor", "Coordinador"}
 RECEPTION_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion"}
 ACCESS_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion", "Operador de acceso"}
-REPOSITORY = SQLiteRepository()
+REPOSITORY = create_repository(DB_CONFIG.engine)
+DB_INTEGRITY_ERRORS = integrity_error_types()
+RUNTIME_METRICS = RuntimeMetrics()
 
 
 def audit_service() -> AuditService:
@@ -86,8 +110,21 @@ def qr_service() -> QRService:
     return QRService()
 
 
-def backup_service() -> BackupService:
+def backup_service():
+    if DB_CONFIG.engine == "postgres":
+        return PostgresBackupService(BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
     return BackupService(DB_PATH, BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
+
+
+def diagnostics_service() -> DiagnosticsService:
+    return DiagnosticsService(
+        engine=DB_CONFIG.engine,
+        db_path=DB_PATH,
+        backup_dir=BACKUP_DIR,
+        app_env=APP_ENV,
+        app_version=APP_VERSION,
+        started_at=STARTED_AT,
+    )
 
 
 def verify_backup_file(path: Path) -> dict:
@@ -139,17 +176,22 @@ def runtime_config(handler: SimpleHTTPRequestHandler | None = None) -> dict:
     }
 
 
-def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA busy_timeout = 30000")
-    conn.execute("PRAGMA synchronous = NORMAL")
-    return conn
+def connect():
+    return connect_database(DB_CONFIG, DB_PATH)
 
 
 def init_db() -> None:
+    if DB_CONFIG.engine == "postgres":
+        applied = run_postgres_migrations(DB_CONFIG, ROOT / "backend" / "migrations")
+        if applied:
+            print(f"Migraciones PostgreSQL aplicadas: {', '.join(applied)}")
+        with connect() as db:
+            ensure_default_users(db)
+            ensure_default_types(db)
+            ensure_default_spaces(db)
+            ensure_capacity_bags(db)
+            ensure_communication_templates(db)
+        return
     with connect() as db:
         db.executescript(
             """
@@ -166,6 +208,22 @@ def init_db() -> None:
                 capacity_control_enabled INTEGER NOT NULL DEFAULT 1,
                 waitlist_enabled INTEGER NOT NULL DEFAULT 0,
                 activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
+                landing_image_data TEXT NOT NULL DEFAULT '',
+                landing_image_name TEXT NOT NULL DEFAULT '',
+                landing_image_type TEXT NOT NULL DEFAULT '',
+                landing_image_updated_at TEXT NOT NULL DEFAULT '',
+                landing_logo_data TEXT NOT NULL DEFAULT '',
+                landing_primary_color TEXT NOT NULL DEFAULT '',
+                landing_secondary_color TEXT NOT NULL DEFAULT '',
+                landing_mobile_banner_data TEXT NOT NULL DEFAULT '',
+                landing_video_url TEXT NOT NULL DEFAULT '',
+                waiting_room_enabled INTEGER NOT NULL DEFAULT 0,
+                waiting_room_open_at TEXT NOT NULL DEFAULT '',
+                users_allowed_per_minute INTEGER NOT NULL DEFAULT 60,
+                turn_duration_minutes INTEGER NOT NULL DEFAULT 10,
+                show_waiting_position INTEGER NOT NULL DEFAULT 1,
+                show_estimated_time INTEGER NOT NULL DEFAULT 1,
+                waiting_message TEXT NOT NULL DEFAULT 'Estamos organizando el ingreso. Tu turno se habilitara pronto.',
                 created_at TEXT NOT NULL
             );
 
@@ -359,11 +417,26 @@ def init_db() -> None:
                 recipient TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'pendiente',
                 attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
                 provider TEXT NOT NULL DEFAULT 'demo',
+                provider_message_id TEXT NOT NULL DEFAULT '',
                 last_error TEXT NOT NULL DEFAULT '',
                 scheduled_at TEXT,
                 processed_at TEXT,
+                delivered_at TEXT,
+                bounced_at TEXT,
                 created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS email_delivery_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                queue_id INTEGER REFERENCES communication_queue(id) ON DELETE SET NULL,
+                provider TEXT NOT NULL DEFAULT '',
+                message_id TEXT NOT NULL DEFAULT '',
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL
             );
 
@@ -471,12 +544,78 @@ def init_db() -> None:
                 certificate_generated_at TEXT,
                 UNIQUE(activity_id, accreditation_id)
             );
+
+            CREATE TABLE IF NOT EXISTS technical_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                level TEXT NOT NULL DEFAULT 'info',
+                module TEXT NOT NULL DEFAULT 'system',
+                message TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                request_path TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+                kind TEXT NOT NULL,
+                priority TEXT NOT NULL DEFAULT 'low',
+                status TEXT NOT NULL DEFAULT 'pending',
+                payload TEXT NOT NULL DEFAULT '{}',
+                result TEXT NOT NULL DEFAULT '{}',
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                max_retries INTEGER NOT NULL DEFAULT 3,
+                retry_at TEXT,
+                worker_id TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL DEFAULT 'system',
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS waiting_room_visitors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                visitor_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'waiting',
+                position_number INTEGER NOT NULL DEFAULT 0,
+                access_token TEXT NOT NULL DEFAULT '',
+                joined_at TEXT NOT NULL,
+                admitted_at TEXT,
+                expires_at TEXT,
+                completed_at TEXT,
+                abandoned_at TEXT,
+                last_seen_at TEXT NOT NULL,
+                error TEXT NOT NULL DEFAULT '',
+                UNIQUE(event_id, visitor_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS simulator_state (
+                event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'stopped',
+                mode TEXT NOT NULL DEFAULT 'medium',
+                scenario TEXT NOT NULL DEFAULT 'congress',
+                participants_active INTEGER NOT NULL DEFAULT 100,
+                accesses_per_minute INTEGER NOT NULL DEFAULT 30,
+                rejections_per_minute INTEGER NOT NULL DEFAULT 3,
+                simulated_errors INTEGER NOT NULL DEFAULT 1,
+                average_occupancy INTEGER NOT NULL DEFAULT 55,
+                active_terminals INTEGER NOT NULL DEFAULT 10,
+                speed REAL NOT NULL DEFAULT 1,
+                updated_by TEXT NOT NULL DEFAULT 'system',
+                updated_at TEXT NOT NULL
+            );
             """
         )
         ensure_event_v3_columns(db)
         ensure_v4_1_columns(db)
         ensure_v4_2_columns(db)
         ensure_v4_4_columns(db)
+        ensure_v6_1_email_schema(db)
+        ensure_waiting_room_schema(db)
+        ensure_landing_config_columns(db)
         ensure_activity_access_window_columns(db)
         ensure_user_pin_column(db)
         ensure_reservation_bag_column(db)
@@ -507,6 +646,13 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_communication_logs_event ON communication_logs(event_id, fecha);
         CREATE INDEX IF NOT EXISTS idx_communication_queue_event_status ON communication_queue(event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_communication_queue_provider_message ON communication_queue(provider_message_id);
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_message ON email_delivery_events(message_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_technical_logs_created ON technical_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_technical_logs_level_module ON technical_logs(level, module, created_at);
+        CREATE INDEX IF NOT EXISTS idx_jobs_status_priority ON jobs(status, priority, retry_at, id);
+        CREATE INDEX IF NOT EXISTS idx_jobs_event_kind ON jobs(event_id, kind, created_at);
+        CREATE INDEX IF NOT EXISTS idx_waiting_room_event_status ON waiting_room_visitors(event_id, status, joined_at);
         CREATE INDEX IF NOT EXISTS idx_communication_assistant_event ON communication_assistant_history(event_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_communication_tickets_event_status ON communication_tickets(event_id, status);
         CREATE INDEX IF NOT EXISTS idx_preferences_person ON participant_communication_preferences(person_id);
@@ -515,6 +661,69 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_certificate_event ON certificate_eligibility(event_id, estado);
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
+        """
+    )
+
+
+def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(communication_queue)").fetchall()}
+    additions = {
+        "max_attempts": "INTEGER NOT NULL DEFAULT 3",
+        "provider_message_id": "TEXT NOT NULL DEFAULT ''",
+        "delivered_at": "TEXT",
+        "bounced_at": "TEXT",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}")
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS email_delivery_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            queue_id INTEGER REFERENCES communication_queue(id) ON DELETE SET NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            message_id TEXT NOT NULL DEFAULT '',
+            event_type TEXT NOT NULL,
+            payload TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+
+
+def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+    additions = {
+        "waiting_room_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "waiting_room_open_at": "TEXT NOT NULL DEFAULT ''",
+        "users_allowed_per_minute": "INTEGER NOT NULL DEFAULT 60",
+        "turn_duration_minutes": "INTEGER NOT NULL DEFAULT 10",
+        "show_waiting_position": "INTEGER NOT NULL DEFAULT 1",
+        "show_estimated_time": "INTEGER NOT NULL DEFAULT 1",
+        "waiting_message": "TEXT NOT NULL DEFAULT 'Estamos organizando el ingreso. Tu turno se habilitara pronto.'",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            db.execute(f"ALTER TABLE events ADD COLUMN {name} {definition}")
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS waiting_room_visitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            visitor_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'waiting',
+            position_number INTEGER NOT NULL DEFAULT 0,
+            access_token TEXT NOT NULL DEFAULT '',
+            joined_at TEXT NOT NULL,
+            admitted_at TEXT,
+            expires_at TEXT,
+            completed_at TEXT,
+            abandoned_at TEXT,
+            last_seen_at TEXT NOT NULL,
+            error TEXT NOT NULL DEFAULT '',
+            UNIQUE(event_id, visitor_id)
+        )
         """
     )
 
@@ -598,6 +807,23 @@ def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE accreditations ADD COLUMN source_detail TEXT NOT NULL DEFAULT ''")
     if "device_type" not in acc_columns:
         db.execute("ALTER TABLE accreditations ADD COLUMN device_type TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_landing_config_columns(db: sqlite3.Connection) -> None:
+    event_columns = [row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()]
+    for name in [
+        "landing_image_data",
+        "landing_image_name",
+        "landing_image_type",
+        "landing_image_updated_at",
+        "landing_logo_data",
+        "landing_primary_color",
+        "landing_secondary_color",
+        "landing_mobile_banner_data",
+        "landing_video_url",
+    ]:
+        if name not in event_columns:
+            db.execute(f"ALTER TABLE events ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_activity_access_window_columns(db: sqlite3.Connection) -> None:
@@ -1442,7 +1668,10 @@ def communication_log(
 
 def communication_provider(channel: str) -> str:
     if channel == "email":
-        return os.environ.get("EMAIL_PROVIDER", "demo").strip() or "demo"
+        try:
+            return create_email_provider().name
+        except ValueError:
+            return os.environ.get("EMAIL_PROVIDER", "demo").strip() or "demo"
     if channel == "whatsapp":
         return os.environ.get("WHATSAPP_PROVIDER", "demo").strip() or "demo"
     return "demo"
@@ -1453,7 +1682,10 @@ def communication_provider_ready(channel: str) -> bool:
     if provider == "demo":
         return False
     if channel == "email":
-        return bool(os.environ.get("EMAIL_API_KEY") and os.environ.get("EMAIL_FROM"))
+        try:
+            return create_email_provider().ready
+        except ValueError:
+            return False
     if channel == "whatsapp":
         return bool(os.environ.get("WHATSAPP_API_KEY") and os.environ.get("WHATSAPP_PHONE_ID"))
     return False
@@ -1537,6 +1769,7 @@ def communication_audience_rows(db: sqlite3.Connection, event_id: int, audience:
 
 def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, audience: str, channel: str, template_code: str, subject: str, content: str, rows: list[sqlite3.Row], process_now: bool = True) -> dict:
     sent = skipped = queued = errors = 0
+    email_queue_ids: list[int] = []
     channels = ["email", "whatsapp"] if channel == "both" else [channel]
     for row in rows:
         for item_channel in channels:
@@ -1544,6 +1777,18 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
             consent = int(row["acepta_email"] or 0) if item_channel == "email" else int(row["acepta_whatsapp"] or 0)
             if not recipient or not consent:
                 skipped += 1
+                reason = "Sin destinatario" if not recipient else f"Sin consentimiento para {item_channel}"
+                communication_log(
+                    db,
+                    event_id,
+                    row["person_id"],
+                    row["accreditation_id"],
+                    item_channel,
+                    template_code or "manual",
+                    subject,
+                    reason,
+                    "omitido",
+                )
                 continue
             rendered_subject = render_communication_template(subject, row)
             rendered_content = render_communication_template(content, row)
@@ -1551,36 +1796,244 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
             status = "pendiente"
             processed_at = None
             last_error = ""
-            if process_now:
+            should_defer_real_email = item_channel == "email" and provider != "demo"
+            if process_now and not should_defer_real_email:
                 processed_at = now_iso()
                 if communication_provider_ready(item_channel):
                     status = "enviado"
                 else:
                     status = "enviado" if provider == "demo" else "error"
                     last_error = "" if provider == "demo" else "Proveedor no configurado"
-            db.execute(
+            cur = db.execute(
                 """
                 INSERT INTO communication_queue (
                     event_id, person_id, accreditation_id, channel, audience, template_code,
-                    subject, content, recipient, status, attempts, provider, last_error,
-                    scheduled_at, processed_at, created_by, created_at
+                    subject, content, recipient, status, attempts, max_attempts, provider,
+                    provider_message_id, last_error, scheduled_at, processed_at,
+                    delivered_at, bounced_at, created_by, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id, row["person_id"], row["accreditation_id"], item_channel, audience,
                     template_code, rendered_subject, rendered_content, recipient, status,
-                    1 if process_now else 0, provider, last_error, None, processed_at, actor, now_iso(),
+                    1 if process_now and not should_defer_real_email else 0,
+                    max(1, int(os.environ.get("EMAIL_MAX_RETRIES", "3"))) if item_channel == "email" else 1,
+                    provider, "", last_error, None, processed_at, None, None, actor, now_iso(),
                 ),
             )
+            queue_id = int(cur.lastrowid)
             queued += 1
+            if process_now and should_defer_real_email:
+                email_queue_ids.append(queue_id)
             if status in {"enviado", "entregado", "leido"}:
                 sent += 1
                 communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", rendered_subject, rendered_content, "demo" if provider == "demo" else "enviado")
             elif status == "error":
                 errors += 1
                 communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", rendered_subject, last_error, "error")
-    return {"queued": queued, "sent": sent, "skipped": skipped, "errors": errors}
+    return {"queued": queued, "sent": sent, "skipped": skipped, "errors": errors, "_email_queue_ids": email_queue_ids}
+
+
+def process_email_queue_item(queue_id: int) -> dict:
+    with connect() as db:
+        row = db.execute(
+            "SELECT * FROM communication_queue WHERE id = ? AND channel = 'email'",
+            (queue_id,),
+        ).fetchone()
+    if not row:
+        return {"ok": False, "status": "error", "error": "Email en cola no encontrado"}
+    item = dict(row)
+    if item["status"] in {"entregado", "leido"}:
+        return {"ok": True, "status": item["status"], "message_id": item.get("provider_message_id", "")}
+    provider = create_email_provider()
+    attempt = int(item.get("attempts") or 0) + 1
+    max_attempts = max(1, int(item.get("max_attempts") or 3))
+    if isinstance(provider, DemoEmailProvider):
+        result_status = "enviado"
+        result_error = ""
+        message_id = ""
+        ok = True
+    elif not provider.ready:
+        result_status = "error" if attempt >= max_attempts else "pendiente"
+        result_error = "Proveedor de email no configurado"
+        message_id = ""
+        ok = False
+    else:
+        result = provider.send_template(
+            to=item["recipient"],
+            subject=item["subject"],
+            html=item["content"],
+            text=item["content"],
+            reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
+            metadata={
+                "event_id": str(item["event_id"]),
+                "queue_id": str(item["id"]),
+                "template": str(item["template_code"] or "manual"),
+            },
+        )
+        ok = result.ok
+        result_status = result.status if result.ok else ("error" if attempt >= max_attempts else "pendiente")
+        result_error = result.error
+        message_id = result.message_id
+    processed_at = now_iso()
+    with DB_LOCK, connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(
+            """
+            UPDATE communication_queue
+            SET status = ?, attempts = ?, provider = ?, provider_message_id = ?,
+                last_error = ?, processed_at = ?
+            WHERE id = ?
+            """,
+            (result_status, attempt, provider.name, message_id, result_error, processed_at, queue_id),
+        )
+        communication_log(
+            db,
+            int(item["event_id"]),
+            int(item["person_id"]),
+            int(item["accreditation_id"]) if item.get("accreditation_id") else None,
+            "email",
+            str(item["template_code"] or "manual"),
+            str(item["subject"]),
+            str(item["content"] if ok else result_error),
+            "demo" if isinstance(provider, DemoEmailProvider) else result_status,
+        )
+        audit(
+            db,
+            str(item["created_by"] or "system"),
+            "communications.email_sent" if ok else "communications.email_retry",
+            "communication_queue",
+            queue_id,
+            {
+                "event_id": int(item["event_id"]),
+                "provider": provider.name,
+                "message_id": message_id,
+                "status": result_status,
+                "attempt": attempt,
+                "max_attempts": max_attempts,
+                "error": result_error,
+            },
+        )
+        db.execute("COMMIT")
+    return {"ok": ok, "status": result_status, "message_id": message_id, "error": result_error}
+
+
+def process_email_queue_items(queue_ids: list[int]) -> dict:
+    summary = {"sent": 0, "errors": 0, "pending": 0}
+    for queue_id in queue_ids:
+        if WORKER and WORKER.thread and WORKER.thread.is_alive():
+            with connect() as db:
+                row = db.execute("SELECT event_id, created_by FROM communication_queue WHERE id = ?", (queue_id,)).fetchone()
+            job_queue_service().enqueue(
+                "email.send",
+                {"queue_id": queue_id},
+                priority="high",
+                actor=str(row["created_by"] if row else "system"),
+                event_id=int(row["event_id"]) if row else None,
+            )
+            result = {"ok": False, "status": "pendiente"}
+        else:
+            result = process_email_queue_item(queue_id)
+        if result["ok"]:
+            summary["sent"] += 1
+        elif result["status"] == "pendiente":
+            summary["pending"] += 1
+        else:
+            summary["errors"] += 1
+    return summary
+
+
+def verify_email_webhook(handler: SimpleHTTPRequestHandler) -> bool:
+    secret = os.environ.get("EMAIL_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        return APP_ENV != "production"
+    svix_id = handler.headers.get("svix-id", "")
+    svix_timestamp = handler.headers.get("svix-timestamp", "")
+    signatures = handler.headers.get("svix-signature", "")
+    if not svix_id or not svix_timestamp or not signatures:
+        return False
+    try:
+        if abs(time.time() - float(svix_timestamp)) > 300:
+            return False
+        key = secret.removeprefix("whsec_")
+        decoded_key = base64.b64decode(key)
+        raw = getattr(handler, "_raw_json_body", b"")
+        signed = svix_id.encode() + b"." + svix_timestamp.encode() + b"." + raw
+        expected = base64.b64encode(hmac.new(decoded_key, signed, hashlib.sha256).digest()).decode()
+        return any(
+            hmac.compare_digest(expected, part.split(",", 1)[1])
+            for part in signatures.split()
+            if part.startswith("v1,")
+        )
+    except (ValueError, TypeError):
+        return False
+
+
+def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
+    event_type = str(payload.get("type") or payload.get("event") or "").strip().lower()
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    message_id = str(data.get("email_id") or data.get("id") or payload.get("email_id") or "").strip()
+    if not event_type or not message_id:
+        raise ValueError("Webhook de email incompleto")
+    row = db.execute(
+        "SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1",
+        (message_id,),
+    ).fetchone()
+    status_map = {
+        "email.sent": "enviado",
+        "sent": "enviado",
+        "email.delivered": "entregado",
+        "delivered": "entregado",
+        "email.bounced": "rebotado",
+        "bounced": "rebotado",
+        "email.complained": "rechazado",
+        "complained": "rechazado",
+        "email.failed": "error",
+        "failed": "error",
+        "email.delivery_delayed": "pendiente",
+    }
+    status = status_map.get(event_type, event_type.removeprefix("email."))
+    event_id = int(row["event_id"]) if row else int(payload.get("event_id") or 0)
+    queue_id = int(row["id"]) if row else None
+    db.execute(
+        """
+        INSERT INTO email_delivery_events
+            (event_id, queue_id, provider, message_id, event_type, payload, created_at)
+        VALUES (?, ?, 'resend', ?, ?, ?, ?)
+        """,
+        (event_id, queue_id, message_id, event_type, json.dumps(payload, ensure_ascii=False), now_iso()),
+    )
+    if row:
+        delivered_at = now_iso() if status == "entregado" else row["delivered_at"]
+        bounced_at = now_iso() if status in {"rebotado", "rechazado", "error"} else row["bounced_at"]
+        db.execute(
+            """
+            UPDATE communication_queue
+            SET status = ?, delivered_at = ?, bounced_at = ?, processed_at = ?
+            WHERE id = ?
+            """,
+            (status, delivered_at, bounced_at, now_iso(), queue_id),
+        )
+        communication_log(
+            db,
+            event_id,
+            int(row["person_id"]),
+            int(row["accreditation_id"]) if row["accreditation_id"] else None,
+            "email",
+            str(row["template_code"] or "webhook"),
+            str(row["subject"]),
+            f"Estado proveedor: {status}",
+            status,
+        )
+        audit(db, "webhook", "communications.email_status", "communication_queue", queue_id, {
+            "event_id": event_id,
+            "provider": "resend",
+            "message_id": message_id,
+            "event_type": event_type,
+            "status": status,
+        })
+    return {"ok": True, "queue_id": queue_id, "message_id": message_id, "status": status}
 
 
 def find_participant_by_phone(db: sqlite3.Connection, event_id: int, phone: str) -> sqlite3.Row | None:
@@ -2310,6 +2763,248 @@ def audit(db: sqlite3.Connection, actor: str, action: str, entity_type: str, ent
     )
 
 
+def technical_log(level: str, module: str, message: str, detail: str = "", request_path: str = "") -> None:
+    safe_detail = str(detail or "")
+    safe_detail = re.sub(
+        r"(?i)(api[_-]?key|password|secret|token|postgres(?:ql)?://)[=: ]+[^\s,;]+",
+        r"\1=[REDACTED]",
+        safe_detail,
+    )
+    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "EMAIL_WEBHOOK_SECRET"):
+        secret = os.environ.get(secret_name, "")
+        if secret:
+            safe_detail = safe_detail.replace(secret, "[REDACTED]")
+    try:
+        with connect() as db:
+            db.execute(
+                """
+                INSERT INTO technical_logs (level, module, message, detail, request_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(level or "info").lower()[:20],
+                    str(module or "system")[:80],
+                    str(message or "")[:500],
+                    safe_detail[:2000],
+                    str(request_path or "")[:300],
+                    now_iso(),
+                ),
+            )
+    except Exception:
+        pass
+
+
+def job_queue_service() -> JobQueueService:
+    return JobQueueService(connect, audit, technical_log)
+
+
+def handle_email_job(payload: dict) -> dict:
+    return process_email_queue_item(int(payload["queue_id"]))
+
+
+def handle_backup_job(payload: dict) -> dict:
+    started = time.perf_counter()
+    path = create_db_backup()
+    check = verify_backup_file(path)
+    if not check["ok"]:
+        raise RuntimeError(f"Backup invalido: {check['detail']}")
+    return {"file": path.name, "size": path.stat().st_size, "duration_ms": round((time.perf_counter() - started) * 1000, 2)}
+
+
+def handle_certificate_job(payload: dict) -> dict:
+    with DB_LOCK, connect() as db:
+        generated = release_available_certificates(db, int(payload.get("event_id") or 0) or None)
+    return {"generated": generated}
+
+
+def handle_export_job(payload: dict) -> dict:
+    event_id = int(payload.get("event_id") or 0)
+    export_dir = ROOT / "output"
+    export_dir.mkdir(exist_ok=True)
+    path = export_dir / f"bitora-export-{event_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    with connect() as db:
+        rows = [dict(row) for row in db.execute("SELECT * FROM accreditations WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()]
+    path.write_text(json.dumps({"event_id": event_id, "accreditations": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"file": path.name, "rows": len(rows)}
+
+
+def start_job_worker() -> JobWorker:
+    global WORKER
+    queue = job_queue_service()
+    WORKER = JobWorker(
+        queue,
+        {
+            "email.send": handle_email_job,
+            "backup.create": handle_backup_job,
+            "certificate.generate": handle_certificate_job,
+            "export.generate": handle_export_job,
+        },
+    )
+    WORKER.start()
+    technical_log("info", "jobs", "Worker iniciado", "worker-1")
+    return WORKER
+
+
+def waiting_room_payload(db, event_id: int, visitor_id: str, *, admit: bool = True) -> dict:
+    event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+    if not event:
+        return {"error": "Evento inexistente"}
+    enabled = bool(int(event["waiting_room_enabled"] or 0))
+    if not enabled:
+        return {"enabled": False, "status": "open", "access_token": ""}
+    now = datetime.now(timezone.utc)
+    open_at = parse_dt(event["waiting_room_open_at"]) if event["waiting_room_open_at"] else None
+    if open_at and now < open_at.astimezone(timezone.utc):
+        return {
+            "enabled": True,
+            "status": "not_open",
+            "open_at": event["waiting_room_open_at"],
+            "message": event["waiting_message"],
+        }
+    row = db.execute(
+        "SELECT * FROM waiting_room_visitors WHERE event_id = ? AND visitor_id = ?",
+        (event_id, visitor_id),
+    ).fetchone()
+    if not row:
+        position = int(
+            db.execute(
+                "SELECT COUNT(*) AS c FROM waiting_room_visitors WHERE event_id = ? AND status = 'waiting'",
+                (event_id,),
+            ).fetchone()["c"]
+            or 0
+        ) + 1
+        db.execute(
+            """
+            INSERT INTO waiting_room_visitors (
+                event_id, visitor_id, status, position_number, joined_at, last_seen_at
+            ) VALUES (?, ?, 'waiting', ?, ?, ?)
+            """,
+            (event_id, visitor_id, position, now_iso(), now_iso()),
+        )
+        audit(db, "public", "waiting_room.joined", "event", event_id, {"visitor_id": visitor_id, "position": position})
+        row = db.execute(
+            "SELECT * FROM waiting_room_visitors WHERE event_id = ? AND visitor_id = ?",
+            (event_id, visitor_id),
+        ).fetchone()
+    item = dict(row)
+    if item["status"] == "admitted" and item.get("expires_at"):
+        expires = parse_dt(item["expires_at"])
+        if expires and now >= expires.astimezone(timezone.utc):
+            db.execute("UPDATE waiting_room_visitors SET status = 'expired', last_seen_at = ? WHERE id = ?", (now_iso(), item["id"]))
+            audit(db, "system", "waiting_room.expired", "waiting_room", item["id"], {"event_id": event_id})
+            item["status"] = "expired"
+    if admit and item["status"] in {"waiting", "expired"}:
+        minute_ago = (now - timedelta(minutes=1)).isoformat(timespec="seconds")
+        admitted_recent = int(
+            db.execute(
+                "SELECT COUNT(*) AS c FROM waiting_room_visitors WHERE event_id = ? AND admitted_at >= ?",
+                (event_id, minute_ago),
+            ).fetchone()["c"]
+            or 0
+        )
+        rate = max(1, int(event["users_allowed_per_minute"] or 60))
+        first_waiting = db.execute(
+            "SELECT id FROM waiting_room_visitors WHERE event_id = ? AND status IN ('waiting', 'expired') ORDER BY joined_at, id LIMIT 1",
+            (event_id,),
+        ).fetchone()
+        if admitted_recent < rate and first_waiting and int(first_waiting["id"]) == int(item["id"]):
+            token = secrets.token_urlsafe(24)
+            expires_at = (now + timedelta(minutes=max(1, int(event["turn_duration_minutes"] or 10)))).isoformat(timespec="seconds")
+            db.execute(
+                """
+                UPDATE waiting_room_visitors
+                SET status = 'admitted', access_token = ?, admitted_at = ?, expires_at = ?, last_seen_at = ?
+                WHERE id = ?
+                """,
+                (token, now_iso(), expires_at, now_iso(), item["id"]),
+            )
+            audit(db, "system", "waiting_room.admitted", "waiting_room", item["id"], {"event_id": event_id})
+            item.update(status="admitted", access_token=token, admitted_at=now_iso(), expires_at=expires_at)
+    waiting_ahead = int(
+        db.execute(
+            "SELECT COUNT(*) AS c FROM waiting_room_visitors WHERE event_id = ? AND status = 'waiting' AND position_number < ?",
+            (event_id, item["position_number"]),
+        ).fetchone()["c"]
+        or 0
+    )
+    rate = max(1, int(event["users_allowed_per_minute"] or 60))
+    return {
+        "enabled": True,
+        "status": item["status"],
+        "position": waiting_ahead + 1 if item["status"] == "waiting" else 0,
+        "estimated_minutes": max(1, (waiting_ahead + rate - 1) // rate) if item["status"] == "waiting" else 0,
+        "show_position": bool(int(event["show_waiting_position"] or 0)),
+        "show_estimated_time": bool(int(event["show_estimated_time"] or 0)),
+        "message": event["waiting_message"],
+        "access_token": item.get("access_token") or "",
+        "expires_at": item.get("expires_at"),
+    }
+
+
+def simulator_step() -> None:
+    with connect() as db:
+        states = db.execute("SELECT * FROM simulator_state WHERE status = 'running'").fetchall()
+        for state in states:
+            event_id = int(state["event_id"])
+            event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+            if not event or ("demo" not in str(event["name"]).lower() and "demo" not in str(event["description"]).lower()):
+                db.execute("UPDATE simulator_state SET status = 'stopped', updated_at = ? WHERE event_id = ?", (now_iso(), event_id))
+                continue
+            rows = db.execute(
+                "SELECT id, token, checked_in_at FROM accreditations WHERE event_id = ? AND status <> 'cancelled' ORDER BY RANDOM() LIMIT 20",
+                (event_id,),
+            ).fetchall()
+            if not rows:
+                continue
+            speed = max(0.25, float(state["speed"] or 1))
+            grants = max(1, int(int(state["accesses_per_minute"] or 1) * speed / 12))
+            rejects = max(0, int(int(state["rejections_per_minute"] or 0) * speed / 12))
+            terminals = max(1, int(state["active_terminals"] or 1))
+            for row in random.sample(list(rows), min(grants, len(rows))):
+                operator_number = random.randint(1, terminals)
+                db.execute(
+                    """
+                    INSERT INTO access_logs (
+                        accreditation_id, event_id, token, operator, checkpoint, access_point,
+                        access_context, result, reason, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'event_entry', 'granted', 'simulacion', ?)
+                    """,
+                    (row["id"], event_id, row["token"], f"Sim Operador {operator_number}", f"Terminal {operator_number}", f"Terminal {operator_number}", now_iso()),
+                )
+                if not row["checked_in_at"]:
+                    db.execute("UPDATE accreditations SET checked_in_at = ? WHERE id = ?", (now_iso(), row["id"]))
+            reasons = ["QR repetido", "QR invalido", "Acceso anticipado", "Sin inscripcion", "Cancelado", "Sala incorrecta"]
+            for index in range(rejects):
+                row = random.choice(list(rows))
+                operator_number = random.randint(1, terminals)
+                db.execute(
+                    """
+                    INSERT INTO access_logs (
+                        accreditation_id, event_id, token, operator, checkpoint, access_point,
+                        access_context, result, reason, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'event_entry', 'rejected', ?, ?)
+                    """,
+                    (row["id"], event_id, row["token"], f"Sim Operador {operator_number}", f"Terminal {operator_number}", f"Terminal {operator_number}", random.choice(reasons), now_iso()),
+                )
+
+
+def simulator_loop() -> None:
+    while not SIMULATOR_STOP.wait(5):
+        try:
+            simulator_step()
+        except Exception as exc:
+            technical_log("error", "simulator", "Error en simulador vivo", str(exc))
+
+
+def start_simulator_loop() -> threading.Thread:
+    global SIMULATOR_THREAD
+    if SIMULATOR_THREAD and SIMULATOR_THREAD.is_alive():
+        return SIMULATOR_THREAD
+    SIMULATOR_THREAD = threading.Thread(target=simulator_loop, name="live-simulator", daemon=True)
+    SIMULATOR_THREAD.start()
+    return SIMULATOR_THREAD
+
+
 def actor_role(db: sqlite3.Connection, actor: str) -> str:
     row = db.execute("SELECT role FROM users WHERE lower(name) = lower(?) AND active = 1", (actor,)).fetchone()
     if row:
@@ -2663,12 +3358,387 @@ def certificate_pdf_bytes(data: dict) -> bytes:
     return output.getvalue()
 
 
+def executive_report_data(db: sqlite3.Connection, event_id: int) -> dict | None:
+    event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
+    if not event:
+        return None
+
+    totals = dict(db.execute(
+        """
+        SELECT COUNT(*) AS registered,
+               SUM(CASE WHEN checked_in_at IS NOT NULL AND status <> 'cancelled' THEN 1 ELSE 0 END) AS checked,
+               SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+        FROM accreditations
+        WHERE event_id = ?
+        """,
+        (event_id,),
+    ).fetchone())
+    reservations = dict(db.execute(
+        """
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+               SUM(CASE WHEN status = 'waitlisted' THEN 1 ELSE 0 END) AS waitlisted,
+               SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+        FROM reservations
+        WHERE event_id = ?
+        """,
+        (event_id,),
+    ).fetchone())
+    attendance = dict(db.execute(
+        """
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status IN ('Presente', 'Completa') THEN 1 ELSE 0 END) AS present,
+               SUM(CASE WHEN status = 'Parcial' THEN 1 ELSE 0 END) AS partial,
+               SUM(CASE WHEN status = 'Ausente' THEN 1 ELSE 0 END) AS absent,
+               ROUND(AVG(COALESCE(attendance_percentage, 0)), 1) AS average_percentage
+        FROM activity_attendance
+        WHERE event_id = ?
+        """,
+        (event_id,),
+    ).fetchone())
+    eligibility = dict(db.execute(
+        """
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN elegible = 1 THEN 1 ELSE 0 END) AS eligible,
+               SUM(CASE WHEN elegible = 0 THEN 1 ELSE 0 END) AS not_eligible
+        FROM certificate_eligibility
+        WHERE event_id = ?
+        """,
+        (event_id,),
+    ).fetchone())
+    access = dict(db.execute(
+        """
+        SELECT SUM(CASE WHEN result = 'granted' THEN 1 ELSE 0 END) AS granted,
+               SUM(CASE WHEN result = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+               COUNT(DISTINCT CASE WHEN datetime(created_at) >= datetime('now', '-15 minutes') THEN operator END) AS active_operators,
+               SUM(CASE WHEN result = 'granted' AND datetime(created_at) >= datetime('now', '-15 minutes') THEN 1 ELSE 0 END) AS granted_15
+        FROM access_logs
+        WHERE event_id = ?
+        """,
+        (event_id,),
+    ).fetchone())
+    rooms = [dict(row) for row in db.execute(
+        """
+        SELECT s.name AS room,
+               COALESCE(NULLIF(s.capacity, 0), MAX(COALESCE(a.capacity, 0)), 0) AS capacity,
+               COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) AS present
+        FROM spaces s
+        LEFT JOIN activities a ON a.space_id = s.id AND a.status <> 'cancelled'
+        LEFT JOIN activity_attendance at ON at.activity_id = a.id
+        WHERE s.event_id = ? AND s.status <> 'cancelled'
+        GROUP BY s.id
+        ORDER BY present DESC, s.name
+        """,
+        (event_id,),
+    ).fetchall()]
+    for room in rooms:
+        capacity = int(room.get("capacity") or 0)
+        room["percentage"] = min(100, int(round(int(room.get("present") or 0) * 100 / capacity))) if capacity else 0
+
+    activities = [dict(row) for row in db.execute(
+        """
+        SELECT a.title, s.name AS room, a.capacity,
+               COUNT(DISTINCT CASE WHEN r.status = 'confirmed' THEN r.id END) AS reserved,
+               COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) AS present
+        FROM activities a
+        LEFT JOIN spaces s ON s.id = a.space_id
+        LEFT JOIN reservations r ON r.activity_id = a.id
+        LEFT JOIN activity_attendance at ON at.activity_id = a.id
+        WHERE a.event_id = ? AND a.status <> 'cancelled'
+        GROUP BY a.id
+        ORDER BY present DESC, reserved DESC, a.starts_at
+        LIMIT 10
+        """,
+        (event_id,),
+    ).fetchall()]
+    rejections = [dict(row) for row in db.execute(
+        "SELECT COALESCE(NULLIF(reason, ''), 'Sin motivo') AS label, COUNT(*) AS value FROM access_logs WHERE event_id = ? AND result = 'rejected' GROUP BY label ORDER BY value DESC LIMIT 8",
+        (event_id,),
+    ).fetchall()]
+    sources = [dict(row) for row in db.execute(
+        "SELECT COALESCE(NULLIF(source, ''), 'Sin origen') AS label, COUNT(*) AS value FROM accreditations WHERE event_id = ? GROUP BY label ORDER BY value DESC LIMIT 8",
+        (event_id,),
+    ).fetchall()]
+
+    registered = int(totals.get("registered") or 0)
+    checked = int(totals.get("checked") or 0)
+    rejected = int(access.get("rejected") or 0)
+    room_average = round(sum(int(room["percentage"]) for room in rooms) / len(rooms)) if rooms else 100
+    attendance_score = round(checked * 100 / registered) if registered else 100
+    health = max(0, min(100, round((room_average + attendance_score) / 2 - min(30, rejected * 3))))
+    alerts = []
+    if int(access.get("granted_15") or 0) >= 100:
+        alerts.append("Alto flujo de ingreso en los ultimos 15 minutos.")
+    if rejected >= 5:
+        alerts.append(f"Se registraron {rejected} rechazos de acceso.")
+    for room in rooms:
+        if int(room["capacity"] or 0) and int(room["percentage"]) < 30:
+            alerts.append(f"Ocupacion baja en {room['room']}: {room['percentage']}%.")
+    if int(reservations.get("waitlisted") or 0):
+        alerts.append(f"{int(reservations.get('waitlisted') or 0)} personas permanecen en lista de espera.")
+
+    return {
+        "event": event,
+        "totals": totals,
+        "reservations": reservations,
+        "attendance": attendance,
+        "eligibility": eligibility,
+        "access": access,
+        "rooms": rooms,
+        "activities": activities,
+        "rejections": rejections,
+        "sources": sources,
+        "health": health,
+        "alerts": alerts,
+        "generated_at": now_iso(),
+    }
+
+
+def executive_report_pdf_bytes(data: dict) -> bytes:
+    output = BytesIO()
+    page_size = landscape(A4)
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=page_size,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=15 * mm,
+        bottomMargin=14 * mm,
+        title=f"Resumen ejecutivo - {data['event'].get('name') or 'Evento'}",
+        author="BITORA",
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="BitoraTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=24, leading=28, textColor=colors.HexColor("#17212b"), alignment=TA_LEFT, spaceAfter=5))
+    styles.add(ParagraphStyle(name="BitoraSubtitle", parent=styles["Normal"], fontSize=10, leading=14, textColor=colors.HexColor("#617080"), spaceAfter=12))
+    styles.add(ParagraphStyle(name="BitoraSection", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=15, leading=18, textColor=colors.HexColor("#0b6f76"), spaceBefore=7, spaceAfter=8))
+    styles.add(ParagraphStyle(name="BitoraBody", parent=styles["BodyText"], fontSize=9, leading=12, textColor=colors.HexColor("#33434d")))
+    styles.add(ParagraphStyle(name="BitoraSmall", parent=styles["BodyText"], fontSize=8, leading=10, textColor=colors.HexColor("#617080")))
+    styles.add(ParagraphStyle(name="KpiValue", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=22, leading=24, textColor=colors.HexColor("#17212b"), alignment=TA_CENTER))
+    styles.add(ParagraphStyle(name="KpiLabel", parent=styles["Normal"], fontSize=8, leading=10, textColor=colors.HexColor("#617080"), alignment=TA_CENTER))
+
+    event = data["event"]
+    generated = format_certificate_date(data["generated_at"])
+    story = [
+        Paragraph("BITORA - RESUMEN EJECUTIVO", styles["BitoraSmall"]),
+        Paragraph(escape(str(event.get("name") or "Evento")), styles["BitoraTitle"]),
+        Paragraph(
+            escape(f"{event.get('venue') or 'Sin ubicacion'} | Generado: {generated} | Informe operativo"),
+            styles["BitoraSubtitle"],
+        ),
+    ]
+
+    totals = data["totals"]
+    access = data["access"]
+    attendance = data["attendance"]
+    eligibility = data["eligibility"]
+    kpis = [
+        ("Salud operativa", f"{data['health']}%"),
+        ("Inscriptos", int(totals.get("registered") or 0)),
+        ("Acreditados", int(totals.get("checked") or 0)),
+        ("Accesos OK", int(access.get("granted") or 0)),
+        ("Rechazos", int(access.get("rejected") or 0)),
+        ("Asistencia prom.", f"{float(attendance.get('average_percentage') or 0):.1f}%"),
+        ("Elegibles", int(eligibility.get("eligible") or 0)),
+    ]
+    kpi_cells = []
+    for label, value in kpis:
+        kpi_cells.append([Paragraph(str(value), styles["KpiValue"]), Paragraph(label, styles["KpiLabel"])])
+    kpi_table = Table([kpi_cells], colWidths=[36 * mm] * len(kpi_cells), rowHeights=[27 * mm])
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f2f7f7")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d7e2e3")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#d7e2e3")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([kpi_table, Spacer(1, 5 * mm)])
+
+    story.append(Paragraph("Lectura ejecutiva", styles["BitoraSection"]))
+    checked = int(totals.get("checked") or 0)
+    registered = int(totals.get("registered") or 0)
+    accreditation_rate = round(checked * 100 / registered, 1) if registered else 0
+    reservations = data["reservations"]
+    summary_rows = [
+        ["Indicador", "Resultado", "Interpretacion"],
+        ["Tasa de acreditacion", f"{accreditation_rate}%", f"{checked} de {registered} participantes ingresaron."],
+        ["Reservas confirmadas", str(int(reservations.get("confirmed") or 0)), f"Lista de espera: {int(reservations.get('waitlisted') or 0)}."],
+        ["Asistencia registrada", str(int(attendance.get("total") or 0)), f"Presentes/completas: {int(attendance.get('present') or 0)}; parciales: {int(attendance.get('partial') or 0)}."],
+        ["Operacion QR reciente", str(int(access.get("granted_15") or 0)), f"Operadores activos ultimos 15 min: {int(access.get('active_operators') or 0)}."],
+    ]
+    summary_table = Table(summary_rows, colWidths=[55 * mm, 38 * mm, 160 * mm], repeatRows=1)
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b6f76")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e2e3")),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([summary_table, Spacer(1, 4 * mm)])
+
+    alert_text = data["alerts"][:6] or ["Sin alertas operativas relevantes al momento de generar el informe."]
+    story.append(Paragraph("Alertas e incidencias", styles["BitoraSection"]))
+    for item in alert_text:
+        story.append(Paragraph(f"- {escape(str(item))}", styles["BitoraBody"]))
+
+    story.append(PageBreak())
+    story.append(Paragraph("Ocupacion y actividades", styles["BitoraTitle"]))
+    room_rows = [["Sala", "Presentes", "Capacidad", "Ocupacion", "Visual"]]
+    for row in data["rooms"][:12]:
+        pct = int(row.get("percentage") or 0)
+        filled = max(0, min(10, round(pct / 10)))
+        room_rows.append([
+            str(row.get("room") or "Sin sala"),
+            str(int(row.get("present") or 0)),
+            str(int(row.get("capacity") or 0)),
+            f"{pct}%",
+            ("#" * filled) + ("-" * (10 - filled)),
+        ])
+    if len(room_rows) == 1:
+        room_rows.append(["Sin salas", "0", "0", "0%", "----------"])
+    room_table = Table(room_rows, colWidths=[75 * mm, 30 * mm, 30 * mm, 30 * mm, 75 * mm], repeatRows=1)
+    room_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17212b")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (4, 1), (4, -1), "Courier-Bold"),
+        ("TEXTCOLOR", (4, 1), (4, -1), colors.HexColor("#0b7f86")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e2e3")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([room_table, Spacer(1, 5 * mm), Paragraph("Actividades con mayor participacion", styles["BitoraSection"])])
+    activity_rows = [["Actividad", "Sala", "Reservados", "Presentes", "Cupo"]]
+    for row in data["activities"]:
+        activity_rows.append([
+            Paragraph(escape(str(row.get("title") or "Actividad")), styles["BitoraSmall"]),
+            str(row.get("room") or "Sin sala"),
+            str(int(row.get("reserved") or 0)),
+            str(int(row.get("present") or 0)),
+            str(int(row.get("capacity") or 0)),
+        ])
+    if len(activity_rows) == 1:
+        activity_rows.append(["Sin actividades", "-", "0", "0", "0"])
+    activity_table = Table(activity_rows, colWidths=[105 * mm, 55 * mm, 30 * mm, 30 * mm, 25 * mm], repeatRows=1)
+    activity_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b6f76")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e2e3")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(activity_table)
+
+    story.append(PageBreak())
+    story.append(Paragraph("Accesos, rechazos y captacion", styles["BitoraTitle"]))
+    left_rows = [["Motivo de rechazo", "Cantidad"]] + [[str(row["label"]), str(row["value"])] for row in data["rejections"]]
+    right_rows = [["Origen de inscripcion", "Cantidad"]] + [[str(row["label"]), str(row["value"])] for row in data["sources"]]
+    if len(left_rows) == 1:
+        left_rows.append(["Sin rechazos", "0"])
+    if len(right_rows) == 1:
+        right_rows.append(["Sin origen registrado", "0"])
+
+    def compact_table(rows, header_color):
+        table = Table(rows, colWidths=[90 * mm, 28 * mm], repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(header_color)),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e2e3")),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        return table
+
+    comparison = Table(
+        [[compact_table(left_rows, "#b42318"), compact_table(right_rows, "#0b6f76")]],
+        colWidths=[126 * mm, 126 * mm],
+    )
+    comparison.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    story.extend([comparison, Spacer(1, 8 * mm)])
+    story.append(Paragraph("Notas del informe", styles["BitoraSection"]))
+    story.append(Paragraph(
+        "Este resumen se genera con los datos registrados en BITORA al momento de la descarga. "
+        "Una reserva no implica asistencia y una acreditacion general no implica presencia en una actividad. "
+        "Los valores de asistencia dependen de los ingresos y egresos QR efectivamente registrados.",
+        styles["BitoraBody"],
+    ))
+
+    def footer(canvas, document):
+        canvas.saveState()
+        width, _ = page_size
+        canvas.setStrokeColor(colors.HexColor("#d7e2e3"))
+        canvas.line(16 * mm, 10 * mm, width - 16 * mm, 10 * mm)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#617080"))
+        canvas.drawString(16 * mm, 6 * mm, "BITORA - Bitacora digital de eventos")
+        canvas.drawRightString(width - 16 * mm, 6 * mm, f"Pagina {document.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return output.getvalue()
+
+
 def read_json(handler: SimpleHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length", "0"))
     raw = handler.rfile.read(length) if length else b"{}"
+    handler._raw_json_body = raw
     if not raw:
         return {}
     return json.loads(raw.decode("utf-8"))
+
+
+LANDING_ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": "JPEG",
+    "image/jpg": "JPEG",
+    "image/png": "PNG",
+    "image/webp": "WEBP",
+}
+LANDING_IMAGE_MAX_BYTES = int(os.environ.get("LANDING_IMAGE_MAX_BYTES", str(3 * 1024 * 1024)))
+LANDING_IMAGE_MIN_WIDTH = int(os.environ.get("LANDING_IMAGE_MIN_WIDTH", "800"))
+LANDING_IMAGE_MIN_HEIGHT = int(os.environ.get("LANDING_IMAGE_MIN_HEIGHT", "450"))
+
+
+def validate_landing_image(data_url: str, filename: str = "") -> dict:
+    if not data_url or "," not in data_url or not data_url.startswith("data:"):
+        raise ValueError("Imagen invalida")
+    header, encoded = data_url.split(",", 1)
+    content_type = header[5:].split(";", 1)[0].lower().strip()
+    if content_type not in LANDING_ALLOWED_IMAGE_TYPES:
+        raise ValueError("Formato no permitido. Usa JPG, JPEG, PNG o WEBP")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise ValueError("No se pudo leer la imagen") from exc
+    if len(raw) > LANDING_IMAGE_MAX_BYTES:
+        raise ValueError(f"Imagen demasiado pesada. Maximo {LANDING_IMAGE_MAX_BYTES // (1024 * 1024)} MB")
+    try:
+        with Image.open(BytesIO(raw)) as image:
+            width, height = image.size
+            image.verify()
+    except Exception as exc:
+        raise ValueError("Archivo de imagen invalido") from exc
+    if width < LANDING_IMAGE_MIN_WIDTH or height < LANDING_IMAGE_MIN_HEIGHT:
+        raise ValueError(f"Resolucion minima {LANDING_IMAGE_MIN_WIDTH} x {LANDING_IMAGE_MIN_HEIGHT}")
+    return {
+        "data_url": data_url,
+        "filename": str(filename or "landing").strip()[:120],
+        "content_type": content_type,
+        "width": width,
+        "height": height,
+        "bytes": len(raw),
+    }
 
 
 def send_download(handler: SimpleHTTPRequestHandler, filename: str, content_type: str, body: bytes) -> None:
@@ -2709,13 +3779,16 @@ def auto_backup_loop() -> None:
         return
     while not BACKUP_STOP.wait(AUTO_BACKUP_MINUTES * 60):
         try:
-            create_db_backup()
+            if WORKER and WORKER.thread and WORKER.thread.is_alive():
+                job_queue_service().enqueue("backup.create", {}, priority="low", actor="auto-backup")
+            else:
+                create_db_backup()
         except Exception as exc:
-            print(f"Backup automatico fallido: {exc}")
+            technical_log("error", "backup", "Backup automatico fallido", str(exc))
 
 
 def start_auto_backup() -> threading.Thread | None:
-    if AUTO_BACKUP_MINUTES <= 0:
+    if AUTO_BACKUP_MINUTES <= 0 or DB_CONFIG.engine == "postgres":
         return None
     thread = threading.Thread(target=auto_backup_loop, name="auto-backup", daemon=True)
     thread.start()
@@ -2754,7 +3827,7 @@ def public_static_path(path: str) -> bool:
 
 
 def public_api_get(path: str) -> bool:
-    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics"}
+    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status"}
 
 
 def public_api_post(path: str) -> bool:
@@ -2768,6 +3841,9 @@ def public_api_post(path: str) -> bool:
         "/api/portal/preferences",
         "/api/portal/profile",
         "/api/communications/whatsapp/webhook",
+        "/api/communications/email/webhook",
+        "/api/waiting-room/join",
+        "/api/waiting-room/abandon",
     }
 
 
@@ -2801,6 +3877,10 @@ def network_info(handler: SimpleHTTPRequestHandler) -> dict:
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "AcreditacionesMVP/0.1"
 
+    def send_response(self, code: int, message: str | None = None) -> None:
+        self._response_status = int(code)
+        super().send_response(code, message)
+
     def login_required(self) -> bool:
         return bool(getattr(self.server, "require_login", False))
 
@@ -2816,6 +3896,9 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def is_authenticated(self) -> bool:
         return not self.login_required() or self.session_user() is not None
+
+    def effective_user(self) -> dict | None:
+        return self.session_user() or ({"name": "Admin", "role": "Super Admin", "local": True} if not self.login_required() else None)
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -2843,26 +3926,36 @@ class AppHandler(SimpleHTTPRequestHandler):
         return str(LEGACY_STATIC_DIR / clean.lstrip("/"))
 
     def do_GET(self) -> None:
+        started = RUNTIME_METRICS.begin()
+        self._response_status = 200
         parsed = urlparse(self.path)
-        if parsed.path == "/health":
-            self.send_json({"status": "ok", "env": APP_ENV, "version": APP_VERSION})
-            return
-        if parsed.path.startswith("/api/"):
-            self.handle_api_get(parsed.path, parse_qs(parsed.query))
-            return
-        if self.login_required() and not public_static_path(parsed.path) and not self.session_user():
-            self.send_response(302)
-            self.send_header("Location", "/login.html")
-            self.end_headers()
-            return
-        super().do_GET()
+        try:
+            if parsed.path == "/health":
+                self.send_json({"status": "ok", "env": APP_ENV, "version": APP_VERSION})
+                return
+            if parsed.path.startswith("/api/"):
+                self.handle_api_get(parsed.path, parse_qs(parsed.query))
+                return
+            if self.login_required() and not public_static_path(parsed.path) and not self.session_user():
+                self.send_response(302)
+                self.send_header("Location", "/login.html")
+                self.end_headers()
+                return
+            super().do_GET()
+        finally:
+            RUNTIME_METRICS.finish(started, "GET", parsed.path, getattr(self, "_response_status", 200))
 
     def do_POST(self) -> None:
+        started = RUNTIME_METRICS.begin()
+        self._response_status = 200
         parsed = urlparse(self.path)
-        if parsed.path.startswith("/api/"):
-            self.handle_api_post(parsed.path)
-            return
-        self.send_error(HTTPStatus.NOT_FOUND)
+        try:
+            if parsed.path.startswith("/api/"):
+                self.handle_api_post(parsed.path)
+                return
+            self.send_error(HTTPStatus.NOT_FOUND)
+        finally:
+            RUNTIME_METRICS.finish(started, "POST", parsed.path, getattr(self, "_response_status", 200))
 
     def send_json(self, data: dict | list, status: int = 200) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -2888,7 +3981,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not self.require_api_auth(path, is_post=False):
                 return
             if path == "/api/auth/me":
-                session = self.session_user()
+                session = self.effective_user()
+                if not session and not self.login_required():
+                    session = {"name": "Admin", "role": "Super Admin", "local": True}
                 self.send_json({"authenticated": bool(session), "user": session, "config": runtime_config(self)})
                 return
 
@@ -2898,6 +3993,75 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/network-info":
                 self.send_json(network_info(self))
+                return
+
+            if path == "/api/waiting-room/status":
+                event_id = int(query.get("event_id", ["0"])[0])
+                visitor_id = query.get("visitor_id", [""])[0].strip()
+                if not event_id or not visitor_id:
+                    self.send_json({"error": "Falta evento o visitante"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = waiting_room_payload(db, event_id, visitor_id)
+                    db.execute("COMMIT")
+                self.send_json(result, 404 if result.get("error") else 200)
+                return
+
+            if path == "/api/diagnostics/status":
+                session = self.effective_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Diagnostico disponible solo para Super Admin"}, 403)
+                    return
+                with connect() as db:
+                    result = diagnostics_service().collect(
+                        db,
+                        runtime={
+                            **RUNTIME_METRICS.snapshot(),
+                            "worker_alive": bool(WORKER and WORKER.thread and WORKER.thread.is_alive()),
+                            "worker_heartbeat_age": round(time.time() - WORKER.last_heartbeat, 2) if WORKER and WORKER.last_heartbeat else None,
+                        },
+                        sessions=list(AUTH_SESSIONS.values()),
+                        auto_backup_minutes=AUTO_BACKUP_MINUTES,
+                    )
+                    audit(db, session["name"], "diagnostics.opened", "system", None, {"app_status": result["app_status"]})
+                self.send_json(result)
+                return
+
+            if path == "/api/jobs":
+                session = self.effective_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Jobs disponibles solo para Super Admin"}, 403)
+                    return
+                kind = query.get("kind", [""])[0].strip()
+                where = "1 = 1"
+                params: list[object] = []
+                if kind:
+                    where = "kind LIKE ?"
+                    params.append(f"{kind}%")
+                with connect() as db:
+                    rows = db.execute(
+                        f"""
+                        SELECT id, event_id, kind, priority, status, retry_count, max_retries,
+                               retry_at, worker_id, error, created_by, created_at, started_at,
+                               finished_at, updated_at
+                        FROM jobs WHERE {where}
+                        ORDER BY id DESC LIMIT 200
+                        """,
+                        params,
+                    ).fetchall()
+                self.send_json([dict(row) for row in rows])
+                return
+
+            if path == "/api/simulator/status":
+                session = self.effective_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Simulador disponible solo para Super Admin"}, 403)
+                    return
+                event_id = int(query.get("event_id", ["0"])[0])
+                with connect() as db:
+                    row = db.execute("SELECT * FROM simulator_state WHERE event_id = ?", (event_id,)).fetchone()
+                self.send_json(dict(row) if row else {"event_id": event_id, "status": "stopped", "mode": "medium", "scenario": "congress"})
                 return
 
             if path == "/api/qr.svg":
@@ -3088,6 +4252,31 @@ class AppHandler(SimpleHTTPRequestHandler):
                 send_download(self, f"evento-{event_id}-agenda.ics", "text/calendar; charset=utf-8", ("\r\n".join(lines) + "\r\n").encode("utf-8"))
                 return
 
+            if path == "/api/reports/executive.pdf":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    report_data = executive_report_data(db, event_id)
+                    if not report_data:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    audit(
+                        db,
+                        (self.session_user() or {}).get("name", "system"),
+                        "reports.executive_exported",
+                        "event",
+                        event_id,
+                        {"event_id": event_id},
+                    )
+                body = executive_report_pdf_bytes(report_data)
+                safe_name = "".join(char if char.isalnum() else "-" for char in str(report_data["event"].get("name") or "evento")).strip("-").lower()
+                send_download(
+                    self,
+                    f"{safe_name or 'evento'}-resumen-ejecutivo.pdf",
+                    "application/pdf",
+                    body,
+                )
+                return
+
             if path == "/api/reports/visual-summary":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -3176,7 +4365,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         capacity = int(row.get("capacity") or 0)
                         present = int(row.get("present") or 0)
                         registered = int(row.get("registered") or 0)
-                        percentage = int(round((present / capacity * 100), 0)) if capacity else 0
+                        percentage = min(100, int(round((present / capacity * 100), 0))) if capacity else 0
                         if percentage > 60:
                             color = "green"
                         elif percentage >= low_threshold:
@@ -3237,7 +4426,30 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone())
+                    recent_granted_15 = int(db.execute(
+                        """
+                        SELECT COUNT(*) AS c
+                        FROM access_logs
+                        WHERE event_id = ? AND result = 'granted'
+                          AND datetime(created_at) >= datetime('now', '-15 minutes')
+                        """,
+                        (event_id,),
+                    ).fetchone()["c"])
+                    active_operator_count = int(db.execute(
+                        """
+                        SELECT COUNT(DISTINCT operator) AS c
+                        FROM access_logs
+                        WHERE event_id = ?
+                          AND datetime(created_at) >= datetime('now', '-15 minutes')
+                          AND COALESCE(operator, '') <> ''
+                        """,
+                        (event_id,),
+                    ).fetchone()["c"])
                     operational_alerts = []
+                    if recent_granted_15 >= 100:
+                        operational_alerts.append({"type": "high_flow", "level": "yellow", "title": "Alto flujo de ingreso", "message": f"{recent_granted_15} accesos concedidos en los ultimos 15 minutos"})
+                    if active_operator_count >= 30:
+                        operational_alerts.append({"type": "terminal_inactive", "level": "yellow", "title": "Terminal a revisar", "message": f"{active_operator_count} terminales activas y 1 terminal marcada para supervision"})
                     for item in occupancy_by_room:
                         if item["low"]:
                             operational_alerts.append({"type": "occupancy_low", "level": "red", "title": "Ocupacion baja", "message": f"{item['room']}: {item['percentage']}% - {item['present']} presentes / {item['capacity']} capacidad"})
@@ -4087,13 +5299,36 @@ class AppHandler(SimpleHTTPRequestHandler):
                 limit = min(max(int(query.get("limit", ["300"])[0] or 300), 1), 2000)
                 params: list[object] = [event_id]
                 where = "a.event_id = ?"
+                order_clause = "a.id DESC"
                 if search:
-                    where += """ AND (
-                        p.first_name LIKE ? OR p.last_name LIKE ? OR p.email LIKE ? OR
-                        p.dni LIKE ? OR p.company LIKE ? OR a.token LIKE ?
-                    )"""
-                    term = f"%{search}%"
-                    params.extend([term, term, term, term, term, term])
+                    terms = [part for part in search.replace(",", " ").split() if part]
+                    if not terms:
+                        terms = [search]
+                    for _ in terms:
+                        where += """ AND (
+                            p.first_name LIKE ? OR p.last_name LIKE ? OR
+                            (p.first_name || ' ' || p.last_name) LIKE ? OR
+                            (p.last_name || ' ' || p.first_name) LIKE ? OR
+                            p.email LIKE ? OR p.dni LIKE ? OR p.company LIKE ? OR
+                            p.phone LIKE ? OR a.token LIKE ? OR a.type LIKE ?
+                        )"""
+                    for term_raw in terms:
+                        term = f"%{term_raw}%"
+                        params.extend([term, term, term, term, term, term, term, term, term, term])
+                    search_like = f"%{search}%"
+                    order_clause = """
+                        CASE
+                          WHEN lower(p.first_name || ' ' || p.last_name) = lower(?) THEN 0
+                          WHEN lower(p.last_name || ' ' || p.first_name) = lower(?) THEN 1
+                          WHEN (p.first_name || ' ' || p.last_name) LIKE ? THEN 2
+                          WHEN (p.last_name || ' ' || p.first_name) LIKE ? THEN 3
+                          WHEN p.dni = ? THEN 4
+                          WHEN p.company LIKE ? THEN 5
+                          ELSE 9
+                        END,
+                        a.id DESC
+                    """
+                    params.extend([search, search, search_like, search_like, search, search_like])
                 with connect() as db:
                     rows = db.execute(
                         f"""
@@ -4102,7 +5337,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         JOIN people p ON p.id = a.person_id
                         JOIN events e ON e.id = a.event_id
                         WHERE {where}
-                        ORDER BY a.id DESC
+                        ORDER BY {order_clause}
                         LIMIT ?
                         """,
                         params + [limit],
@@ -4278,6 +5513,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             SELECT
                                 SUM(CASE WHEN channel = 'email' AND status IN ('enviado', 'entregado', 'leido') THEN 1 ELSE 0 END) AS emails_sent,
                                 SUM(CASE WHEN channel = 'email' AND status IN ('entregado', 'leido') THEN 1 ELSE 0 END) AS emails_delivered,
+                                SUM(CASE WHEN channel = 'email' AND status IN ('rebotado', 'rechazado') THEN 1 ELSE 0 END) AS emails_bounced,
+                                SUM(CASE WHEN channel = 'email' AND status = 'error' THEN 1 ELSE 0 END) AS emails_failed,
                                 SUM(CASE WHEN channel = 'whatsapp' AND status IN ('enviado', 'entregado', 'leido') THEN 1 ELSE 0 END) AS whatsapp_sent,
                                 SUM(CASE WHEN channel = 'whatsapp' AND status IN ('entregado', 'leido') THEN 1 ELSE 0 END) AS whatsapp_delivered,
                                 SUM(CASE WHEN channel = 'whatsapp' AND status = 'leido' THEN 1 ELSE 0 END) AS whatsapp_read,
@@ -4316,10 +5553,38 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (event_id,),
                         ).fetchall()
                     ]
+                    email_last_success = db.execute(
+                        """
+                        SELECT processed_at
+                        FROM communication_queue
+                        WHERE event_id = ? AND channel = 'email'
+                          AND status IN ('enviado', 'entregado', 'leido')
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (event_id,),
+                    ).fetchone()
+                    email_last_error = db.execute(
+                        """
+                        SELECT last_error, processed_at
+                        FROM communication_queue
+                        WHERE event_id = ? AND channel = 'email' AND last_error <> ''
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (event_id,),
+                    ).fetchone()
                 self.send_json({
                     "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
                     "providers": {
-                        "email": {"provider": communication_provider("email"), "ready": communication_provider_ready("email"), "from": os.environ.get("EMAIL_FROM", "")},
+                        "email": {
+                            "provider": communication_provider("email"),
+                            "ready": communication_provider_ready("email"),
+                            "enabled": os.environ.get("EMAIL_ENABLED", "true").lower() in {"1", "true", "yes", "si"},
+                            "from": os.environ.get("EMAIL_FROM", ""),
+                            "reply_to": os.environ.get("EMAIL_REPLY_TO", ""),
+                            "last_success": email_last_success["processed_at"] if email_last_success else "",
+                            "last_error": email_last_error["last_error"] if email_last_error else "",
+                            "last_error_at": email_last_error["processed_at"] if email_last_error else "",
+                        },
                         "whatsapp": {"provider": communication_provider("whatsapp"), "ready": communication_provider_ready("whatsapp"), "phone_id": os.environ.get("WHATSAPP_PHONE_ID", "")},
                     },
                     "stats": stats,
@@ -4621,7 +5886,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 backup_path = create_db_backup()
                 backup_check = verify_backup_file(backup_path)
-                session = self.session_user()
+                session = self.effective_user()
                 with connect() as db:
                     audit(
                         db,
@@ -4637,6 +5902,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             self.send_json({"error": "Ruta no encontrada"}, 404)
         except Exception as exc:
+            technical_log("error", "api.get", "Error procesando solicitud", str(exc), path)
             self.send_json({"error": str(exc)}, 500)
 
     def handle_api_post(self, path: str) -> None:
@@ -4650,6 +5916,69 @@ class AppHandler(SimpleHTTPRequestHandler):
                     data["operator"] = session["name"]
                 else:
                     data["actor"] = session["name"]
+
+            if path == "/api/waiting-room/join":
+                event_id = int(data.get("event_id") or 0)
+                visitor_id = str(data.get("visitor_id") or "").strip()
+                if not event_id or not visitor_id:
+                    self.send_json({"error": "Falta evento o visitante"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = waiting_room_payload(db, event_id, visitor_id)
+                    db.execute("COMMIT")
+                self.send_json(result, 404 if result.get("error") else 200)
+                return
+
+            if path == "/api/waiting-room/abandon":
+                event_id = int(data.get("event_id") or 0)
+                visitor_id = str(data.get("visitor_id") or "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    row = db.execute(
+                        "SELECT id FROM waiting_room_visitors WHERE event_id = ? AND visitor_id = ?",
+                        (event_id, visitor_id),
+                    ).fetchone()
+                    if row:
+                        db.execute(
+                            "UPDATE waiting_room_visitors SET status = 'abandoned', abandoned_at = ?, last_seen_at = ? WHERE id = ?",
+                            (now_iso(), now_iso(), row["id"]),
+                        )
+                        audit(db, "public", "waiting_room.abandoned", "waiting_room", row["id"], {"event_id": event_id})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True})
+                return
+
+            if path == "/api/waiting-room/config":
+                session = self.effective_user()
+                actor = data.get("actor", "Admin")
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Solo Super Admin puede configurar la sala de espera"}, 403)
+                    return
+                event_id = int(data.get("event_id") or 0)
+                with connect() as db:
+                    db.execute(
+                        """
+                        UPDATE events
+                        SET waiting_room_enabled = ?, waiting_room_open_at = ?,
+                            users_allowed_per_minute = ?, turn_duration_minutes = ?,
+                            show_waiting_position = ?, show_estimated_time = ?, waiting_message = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            1 if truthy(data.get("waiting_room_enabled")) else 0,
+                            str(data.get("waiting_room_open_at") or ""),
+                            max(1, int(data.get("users_allowed_per_minute") or 60)),
+                            max(1, int(data.get("turn_duration_minutes") or 10)),
+                            1 if truthy(data.get("show_position", True)) else 0,
+                            1 if truthy(data.get("show_estimated_time", True)) else 0,
+                            str(data.get("waiting_message") or "").strip(),
+                            event_id,
+                        ),
+                    )
+                    audit(db, actor, "waiting_room.configured", "event", event_id, data)
+                self.send_json({"ok": True})
+                return
 
             if path == "/api/auth/login":
                 name = data.get("name", "").strip()
@@ -4670,6 +5999,66 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(body)
                 return
 
+            if path == "/api/jobs/cancel":
+                session = self.effective_user()
+                actor = data.get("actor", "Admin")
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Solo Super Admin puede cancelar jobs"}, 403)
+                    return
+                ok = job_queue_service().cancel(int(data.get("job_id") or 0), actor)
+                self.send_json({"ok": ok}, 200 if ok else 409)
+                return
+
+            if path == "/api/simulator/control":
+                session = self.effective_user()
+                actor = data.get("actor", "Admin")
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Simulador disponible solo para Super Admin"}, 403)
+                    return
+                event_id = int(data.get("event_id") or 0)
+                action = str(data.get("action") or "start")
+                status = {"start": "running", "pause": "paused", "stop": "stopped"}.get(action)
+                if not status:
+                    self.send_json({"error": "Accion invalida"}, 400)
+                    return
+                with connect() as db:
+                    event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event or ("demo" not in str(event["name"]).lower() and "demo" not in str(event["description"]).lower()):
+                        self.send_json({"error": "El simulador solo puede ejecutarse sobre eventos demo"}, 409)
+                        return
+                    db.execute(
+                        """
+                        INSERT INTO simulator_state (
+                            event_id, status, mode, scenario, participants_active,
+                            accesses_per_minute, rejections_per_minute, simulated_errors,
+                            average_occupancy, active_terminals, speed, updated_by, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(event_id) DO UPDATE SET
+                            status = excluded.status, mode = excluded.mode, scenario = excluded.scenario,
+                            participants_active = excluded.participants_active,
+                            accesses_per_minute = excluded.accesses_per_minute,
+                            rejections_per_minute = excluded.rejections_per_minute,
+                            simulated_errors = excluded.simulated_errors,
+                            average_occupancy = excluded.average_occupancy,
+                            active_terminals = excluded.active_terminals, speed = excluded.speed,
+                            updated_by = excluded.updated_by, updated_at = excluded.updated_at
+                        """,
+                        (
+                            event_id, status, str(data.get("mode") or "medium"), str(data.get("scenario") or "congress"),
+                            max(1, int(data.get("participants_active") or 100)),
+                            max(0, int(data.get("accesses_per_minute") or 30)),
+                            max(0, int(data.get("rejections_per_minute") or 3)),
+                            max(0, int(data.get("simulated_errors") or 1)),
+                            min(100, max(0, int(data.get("average_occupancy") or 55))),
+                            max(1, int(data.get("active_terminals") or 10)),
+                            max(0.25, float(data.get("speed") or 1)),
+                            actor, now_iso(),
+                        ),
+                    )
+                    audit(db, actor, f"simulator.{action}", "event", event_id, {"status": status})
+                self.send_json({"ok": True, "status": status})
+                return
+
             if path == "/api/auth/logout":
                 token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
                 AUTH_SESSIONS.pop(token, None)
@@ -4680,6 +6069,60 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                return
+
+            if path == "/api/event-landing":
+                event_id = int(data.get("event_id") or 0)
+                actor = data.get("actor", "Admin")
+                action = str(data.get("action") or "upload").strip()
+                with DB_LOCK, connect() as db:
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    db.execute("BEGIN IMMEDIATE")
+                    if action == "delete":
+                        db.execute(
+                            """
+                            UPDATE events
+                            SET landing_image_data = '', landing_image_name = '',
+                                landing_image_type = '', landing_image_updated_at = ''
+                            WHERE id = ?
+                            """,
+                            (event_id,),
+                        )
+                        audit(db, actor, "event.landing_image_deleted", "event", event_id, {"event_id": event_id})
+                        db.execute("COMMIT")
+                        self.send_json({"ok": True, "deleted": True})
+                        return
+                    try:
+                        image = validate_landing_image(str(data.get("image_data") or ""), str(data.get("filename") or ""))
+                    except ValueError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": str(exc)}, 400)
+                        return
+                    db.execute(
+                        """
+                        UPDATE events
+                        SET landing_image_data = ?, landing_image_name = ?,
+                            landing_image_type = ?, landing_image_updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (image["data_url"], image["filename"], image["content_type"], now_iso(), event_id),
+                    )
+                    audit(
+                        db,
+                        actor,
+                        "event.landing_image_uploaded",
+                        "event",
+                        event_id,
+                        {"event_id": event_id, "filename": image["filename"], "width": image["width"], "height": image["height"], "bytes": image["bytes"]},
+                    )
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "image": {key: image[key] for key in ("filename", "content_type", "width", "height", "bytes")}})
                 return
 
             if path == "/api/captation/event":
@@ -5283,6 +6726,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
                     audit(db, actor, "communications.queued", "event", event_id, {"channel": channel, "audience": audience, "template": template_code, **result})
                     db.execute("COMMIT")
+                queue_ids = result.pop("_email_queue_ids", [])
+                if queue_ids:
+                    processed = process_email_queue_items(queue_ids)
+                    result["sent"] += processed["sent"]
+                    result["errors"] += processed["errors"]
+                    result["pending"] = processed["pending"]
                 self.send_json({"ok": True, **result})
                 return
 
@@ -5310,7 +6759,89 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
                     audit(db, actor, f"communications.{channel}_queued", "event", event_id, {"audience": audience, **result})
                     db.execute("COMMIT")
+                queue_ids = result.pop("_email_queue_ids", [])
+                if queue_ids:
+                    processed = process_email_queue_items(queue_ids)
+                    result["sent"] += processed["sent"]
+                    result["errors"] += processed["errors"]
+                    result["pending"] = processed["pending"]
                 self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/communications/email/test":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                recipient = str(data.get("email") or "").strip()
+                if not event_id or "@" not in recipient:
+                    self.send_json({"error": "Indica un email de prueba valido"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute(
+                        """
+                        SELECT a.id AS accreditation_id, a.token, a.type, a.status,
+                               p.id AS person_id, p.first_name, p.last_name, p.email, p.phone, p.company,
+                               e.name AS event_name, e.starts_at, e.ends_at,
+                               1 AS acepta_email, 0 AS acepta_whatsapp,
+                               ? AS preferred_email, '' AS preferred_phone
+                        FROM accreditations a
+                        JOIN people p ON p.id = a.person_id
+                        JOIN events e ON e.id = a.event_id
+                        WHERE a.event_id = ? AND a.status <> 'cancelled'
+                        ORDER BY a.id LIMIT 1
+                        """,
+                        (recipient, event_id),
+                    ).fetchone()
+                    if not row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "El evento necesita al menos un participante para probar la cola"}, 400)
+                        return
+                    result = queue_communication(
+                        db,
+                        event_id=event_id,
+                        actor=actor,
+                        audience="test",
+                        channel="email",
+                        template_code="connection_test",
+                        subject=f"Prueba de email BITORA - {row['event_name']}",
+                        content="La conexion de email de BITORA funciona correctamente.",
+                        rows=[row],
+                        process_now=True,
+                    )
+                    audit(db, actor, "communications.email_test_queued", "event", event_id, {"recipient": recipient})
+                    db.execute("COMMIT")
+                queue_ids = result.pop("_email_queue_ids", [])
+                processed = process_email_queue_items(queue_ids) if queue_ids else {"sent": result["sent"], "errors": result["errors"], "pending": 0}
+                self.send_json({"ok": processed["sent"] > 0, **result, **processed})
+                return
+
+            if path == "/api/communications/email/retry":
+                actor = data.get("actor", "Admin")
+                queue_id = int(data.get("queue_id") or 0)
+                if not queue_id:
+                    self.send_json({"error": "Falta queue_id"}, 400)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                result = process_email_queue_item(queue_id)
+                self.send_json(result, 200 if result["ok"] or result["status"] == "pendiente" else 502)
+                return
+
+            if path == "/api/communications/email/webhook":
+                if not verify_email_webhook(self):
+                    self.send_json({"error": "Firma de webhook invalida"}, 401)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = apply_email_webhook(db, data)
+                    db.execute("COMMIT")
+                self.send_json(result)
                 return
 
             if path == "/api/communications/whatsapp/webhook":
@@ -5825,6 +7356,21 @@ class AppHandler(SimpleHTTPRequestHandler):
                         db.execute("ROLLBACK")
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
+                    waiting_row = None
+                    if int(event["waiting_room_enabled"] or 0) and data.get("actor") == "public":
+                        waiting_token = str(data.get("waiting_room_token") or "").strip()
+                        waiting_row = db.execute(
+                            """
+                            SELECT * FROM waiting_room_visitors
+                            WHERE event_id = ? AND access_token = ? AND status = 'admitted'
+                            """,
+                            (event_id, waiting_token),
+                        ).fetchone()
+                        expires = parse_dt(waiting_row["expires_at"]) if waiting_row and waiting_row["expires_at"] else None
+                        if not waiting_row or (expires and datetime.now(timezone.utc) >= expires.astimezone(timezone.utc)):
+                            db.execute("ROLLBACK")
+                            self.send_json({"error": "Necesitas un turno vigente de la sala de espera"}, 403)
+                            return
                     if not int(event["permitir_reserva_actividades_desde_landing"] or 0):
                         activity_ids = []
                     elif event["activity_selection_mode"] == "required_landing" and not activity_ids:
@@ -5836,6 +7382,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                         db.execute("ROLLBACK")
                         self.send_json({"error": registration["error"]}, int(registration.get("status_code", 400)))
                         return
+                    if waiting_row:
+                        db.execute(
+                            "UPDATE waiting_room_visitors SET status = 'completed', completed_at = ?, last_seen_at = ? WHERE id = ?",
+                            (now_iso(), now_iso(), waiting_row["id"]),
+                        )
+                        audit(db, "public", "waiting_room.completed", "waiting_room", waiting_row["id"], {"event_id": event_id, "accreditation_id": registration["id"]})
                     source = normalize_source(data.get("source"), "recepcion" if data.get("actor") != "public" else "landing")
                     source_detail = str(data.get("source_detail") or data.get("utm_campaign") or data.get("qr_source") or "").strip()
                     device_type = normalize_device(data.get("device_type"))
@@ -6025,9 +7577,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             self.send_json({"error": "Ruta no encontrada"}, 404)
-        except sqlite3.IntegrityError as exc:
+        except DB_INTEGRITY_ERRORS as exc:
+            technical_log("warning", "api.post", "Dato duplicado o invalido", str(exc), path)
             self.send_json({"error": "Dato duplicado o invalido", "detail": str(exc)}, 409)
         except Exception as exc:
+            technical_log("error", "api.post", "Error procesando solicitud", str(exc), path)
             self.send_json({"error": str(exc)}, 500)
 
 
@@ -6047,6 +7601,8 @@ class _TextWriter:
 def main() -> None:
     init_db()
     seed_if_empty()
+    start_job_worker()
+    start_simulator_loop()
     if APP_ENV in {"demo", "production"} and HTTPS_REQUIRED and not BASE_URL:
         print("ADVERTENCIA: HTTPS_REQUIRED esta activo pero BASE_URL no fue definido")
     host = os.environ.get("QR_HOST", "0.0.0.0" if APP_ENV in {"demo", "production"} else "localhost")
@@ -6067,6 +7623,9 @@ def main() -> None:
         httpd.serve_forever()
     finally:
         BACKUP_STOP.set()
+        SIMULATOR_STOP.set()
+        if WORKER:
+            WORKER.stop()
         httpd.server_close()
 
 

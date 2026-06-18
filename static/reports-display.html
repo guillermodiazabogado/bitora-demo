@@ -89,13 +89,23 @@
       const checked = Number(totals.checked || 0);
       const access15 = (data.operator_activity || []).reduce((acc, row) => acc + Number(row.value || 0), 0);
       const alerts = (data.operational_alerts || []).length;
+      const health = Math.max(0, Math.min(100, Number(data.event_health || 0)));
+      const healthClass = health >= 70 ? "good" : health >= 40 ? "warn" : "bad";
+      const healthLabel = health >= 70 ? "Estable" : health >= 40 ? "Atencion" : "Critico";
       return `<article class="control-card kpi-card wide">
         <h2>${data.event?.name || "Evento"}</h2>
         <div class="kpi-grid">
-          <div><strong>${Number(data.event_health || 0)}%</strong><span>Salud del evento</span></div>
-          <div><strong>${checked}</strong><span>Acreditados presentes</span></div>
-          <div><strong>${access15}</strong><span>Accesos 15 min</span></div>
-          <div><strong>${alerts}</strong><span>Alertas activas</span></div>
+          <div class="kpi-health ${healthClass}">
+            <div class="kpi-health-head">
+              <span>Salud operativa</span>
+              <strong>${health}%</strong>
+            </div>
+            <i><b style="--w:${health}%"></b></i>
+            <small>${healthLabel}</small>
+          </div>
+          <div class="kpi-tile"><strong>${checked}</strong><span>Acreditados</span><small>presentes</small></div>
+          <div class="kpi-tile"><strong>${access15}</strong><span>Accesos</span><small>ultimos 15 min</small></div>
+          <div class="kpi-tile ${alerts ? "bad" : "good"}"><strong>${alerts}</strong><span>Alertas</span><small>activas</small></div>
         </div>
       </article>`;
     }

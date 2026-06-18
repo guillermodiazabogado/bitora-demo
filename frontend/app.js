@@ -18,6 +18,8 @@ const state = {
   users: [],
   audit: [],
   communications: null,
+  diagnostics: null,
+  simulator: null,
   demoReal: null,
   currentUser: "Admin",
   eventId: null,
@@ -67,9 +69,13 @@ function setView(name) {
 async function loadEvents() {
   await loadAuth();
   await loadUsers();
+  const previousEventId = state.eventId;
   state.events = await api("/api/events");
   const select = $("#eventSelect");
   select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  if (previousEventId && state.events.some((event) => Number(event.id) === Number(previousEventId))) {
+    select.value = String(previousEventId);
+  }
   if ($("#cloneEventSelect")) {
     $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   }
@@ -85,8 +91,131 @@ async function loadAuth() {
   if (state.authUser) {
     state.currentUser = state.authUser.name;
     $("#logoutBtn").classList.remove("hidden");
+    $("#diagnosticsNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
+    $("#simulatorNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
   } else {
     $("#logoutBtn").classList.add("hidden");
+    $("#diagnosticsNav")?.classList.add("hidden");
+    $("#simulatorNav")?.classList.add("hidden");
+  }
+}
+
+function formatDuration(seconds) {
+  const value = Number(seconds || 0);
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  return `${days ? `${days}d ` : ""}${hours}h ${minutes}m`;
+}
+
+function renderDiagnosticsLogs() {
+  const filter = $("#diagnosticsLogFilter")?.value || "";
+  const logs = (state.diagnostics?.logs || []).filter((row) => !filter || row.level === filter);
+  $("#diagnosticsLogs").innerHTML = logs.map((row) => `
+    <article class="audit-row diagnostics-log ${row.level}">
+      <strong>${row.level.toUpperCase()} · ${row.module}</strong>
+      <span>${row.message}</span>
+      <small>${row.created_at}${row.detail ? ` · ${row.detail}` : ""}</small>
+    </article>
+  `).join("") || `<p class="empty">Sin logs para este filtro.</p>`;
+}
+
+async function loadDiagnostics() {
+  if (state.authUser?.role !== "Super Admin") {
+    $("#diagnosticsAccessDenied")?.classList.remove("hidden");
+    $("#diagnosticsContent")?.classList.add("hidden");
+    return;
+  }
+  $("#diagnosticsAccessDenied")?.classList.add("hidden");
+  $("#diagnosticsContent")?.classList.remove("hidden");
+  state.diagnostics = await api("/api/diagnostics/status");
+  const data = state.diagnostics;
+  const labels = { healthy: "Normal", warning: "Atencion", critical: "Critico" };
+  $("#diagnosticsTrafficLight").className = `diagnostics-light ${data.app_status}`;
+  $("#diagnosticsStatusText").textContent = labels[data.app_status] || data.app_status;
+  $("#diagnosticsMeta").textContent = `${data.meta.version} · ${data.meta.env} · ${new Date(data.meta.generated_at).toLocaleString()}`;
+  $("#diagnosticsServices").innerHTML = Object.entries(data.services).map(([key, item]) => `
+    <article class="diagnostics-service ${item.status}">
+      <span class="status-dot"></span>
+      <div><strong>${key.replace("_", " ")}</strong><small>${item.label}</small></div>
+    </article>
+  `).join("");
+  const metrics = data.metrics;
+  $("#diagnosticsMetrics").innerHTML = `
+    <div><strong>${formatDuration(metrics.uptime_seconds)}</strong><span>Uptime</span></div>
+    <div><strong>${metrics.average_response_ms} ms</strong><span>Respuesta promedio</span></div>
+    <div><strong>${metrics.p95_response_ms} ms</strong><span>p95</span></div>
+    <div><strong>${metrics.p99_response_ms} ms</strong><span>p99</span></div>
+    <div><strong>${metrics.requests_per_minute}</strong><span>Consultas/min</span></div>
+    <div><strong>${metrics.concurrent_users}</strong><span>Usuarios concurrentes</span></div>
+    <div><strong>${metrics.active_operators}</strong><span>Operadores activos</span></div>
+    <div><strong>${metrics.qr_per_minute}</strong><span>QR/min</span></div>
+    <div><strong>${metrics.accesses_per_minute}</strong><span>Accesos/min</span></div>
+  `;
+  const database = data.database;
+  $("#diagnosticsDatabase").innerHTML = `
+    <div><span>Motor activo</span><strong>${database.engine}</strong></div>
+    <div><span>Tamano</span><strong>${formatBytes(database.size_bytes)}</strong></div>
+    <div><span>Conexiones activas</span><strong>${database.active_connections}</strong></div>
+    <div><span>Consultas lentas</span><strong>${database.slow_queries}</strong></div>
+    <div><span>Ultima migracion</span><strong>${database.last_migration}</strong></div>
+    <div><span>Cache</span><strong>${data.cache.backend}</strong></div>
+  `;
+  const queues = data.queues;
+  $("#diagnosticsQueues").innerHTML = `
+    <div><span>Pendientes</span><strong>${queues.pending}</strong></div>
+    <div><span>Procesando</span><strong>${queues.processing}</strong></div>
+    <div><span>Completados</span><strong>${queues.completed}</strong></div>
+    <div><span>Fallidos 24 h</span><strong>${queues.failed}</strong></div>
+    <div><span>Reintentos</span><strong>${queues.retries}</strong></div>
+  `;
+  $("#diagnosticsExternal").innerHTML = `
+    <div><span>Ultimo backup</span><strong>${data.backups.last_success ? new Date(data.backups.last_success).toLocaleString() : "Sin backup"}</strong></div>
+    <div><span>Backups disponibles</span><strong>${data.backups.available}</strong></div>
+    <div><span>Webhook email 24 h</span><strong>${data.webhooks.items.email.total || 0}</strong></div>
+    <div><span>Webhook WhatsApp 24 h</span><strong>${data.webhooks.items.whatsapp.total || 0}</strong></div>
+    <div><span>Mercado Pago</span><strong>No configurado</strong></div>
+  `;
+  const eventHealth = data.event_health;
+  $("#diagnosticsEventHealth").innerHTML = `
+    <div><span>Eventos activos</span><strong>${eventHealth.active_events}</strong></div>
+    <div><span>Participantes conectados</span><strong>${eventHealth.connected_participants}</strong></div>
+    <div><span>Operadores conectados</span><strong>${eventHealth.active_operators}</strong></div>
+    <div><span>Terminales activas</span><strong>${eventHealth.active_terminals}</strong></div>
+    <div><span>Terminales inactivas</span><strong>${eventHealth.inactive_terminals}</strong></div>
+  `;
+  $("#diagnosticsAlerts").innerHTML = data.alerts.map((alert) => (
+    `<div class="alert ${alert.severity}"><strong>${alert.severity}</strong> ${alert.message}</div>`
+  )).join("") || `<div class="alert success">Sin alertas tecnicas activas.</div>`;
+  renderDiagnosticsLogs();
+}
+
+async function loadSimulator() {
+  if (!state.eventId || state.authUser?.role !== "Super Admin") return;
+  state.simulator = await api(`/api/simulator/status?event_id=${state.eventId}`);
+  const item = state.simulator;
+  $("#simulatorStatus").innerHTML = `
+    <div><strong>${item.status || "stopped"}</strong><span>Estado</span></div>
+    <div><strong>${item.mode || "medium"}</strong><span>Modo</span></div>
+    <div><strong>${item.participants_active || 0}</strong><span>Participantes activos</span></div>
+    <div><strong>${item.accesses_per_minute || 0}</strong><span>Accesos/min</span></div>
+    <div><strong>${item.rejections_per_minute || 0}</strong><span>Rechazos/min</span></div>
+    <div><strong>${item.active_terminals || 0}</strong><span>Terminales</span></div>
+  `;
+}
+
+async function controlSimulator(action) {
+  const form = $("#simulatorForm");
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  data.action = action;
+  try {
+    const result = await api("/api/simulator/control", { method: "POST", body: JSON.stringify(data) });
+    $("#simulatorNotice").innerHTML = `<div class="panel success">Simulador ${result.status}.</div>`;
+    await loadSimulator();
+  } catch (err) {
+    $("#simulatorNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
 }
 
@@ -123,6 +252,7 @@ function updateControlRoomLink() {
   if ($("#controlRoomLink")) {
     $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&compact=${compact}&rotate=${rotate}&max_rooms=${maxRooms}&max_alerts=${maxAlerts}&blocks=${encodeURIComponent(blocks)}` : "#";
   }
+  setHref("#nocLink", state.eventId ? `/noc.html?event_id=${state.eventId}&refresh=${refresh}` : "#");
 }
 
 function updateMetrics() {
@@ -140,6 +270,11 @@ function updateMetrics() {
   setHref("#exportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
   setHref("#reportsExportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
   setHref("#reportsExportJsonLink", state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#");
+  setHref("#reportsExecutivePdfLink", state.eventId ? `/api/reports/executive.pdf?event_id=${state.eventId}` : "#");
+  setHref("#reportsAccreditationsLink", state.eventId ? `/api/export.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsReservationsLink", state.eventId ? `/api/reservations.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsAttendancesLink", state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsEligibilityLink", state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#");
   setHref("#exportStructureLink", state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#");
   setHref("#exportAgendaLink", state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#");
   setHref("#exportAgendaIcsLink", state.eventId ? `/api/agenda.ics?event_id=${state.eventId}` : "#");
@@ -149,6 +284,121 @@ function updateMetrics() {
   setHref("#reportsBackupLink", state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup");
   updateControlRoomLink();
   renderFeatureVisibility();
+  renderLandingConfig();
+  renderWaitingRoomConfig();
+}
+
+function renderLandingConfig() {
+  const preview = $("#landingPreview");
+  if (!preview) return;
+  const event = currentEvent();
+  const meta = $("#landingImageMeta");
+  if (event?.landing_image_data) {
+    preview.classList.add("has-image");
+    preview.style.backgroundImage = `linear-gradient(90deg, rgba(23, 33, 43, 0.56), rgba(23, 33, 43, 0.12)), url("${event.landing_image_data}")`;
+    preview.innerHTML = `<strong>Imagen personalizada cargada</strong><span>${event.landing_image_name || "landing"} · ${event.landing_image_type || "imagen"}</span>`;
+    meta.textContent = `Actualizada: ${event.landing_image_updated_at || "-"}`;
+  } else {
+    preview.classList.remove("has-image");
+    preview.style.backgroundImage = "";
+    preview.innerHTML = `<strong>Fondo BITORA por defecto</strong><span>Arena #D2B89A · 16:9 · zona segura central</span>`;
+    meta.textContent = "Sin imagen personalizada";
+  }
+}
+
+function renderWaitingRoomConfig() {
+  const form = $("#waitingRoomConfigForm");
+  const event = currentEvent();
+  if (!form || !event) return;
+  form.waiting_room_enabled.checked = Number(event.waiting_room_enabled || 0) === 1;
+  form.waiting_room_open_at.value = String(event.waiting_room_open_at || "").slice(0, 16);
+  form.users_allowed_per_minute.value = event.users_allowed_per_minute || 60;
+  form.turn_duration_minutes.value = event.turn_duration_minutes || 10;
+  form.show_position.checked = Number(event.show_waiting_position ?? 1) === 1;
+  form.show_estimated_time.checked = Number(event.show_estimated_time ?? 1) === 1;
+  form.waiting_message.value = event.waiting_message || "";
+}
+
+async function saveWaitingRoomConfig(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  data.waiting_room_enabled = form.waiting_room_enabled.checked;
+  data.show_position = form.show_position.checked;
+  data.show_estimated_time = form.show_estimated_time.checked;
+  try {
+    await api("/api/waiting-room/config", { method: "POST", body: JSON.stringify(data) });
+    $("#waitingRoomConfigNotice").innerHTML = `<div class="panel success">Sala de espera actualizada.</div>`;
+    await loadEvents();
+  } catch (err) {
+    $("#waitingRoomConfigNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+function readLandingImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("Selecciona una imagen"));
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) return reject(new Error("Formato no permitido. Usa JPG, JPEG, PNG o WEBP"));
+    if (file.size > 3 * 1024 * 1024) return reject(new Error("Imagen demasiado pesada. Maximo 3 MB"));
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        if (image.naturalWidth < 800 || image.naturalHeight < 450) {
+          reject(new Error("Resolucion minima 800 x 450. Recomendado 1920 x 1080"));
+          return;
+        }
+        resolve({ dataUrl: reader.result, width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = () => reject(new Error("No se pudo leer la imagen"));
+      image.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveLandingImage(event) {
+  event.preventDefault();
+  const notice = $("#landingConfigNotice");
+  const file = $("#landingImageFile")?.files?.[0];
+  try {
+    const image = await readLandingImageFile(file);
+    await api("/api/event-landing", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        actor: state.currentUser,
+        action: "upload",
+        filename: file.name,
+        image_data: image.dataUrl,
+      }),
+    });
+    notice.innerHTML = `<div class="panel success">Imagen de landing guardada (${image.width} x ${image.height}).</div>`;
+    $("#landingImageFile").value = "";
+    await loadEvents();
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function deleteLandingImage() {
+  const notice = $("#landingConfigNotice");
+  if (!state.eventId) return;
+  if (!confirm("Eliminar imagen personalizada de la landing? Se usara el fondo BITORA por defecto.")) return;
+  try {
+    await api("/api/event-landing", {
+      method: "POST",
+      body: JSON.stringify({ event_id: state.eventId, actor: state.currentUser, action: "delete" }),
+    });
+    notice.innerHTML = `<div class="panel success">Imagen eliminada. La landing usara el fondo BITORA por defecto.</div>`;
+    await loadEvents();
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
 }
 
 async function loadAccreditations() {
@@ -156,36 +406,100 @@ async function loadAccreditations() {
   const q = encodeURIComponent($("#searchInput")?.value || "");
   const rows = filterAccreditations(await api(`/api/accreditations?event_id=${state.eventId}&q=${q}`));
   state.accreditations = await api(`/api/accreditations?event_id=${state.eventId}`);
-  $("#accreditations").innerHTML = rows.map((row) => `
-    <article class="row">
+  $("#accreditations").innerHTML = rows.map((row) => renderAccreditationCard(row)).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
+  bindAccreditationActions($("#accreditations"));
+  renderReservationSelectors();
+}
+
+function renderAccreditationCard(row, compact = false) {
+  const certificateLabel = Number(row.elegible_certificado || 0) ? "Certificado: elegible" : "Certificado: pendiente";
+  const attendanceLabel = Number(row.requiere_asistencia || 0) ? "Asistencia requerida" : "Asistencia no requerida";
+  const detailLine = [
+    row.dni ? `DNI ${row.dni}` : "",
+    row.phone ? `Tel. ${row.phone}` : "",
+    row.company || "",
+  ].filter(Boolean).join(" - ");
+  const quickActions = `
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Ver QR</a>
+    <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+    <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
+    <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
+    ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+  `;
+  const fullActions = `
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
+    <a class="button ghost" href="/api/qr.svg?token=${row.token}" target="_blank">Ver QR</a>
+    <a class="button ghost" href="/api/qr.svg?token=${row.token}" download="${row.token}.svg">Descargar QR</a>
+    <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+    <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
+    <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
+    <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
+    <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
+    ${row.status === "cancelled"
+      ? `<button type="button" class="status-accreditation" data-id="${row.id}" data-status="active">Reactivar</button>`
+      : `<button type="button" class="status-accreditation danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>`}
+    ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+    ${row.email ? `<a class="button ghost" href="mailto:${row.email}?subject=Credencial%20${encodeURIComponent(row.event_name || "BITORA")}&body=${encodeURIComponent(`Hola ${row.first_name || ""}, tu portal es ${location.origin}/p.html?token=${row.token}`)}">Email</a>` : ""}
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Reenviar portal</a>
+    <button type="button" class="audit-focus" data-token="${row.token}">Historial</button>
+  `;
+  return `
+    <article class="row ${compact ? "compact-row" : ""}">
       <div>
         <strong>${row.first_name} ${row.last_name}</strong>
-        <span>${row.company || row.email} - ${row.email}</span>
+        <span>${row.email}</span>
+        <span>${detailLine || "Sin datos complementarios"}</span>
       </div>
       <code>${row.token}</code>
       <span class="pill">${row.type}</span>
-      <span class="status ${row.checked_in_at ? "ok" : ""}">${accreditationStatusLabel(row)}</span>
+      <div class="status-stack">
+        <span class="status ${row.checked_in_at ? "ok" : ""}">${accreditationStatusLabel(row)}</span>
+        <span class="status">${certificateLabel}</span>
+        <span class="status">${attendanceLabel}</span>
+      </div>
       <div class="row-actions">
-        <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
-        <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
-        <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
-        <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
-        <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
-        <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
-        ${row.status === "cancelled"
-          ? `<button type="button" class="status-accreditation" data-id="${row.id}" data-status="active">Reactivar</button>`
-          : `<button type="button" class="status-accreditation danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>`}
-        ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+        ${compact ? quickActions : fullActions}
       </div>
     </article>
-  `).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
-  $$(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
-  $$(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
-  $$(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
-  $$(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
-  $$(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
-  $$(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
-  renderReservationSelectors();
+  `;
+}
+
+function bindAccreditationActions(scope = document) {
+  scope.querySelectorAll(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
+  scope.querySelectorAll(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
+  scope.querySelectorAll(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
+  scope.querySelectorAll(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
+  scope.querySelectorAll(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
+  scope.querySelectorAll(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
+  scope.querySelectorAll(".audit-focus").forEach((button) => button.addEventListener("click", () => {
+    setView("audit");
+    loadAudit();
+  }));
+}
+
+async function loadQuickReception() {
+  if (!state.eventId) return;
+  const box = $("#quickReceptionResult");
+  const term = ($("#quickReceptionSearch")?.value || "").trim();
+  if (!term) {
+    box.innerHTML = `<p class="empty">Busca un participante para ver acciones rapidas.</p>`;
+    return;
+  }
+  const rows = await api(`/api/accreditations?event_id=${state.eventId}&q=${encodeURIComponent(term)}`);
+  box.innerHTML = rows.slice(0, 5).map((row) => renderAccreditationCard(row, true)).join("") || `<p class="empty">Sin resultados para esa busqueda.</p>`;
+  bindAccreditationActions(box);
+}
+
+async function quickValidateReceptionToken() {
+  const token = ($("#quickReceptionToken")?.value || "").trim();
+  const box = $("#quickReceptionResult");
+  if (!token) {
+    box.innerHTML = `<div class="panel danger">Pegá un token o QR para acreditar.</div>`;
+    return;
+  }
+  await manualCheckIn(token);
+  $("#quickReceptionToken").value = "";
+  await loadQuickReception();
 }
 
 function printUrl(extra = {}) {
@@ -373,12 +687,30 @@ async function loadCommunications() {
   $("#communicationV5Metrics").innerHTML = `
     <div><strong>${Number(queueMetrics.emails_sent || 0)}</strong><span>Emails enviados</span></div>
     <div><strong>${Number(queueMetrics.emails_delivered || 0)}</strong><span>Emails entregados</span></div>
+    <div><strong>${Number(queueMetrics.emails_bounced || 0)}</strong><span>Rebotes</span></div>
+    <div><strong>${Number(queueMetrics.emails_failed || 0)}</strong><span>Email fallidos</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_sent || 0)}</strong><span>WhatsApp enviados</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_delivered || 0)}</strong><span>WhatsApp entregados</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_read || 0)}</strong><span>WhatsApp leidos</span></div>
     <div><strong>${Number(queueMetrics.pending || 0)}</strong><span>Pendientes</span></div>
     <div><strong>${Number(queueMetrics.errors || 0)}</strong><span>Errores</span></div>
   `;
+  const emailProvider = providers.email || {};
+  const emailSummary = $("#emailConfigSummary");
+  if (emailSummary) {
+    emailSummary.innerHTML = `
+      <div><strong>${emailProvider.provider || "demo"}</strong><span>Proveedor activo</span></div>
+      <div><strong>${emailProvider.ready ? "Conectado" : "No configurado"}</strong><span>Estado</span></div>
+      <div><strong>${emailProvider.from || "Sin remitente"}</strong><span>Remitente</span></div>
+      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a</span></div>
+      <div><strong>${emailProvider.last_success ? new Date(emailProvider.last_success).toLocaleString() : "Sin envios"}</strong><span>Ultimo exitoso</span></div>
+      <div><strong>${emailProvider.last_error || "Sin errores"}</strong><span>Ultimo error</span></div>
+    `;
+  }
+  const emailTestForm = $("#emailTestForm");
+  if (emailTestForm) {
+    emailTestForm.classList.toggle("hidden", state.authUser?.role !== "Super Admin");
+  }
   $("#assistantMetrics").innerHTML = `
     <div><strong>${Number(assistantMetrics.received || 0)}</strong><span>Consultas</span></div>
     <div><strong>${Number(assistantMetrics.resolved || 0)}</strong><span>Resueltas</span></div>
@@ -431,6 +763,7 @@ async function loadDemoReal() {
   if (!state.eventId) return;
   state.demoReal = await api(`/api/demo-real?event_id=${state.eventId}`);
   const panel = $("#demoRealPanel");
+  if (!panel) return;
   if (!state.demoReal.active) {
     panel.classList.add("hidden");
     return;
@@ -591,7 +924,9 @@ function renderAccessActivitySelector() {
 }
 
 function renderReservations() {
-  $("#reservationsList").innerHTML = state.reservations.map((row) => `
+  const list = $("#reservationsList");
+  if (!list) return;
+  list.innerHTML = state.reservations.map((row) => `
     <article class="reservation-row ${row.status}">
       <strong>${row.first_name} ${row.last_name}</strong>
       <span>${row.activity_title} - ${row.space_name}</span>
@@ -602,7 +937,7 @@ function renderReservations() {
       </div>
     </article>
   `).join("") || `<p class="empty">Todavia no hay inscripciones.</p>`;
-  $$(".reservation-status").forEach((button) => (
+  list.querySelectorAll(".reservation-status").forEach((button) => (
     button.addEventListener("click", () => changeReservationStatus(button.dataset.id, button.dataset.status))
   ));
 }
@@ -1023,10 +1358,11 @@ async function createDemoReal(event) {
     notice.innerHTML = `
       <div class="panel success">
         Demo real creada: ${result.participants} participantes, ${result.spaces} salas, ${result.activities} actividades.
+        Pico operativo: ${result.peak?.entered || 0} ingresados, ${result.peak?.last_15_minutes || 0} ingresos en 15 min, ${result.peak?.active_terminals || 0} terminales activas.
         Backup previo: ${result.backup_before}. Backup demo: ${result.backup_after}.
       </div>
     `;
-    form.reset();
+    form.elements.confirm.value = "DEMO";
     await loadEvents();
   } catch (err) {
     notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -1247,6 +1583,26 @@ async function sendDemoCommunication(event) {
   }
 }
 
+async function sendTestEmail(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const notice = $("#emailTestNotice");
+  try {
+    const result = await api("/api/communications/email/test", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        actor: state.currentUser,
+        email: form.elements.email.value,
+      }),
+    });
+    notice.innerHTML = `<div class="panel success">Email de prueba procesado. Enviados: ${Number(result.sent || 0)}.</div>`;
+    await Promise.all([loadCommunications(), loadAudit()]);
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
 async function testAssistant(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1366,6 +1722,8 @@ function stopCameraScan() {
 document.addEventListener("DOMContentLoaded", async () => {
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
     setView(button.dataset.view);
+    if (button.dataset.view === "diagnostics") loadDiagnostics();
+    if (button.dataset.view === "simulator") loadSimulator();
     const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
     history.replaceState(null, "", url);
   }));
@@ -1400,22 +1758,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#editAccreditationForm").addEventListener("submit", saveAccreditationEdit);
   $("#importForm").addEventListener("submit", importAccreditations);
   $("#importFile").addEventListener("change", loadImportFile);
+  $("#landingImageForm")?.addEventListener("submit", saveLandingImage);
+  $("#waitingRoomConfigForm")?.addEventListener("submit", saveWaitingRoomConfig);
+  $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
+  $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
   $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);
-  $("#reservationForm").addEventListener("submit", saveReservation);
+  $("#reservationForm")?.addEventListener("submit", saveReservation);
   $("#displayConfigForm").addEventListener("submit", saveDisplayConfig);
   $("#refreshBtn").addEventListener("click", loadEvents);
   $("#logoutBtn").addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
     location.href = "/login.html";
   });
+  $("#refreshDiagnosticsBtn")?.addEventListener("click", loadDiagnostics);
+  $("#diagnosticsLogFilter")?.addEventListener("change", renderDiagnosticsLogs);
+  $$("[data-simulator-action]").forEach((button) => button.addEventListener("click", () => controlSimulator(button.dataset.simulatorAction)));
   $("#printFilteredBtn").addEventListener("click", printFilteredCredentials);
   $("#searchInput").addEventListener("input", () => loadAccreditations());
   $("#statusFilter").addEventListener("change", () => loadAccreditations());
   $("#typeFilter").addEventListener("change", () => loadAccreditations());
+  $("#quickReceptionSearch")?.addEventListener("input", () => loadQuickReception());
+  $("#quickReceptionToken")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") quickValidateReceptionToken();
+  });
+  $("#quickReceptionValidate")?.addEventListener("click", quickValidateReceptionToken);
   $("#validateBtn").addEventListener("click", validateAccess);
   $("#attendanceExitBtn").addEventListener("click", registerAttendanceExit);
   $("#cameraBtn").addEventListener("click", startCameraScan);
@@ -1426,5 +1796,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
     setView(initialView);
+    if (initialView === "diagnostics") await loadDiagnostics();
+    if (initialView === "simulator") await loadSimulator();
   }
 });

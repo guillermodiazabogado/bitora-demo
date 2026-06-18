@@ -1,5 +1,7 @@
 # BITORA - guia de despliegue online
 
+Para produccion inicial con PostgreSQL consultar tambien `POSTGRES_DEPLOYMENT.md`.
+
 Esta guia deja el proyecto listo para publicar una demo en Internet. No reemplaza la puesta en produccion final: para produccion real se recomienda migrar a PostgreSQL, configurar dominio, HTTPS, backups externos y secretos definitivos.
 
 ## 1. Preparar GitHub
@@ -19,7 +21,7 @@ Esta guia deja el proyecto listo para publicar una demo en Internet. No reemplaz
 
 ## 2. Variables recomendadas
 
-Para demo online:
+Para demo online local/temporal:
 
 ```env
 APP_ENV=demo
@@ -34,6 +36,16 @@ QR_BACKUP_KEEP_LAST=24
 ```
 
 `PORT` no debe fijarse manualmente en Render/Railway si la plataforma lo asigna. BITORA lo lee automaticamente.
+
+Para una demo online seria o produccion:
+
+```env
+APP_ENV=production
+QR_DB_ENGINE=postgres
+QR_POSTGRES_DSN=postgresql://usuario:password@host:5432/bitora
+QR_POSTGRES_POOL_MIN=1
+QR_POSTGRES_POOL_MAX=10
+```
 
 ## 3. Render
 
@@ -79,3 +91,8 @@ Probar:
 ## 7. Limitaciones de SQLite en cloud gratis
 
 SQLite sirve para demo. En planes gratuitos puede perder datos si el disco es efimero o si la app se recrea. Para eventos reales usar PostgreSQL, backups externos y almacenamiento persistente.
+
+## 8. Documentacion complementaria
+
+- PostgreSQL y migraciones: `POSTGRES_DEPLOYMENT.md`.
+- Email real con Resend: `EMAIL_RESEND_DEPLOYMENT.md`.

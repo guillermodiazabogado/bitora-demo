@@ -26,6 +26,8 @@ server.err.log
 *.bak
 *.zip
 deploy_package/
+output/
+tmp/
 ~$*
 
 # Sistema/editor

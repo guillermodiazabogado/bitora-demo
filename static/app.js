@@ -67,9 +67,13 @@ function setView(name) {
 async function loadEvents() {
   await loadAuth();
   await loadUsers();
+  const previousEventId = state.eventId;
   state.events = await api("/api/events");
   const select = $("#eventSelect");
   select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  if (previousEventId && state.events.some((event) => Number(event.id) === Number(previousEventId))) {
+    select.value = String(previousEventId);
+  }
   if ($("#cloneEventSelect")) {
     $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   }
@@ -140,6 +144,11 @@ function updateMetrics() {
   setHref("#exportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
   setHref("#reportsExportCaptationLink", state.eventId ? `/api/captation.csv?event_id=${state.eventId}` : "#");
   setHref("#reportsExportJsonLink", state.eventId ? `/api/export.json?event_id=${state.eventId}` : "#");
+  setHref("#reportsExecutivePdfLink", state.eventId ? `/api/reports/executive.pdf?event_id=${state.eventId}` : "#");
+  setHref("#reportsAccreditationsLink", state.eventId ? `/api/export.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsReservationsLink", state.eventId ? `/api/reservations.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsAttendancesLink", state.eventId ? `/api/attendances.csv?event_id=${state.eventId}` : "#");
+  setHref("#reportsEligibilityLink", state.eventId ? `/api/certificate-eligibility.csv?event_id=${state.eventId}&status=eligible` : "#");
   setHref("#exportStructureLink", state.eventId ? `/api/event-structure.json?event_id=${state.eventId}` : "#");
   setHref("#exportAgendaLink", state.eventId ? `/api/agenda.csv?event_id=${state.eventId}` : "#");
   setHref("#exportAgendaIcsLink", state.eventId ? `/api/agenda.ics?event_id=${state.eventId}` : "#");
@@ -149,6 +158,89 @@ function updateMetrics() {
   setHref("#reportsBackupLink", state.eventId ? `/api/backup?event_id=${state.eventId}` : "/api/backup");
   updateControlRoomLink();
   renderFeatureVisibility();
+  renderLandingConfig();
+}
+
+function renderLandingConfig() {
+  const preview = $("#landingPreview");
+  if (!preview) return;
+  const event = currentEvent();
+  const meta = $("#landingImageMeta");
+  if (event?.landing_image_data) {
+    preview.classList.add("has-image");
+    preview.style.backgroundImage = `linear-gradient(90deg, rgba(23, 33, 43, 0.56), rgba(23, 33, 43, 0.12)), url("${event.landing_image_data}")`;
+    preview.innerHTML = `<strong>Imagen personalizada cargada</strong><span>${event.landing_image_name || "landing"} · ${event.landing_image_type || "imagen"}</span>`;
+    meta.textContent = `Actualizada: ${event.landing_image_updated_at || "-"}`;
+  } else {
+    preview.classList.remove("has-image");
+    preview.style.backgroundImage = "";
+    preview.innerHTML = `<strong>Fondo BITORA por defecto</strong><span>Arena #D2B89A · 16:9 · zona segura central</span>`;
+    meta.textContent = "Sin imagen personalizada";
+  }
+}
+
+function readLandingImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("Selecciona una imagen"));
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) return reject(new Error("Formato no permitido. Usa JPG, JPEG, PNG o WEBP"));
+    if (file.size > 3 * 1024 * 1024) return reject(new Error("Imagen demasiado pesada. Maximo 3 MB"));
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        if (image.naturalWidth < 800 || image.naturalHeight < 450) {
+          reject(new Error("Resolucion minima 800 x 450. Recomendado 1920 x 1080"));
+          return;
+        }
+        resolve({ dataUrl: reader.result, width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = () => reject(new Error("No se pudo leer la imagen"));
+      image.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveLandingImage(event) {
+  event.preventDefault();
+  const notice = $("#landingConfigNotice");
+  const file = $("#landingImageFile")?.files?.[0];
+  try {
+    const image = await readLandingImageFile(file);
+    await api("/api/event-landing", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        actor: state.currentUser,
+        action: "upload",
+        filename: file.name,
+        image_data: image.dataUrl,
+      }),
+    });
+    notice.innerHTML = `<div class="panel success">Imagen de landing guardada (${image.width} x ${image.height}).</div>`;
+    $("#landingImageFile").value = "";
+    await loadEvents();
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function deleteLandingImage() {
+  const notice = $("#landingConfigNotice");
+  if (!state.eventId) return;
+  if (!confirm("Eliminar imagen personalizada de la landing? Se usara el fondo BITORA por defecto.")) return;
+  try {
+    await api("/api/event-landing", {
+      method: "POST",
+      body: JSON.stringify({ event_id: state.eventId, actor: state.currentUser, action: "delete" }),
+    });
+    notice.innerHTML = `<div class="panel success">Imagen eliminada. La landing usara el fondo BITORA por defecto.</div>`;
+    await loadEvents();
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
 }
 
 async function loadAccreditations() {
@@ -156,36 +248,100 @@ async function loadAccreditations() {
   const q = encodeURIComponent($("#searchInput")?.value || "");
   const rows = filterAccreditations(await api(`/api/accreditations?event_id=${state.eventId}&q=${q}`));
   state.accreditations = await api(`/api/accreditations?event_id=${state.eventId}`);
-  $("#accreditations").innerHTML = rows.map((row) => `
-    <article class="row">
+  $("#accreditations").innerHTML = rows.map((row) => renderAccreditationCard(row)).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
+  bindAccreditationActions($("#accreditations"));
+  renderReservationSelectors();
+}
+
+function renderAccreditationCard(row, compact = false) {
+  const certificateLabel = Number(row.elegible_certificado || 0) ? "Certificado: elegible" : "Certificado: pendiente";
+  const attendanceLabel = Number(row.requiere_asistencia || 0) ? "Asistencia requerida" : "Asistencia no requerida";
+  const detailLine = [
+    row.dni ? `DNI ${row.dni}` : "",
+    row.phone ? `Tel. ${row.phone}` : "",
+    row.company || "",
+  ].filter(Boolean).join(" - ");
+  const quickActions = `
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Ver QR</a>
+    <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+    <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
+    <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
+    ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+  `;
+  const fullActions = `
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
+    <a class="button ghost" href="/api/qr.svg?token=${row.token}" target="_blank">Ver QR</a>
+    <a class="button ghost" href="/api/qr.svg?token=${row.token}" download="${row.token}.svg">Descargar QR</a>
+    <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
+    <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
+    <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
+    <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
+    <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
+    ${row.status === "cancelled"
+      ? `<button type="button" class="status-accreditation" data-id="${row.id}" data-status="active">Reactivar</button>`
+      : `<button type="button" class="status-accreditation danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>`}
+    ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+    ${row.email ? `<a class="button ghost" href="mailto:${row.email}?subject=Credencial%20${encodeURIComponent(row.event_name || "BITORA")}&body=${encodeURIComponent(`Hola ${row.first_name || ""}, tu portal es ${location.origin}/p.html?token=${row.token}`)}">Email</a>` : ""}
+    <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Reenviar portal</a>
+    <button type="button" class="audit-focus" data-token="${row.token}">Historial</button>
+  `;
+  return `
+    <article class="row ${compact ? "compact-row" : ""}">
       <div>
         <strong>${row.first_name} ${row.last_name}</strong>
-        <span>${row.company || row.email} - ${row.email}</span>
+        <span>${row.email}</span>
+        <span>${detailLine || "Sin datos complementarios"}</span>
       </div>
       <code>${row.token}</code>
       <span class="pill">${row.type}</span>
-      <span class="status ${row.checked_in_at ? "ok" : ""}">${accreditationStatusLabel(row)}</span>
+      <div class="status-stack">
+        <span class="status ${row.checked_in_at ? "ok" : ""}">${accreditationStatusLabel(row)}</span>
+        <span class="status">${certificateLabel}</span>
+        <span class="status">${attendanceLabel}</span>
+      </div>
       <div class="row-actions">
-        <a class="button ghost" href="/p.html?token=${row.token}" target="_blank">Credencial</a>
-        <button type="button" class="print-one" data-token="${row.token}">Imprimir</button>
-        <button type="button" class="wristband-one" data-token="${row.token}">Pulsera</button>
-        <button type="button" class="certificate-one" data-token="${row.token}">Certificado</button>
-        <button type="button" class="edit-accreditation" data-id="${row.id}">Editar</button>
-        <button type="button" class="manual-checkin" data-token="${row.token}">Acreditar</button>
-        ${row.status === "cancelled"
-          ? `<button type="button" class="status-accreditation" data-id="${row.id}" data-status="active">Reactivar</button>`
-          : `<button type="button" class="status-accreditation danger-button" data-id="${row.id}" data-status="cancelled">Cancelar</button>`}
-        ${row.phone ? `<a class="button ghost" href="${whatsappLink(row)}" target="_blank">WhatsApp</a>` : ""}
+        ${compact ? quickActions : fullActions}
       </div>
     </article>
-  `).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
-  $$(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
-  $$(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
-  $$(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
-  $$(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
-  $$(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
-  $$(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
-  renderReservationSelectors();
+  `;
+}
+
+function bindAccreditationActions(scope = document) {
+  scope.querySelectorAll(".manual-checkin").forEach((button) => button.addEventListener("click", () => manualCheckIn(button.dataset.token)));
+  scope.querySelectorAll(".print-one").forEach((button) => button.addEventListener("click", () => printOneCredential(button.dataset.token)));
+  scope.querySelectorAll(".wristband-one").forEach((button) => button.addEventListener("click", () => printOneWristband(button.dataset.token)));
+  scope.querySelectorAll(".certificate-one").forEach((button) => button.addEventListener("click", () => printManualCertificate(button.dataset.token)));
+  scope.querySelectorAll(".edit-accreditation").forEach((button) => button.addEventListener("click", () => openAccreditationEditor(button.dataset.id)));
+  scope.querySelectorAll(".status-accreditation").forEach((button) => button.addEventListener("click", () => changeAccreditationStatus(button.dataset.id, button.dataset.status)));
+  scope.querySelectorAll(".audit-focus").forEach((button) => button.addEventListener("click", () => {
+    setView("audit");
+    loadAudit();
+  }));
+}
+
+async function loadQuickReception() {
+  if (!state.eventId) return;
+  const box = $("#quickReceptionResult");
+  const term = ($("#quickReceptionSearch")?.value || "").trim();
+  if (!term) {
+    box.innerHTML = `<p class="empty">Busca un participante para ver acciones rapidas.</p>`;
+    return;
+  }
+  const rows = await api(`/api/accreditations?event_id=${state.eventId}&q=${encodeURIComponent(term)}`);
+  box.innerHTML = rows.slice(0, 5).map((row) => renderAccreditationCard(row, true)).join("") || `<p class="empty">Sin resultados para esa busqueda.</p>`;
+  bindAccreditationActions(box);
+}
+
+async function quickValidateReceptionToken() {
+  const token = ($("#quickReceptionToken")?.value || "").trim();
+  const box = $("#quickReceptionResult");
+  if (!token) {
+    box.innerHTML = `<div class="panel danger">Pegá un token o QR para acreditar.</div>`;
+    return;
+  }
+  await manualCheckIn(token);
+  $("#quickReceptionToken").value = "";
+  await loadQuickReception();
 }
 
 function printUrl(extra = {}) {
@@ -431,6 +587,7 @@ async function loadDemoReal() {
   if (!state.eventId) return;
   state.demoReal = await api(`/api/demo-real?event_id=${state.eventId}`);
   const panel = $("#demoRealPanel");
+  if (!panel) return;
   if (!state.demoReal.active) {
     panel.classList.add("hidden");
     return;
@@ -591,7 +748,9 @@ function renderAccessActivitySelector() {
 }
 
 function renderReservations() {
-  $("#reservationsList").innerHTML = state.reservations.map((row) => `
+  const list = $("#reservationsList");
+  if (!list) return;
+  list.innerHTML = state.reservations.map((row) => `
     <article class="reservation-row ${row.status}">
       <strong>${row.first_name} ${row.last_name}</strong>
       <span>${row.activity_title} - ${row.space_name}</span>
@@ -602,7 +761,7 @@ function renderReservations() {
       </div>
     </article>
   `).join("") || `<p class="empty">Todavia no hay inscripciones.</p>`;
-  $$(".reservation-status").forEach((button) => (
+  list.querySelectorAll(".reservation-status").forEach((button) => (
     button.addEventListener("click", () => changeReservationStatus(button.dataset.id, button.dataset.status))
   ));
 }
@@ -1023,10 +1182,11 @@ async function createDemoReal(event) {
     notice.innerHTML = `
       <div class="panel success">
         Demo real creada: ${result.participants} participantes, ${result.spaces} salas, ${result.activities} actividades.
+        Pico operativo: ${result.peak?.entered || 0} ingresados, ${result.peak?.last_15_minutes || 0} ingresos en 15 min, ${result.peak?.active_terminals || 0} terminales activas.
         Backup previo: ${result.backup_before}. Backup demo: ${result.backup_after}.
       </div>
     `;
-    form.reset();
+    form.elements.confirm.value = "DEMO";
     await loadEvents();
   } catch (err) {
     notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
@@ -1400,12 +1560,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#editAccreditationForm").addEventListener("submit", saveAccreditationEdit);
   $("#importForm").addEventListener("submit", importAccreditations);
   $("#importFile").addEventListener("change", loadImportFile);
+  $("#landingImageForm")?.addEventListener("submit", saveLandingImage);
+  $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);
-  $("#reservationForm").addEventListener("submit", saveReservation);
+  $("#reservationForm")?.addEventListener("submit", saveReservation);
   $("#displayConfigForm").addEventListener("submit", saveDisplayConfig);
   $("#refreshBtn").addEventListener("click", loadEvents);
   $("#logoutBtn").addEventListener("click", async () => {
@@ -1416,6 +1578,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#searchInput").addEventListener("input", () => loadAccreditations());
   $("#statusFilter").addEventListener("change", () => loadAccreditations());
   $("#typeFilter").addEventListener("change", () => loadAccreditations());
+  $("#quickReceptionSearch")?.addEventListener("input", () => loadQuickReception());
+  $("#quickReceptionToken")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") quickValidateReceptionToken();
+  });
+  $("#quickReceptionValidate")?.addEventListener("click", quickValidateReceptionToken);
   $("#validateBtn").addEventListener("click", validateAccess);
   $("#attendanceExitBtn").addEventListener("click", registerAttendanceExit);
   $("#cameraBtn").addEventListener("click", startCameraScan);

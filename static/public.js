@@ -27,6 +27,13 @@ function applyEventTheme(event) {
   root.style.setProperty("--event-secondary", event.theme_dark || theme.secondary);
   root.style.setProperty("--event-accent", event.theme_accent || theme.accent);
   root.style.setProperty("--event-soft", event.theme_soft || theme.soft);
+  if (event.landing_image_data) {
+    root.style.setProperty("--landing-image", `url("${event.landing_image_data}")`);
+    document.body.classList.add("has-landing-image");
+  } else {
+    root.style.setProperty("--landing-image", "none");
+    document.body.classList.remove("has-landing-image");
+  }
 }
 
 function deviceType() {
@@ -71,7 +78,29 @@ function formData(form) {
 
 function formatDate(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  return `${String(date.getDate()).padStart(2, "0")} ${date.toLocaleString("es-AR", { month: "short" }).replace(".", "").toUpperCase()}`;
+}
+
+function formatTimeRange(start, end) {
+  if (!start) return "-";
+  const formatter = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const startText = formatter.format(new Date(start));
+  const endText = end ? formatter.format(new Date(end)) : "";
+  return endText ? `${startText} a ${endText} hs` : `${startText} hs`;
+}
+
+function renderPublicTypes(types = []) {
+  const available = new Set(types.map((row) => String(row.name || "").trim().toLowerCase()));
+  const preferred = [
+    { value: "General", label: "Publico General", aliases: ["general", "publico general", "público general"] },
+    { value: "Disertante", label: "Disertante", aliases: ["disertante", "disertantes"] },
+    { value: "Prensa", label: "Prensa", aliases: ["prensa"] },
+  ];
+  return preferred
+    .filter((row) => row.value === "General" || row.aliases.some((alias) => available.has(alias)))
+    .map((row) => `<option value="${row.value}">${row.label}</option>`)
+    .join("");
 }
 
 async function loadEvent() {
@@ -82,44 +111,16 @@ async function loadEvent() {
   document.title = event.name;
   $("#eventTitle").textContent = event.name;
   $("#eventDescription").textContent = event.description || "Completa tus datos para recibir tu credencial digital.";
-  $("#eventDate").textContent = `${formatDate(event.starts_at)}${event.ends_at ? ` - ${formatDate(event.ends_at)}` : ""}`;
+  $("#eventDate").textContent = formatDate(event.starts_at);
+  $("#eventTime").textContent = formatTimeRange(event.starts_at, event.ends_at);
   $("#eventVenue").textContent = event.venue || "-";
-  $("#eventCapacity").textContent = "Segun disponibilidad";
-  $("#publicTypeSelect").innerHTML = (event.types || []).map((row) => `<option>${row.name}</option>`).join("") || "<option>General</option>";
+  $("#publicTypeSelect").innerHTML = renderPublicTypes(event.types) || `<option value="General">Publico General</option>`;
+  $("#publicTypeSelect").value = "General";
   $("#sourceInput").value = source;
   $("#sourceDetailInput").value = sourceDetail;
   $("#deviceInput").value = deviceType();
   $("#sessionInput").value = sessionId;
-  renderCaptationActions(event);
   track("landing_opened");
-}
-
-function renderCaptationActions(event) {
-  const mode = event.captation_mode || "MIXTO";
-  const mobile = deviceType() === "mobile";
-  const whatsappUrl = whatsappLink(event);
-  const form = $("#publicRegisterForm");
-  const box = $("#captationActions");
-  const webPrimary = mode === "WEB_DIRECTA" || (mode === "MIXTO" && !mobile);
-  const whatsappPrimary = mode === "WHATSAPP_PRIMERO" || (mode === "MIXTO" && mobile);
-  form.classList.toggle("secondary-form", whatsappPrimary);
-  const primaryLabel = event.primary_action_label || (whatsappPrimary ? "Inscribirme por WhatsApp" : "Inscribirme");
-  const secondaryLabel = event.secondary_action_label || (whatsappPrimary ? "Continuar por web" : "Continuar por WhatsApp");
-  box.innerHTML = `
-    <h2>${whatsappPrimary ? "Inscripcion por WhatsApp" : "Inscripcion web"}</h2>
-    <div class="confirmation-actions">
-      ${whatsappPrimary ? `<a id="whatsappPrimary" class="button" href="${whatsappUrl}" target="_blank">${primaryLabel}</a>` : `<a class="button" href="#publicRegisterForm">${primaryLabel}</a>`}
-      ${webPrimary ? `<a id="whatsappSecondary" class="button ghost" href="${whatsappUrl}" target="_blank">${secondaryLabel}</a>` : `<a class="button ghost" href="#publicRegisterForm">${secondaryLabel}</a>`}
-    </div>
-  `;
-  $("#whatsappPrimary")?.addEventListener("click", () => track("whatsapp_clicked"));
-  $("#whatsappSecondary")?.addEventListener("click", () => track("whatsapp_clicked"));
-}
-
-function whatsappLink(event) {
-  const phone = String(event.whatsapp_number || "").replace(/\D/g, "");
-  const text = `Hola, quiero inscribirme a ${event.name}. Link: ${location.href}`;
-  return phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
 async function track(action) {

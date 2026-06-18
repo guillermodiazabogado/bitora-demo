@@ -7,9 +7,25 @@ import tempfile
 import threading
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import server
+
+
+class FakeResendHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        return
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(length)
+        body = json.dumps({"id": "v5-email-1"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
 
 def req(base, method, path, payload=None, expect=200):
@@ -30,13 +46,17 @@ def req(base, method, path, payload=None, expect=200):
 
 
 def main() -> None:
-    old = {key: os.environ.get(key) for key in ("EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO")}
+    old = {key: os.environ.get(key) for key in ("EMAIL_PROVIDER", "EMAIL_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO", "EMAIL_ENABLED", "EMAIL_RESEND_API_URL")}
     tmp = Path(tempfile.mkdtemp(prefix="qr-v5-email-"))
     httpd = None
+    provider = ThreadingHTTPServer(("127.0.0.1", 0), FakeResendHandler)
+    threading.Thread(target=provider.serve_forever, daemon=True).start()
     try:
         os.environ["EMAIL_PROVIDER"] = "resend"
         os.environ["EMAIL_API_KEY"] = "test-key"
         os.environ["EMAIL_FROM"] = "eventos@example.test"
+        os.environ["EMAIL_ENABLED"] = "true"
+        os.environ["EMAIL_RESEND_API_URL"] = f"http://127.0.0.1:{provider.server_address[1]}"
         server.DB_PATH = tmp / "email.sqlite3"
         server.BACKUP_DIR = tmp / "backups"
         server.AppHandler.log_message = lambda self, format, *args: None
@@ -57,6 +77,8 @@ def main() -> None:
         if httpd:
             httpd.shutdown()
             httpd.server_close()
+        provider.shutdown()
+        provider.server_close()
         for key, value in old.items():
             if value is None:
                 os.environ.pop(key, None)

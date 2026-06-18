@@ -27,6 +27,8 @@
     let displayConfig = {};
     let carouselPage = 0;
     let carouselTimer = null;
+    let carouselSignature = "";
+    const CAROUSEL_PAGE_SECONDS = 20;
 
     const $ = (selector) => document.querySelector(selector);
     const fmtTime = (value) => new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -85,16 +87,28 @@
     }
 
     function scheduleCarousel() {
-      clearInterval(carouselTimer);
-      carouselTimer = null;
+      if (carouselTimer) return;
       if ((displayConfig.mode || "airport") !== "airport") return;
       const pageSize = airportPageSize();
       if ((displayRows || []).length <= pageSize) return;
-      carouselTimer = setInterval(() => {
+      carouselTimer = setTimeout(() => {
+        carouselTimer = null;
         const pages = Math.max(Math.ceil(displayRows.length / airportPageSize()), 1);
         carouselPage = (carouselPage + 1) % pages;
         renderCarousel();
-      }, Math.max(6, Math.min(refreshSeconds, 12)) * 1000);
+        scheduleCarousel();
+      }, CAROUSEL_PAGE_SECONDS * 1000);
+    }
+
+    function restartCarousel() {
+      clearTimeout(carouselTimer);
+      carouselTimer = null;
+      scheduleCarousel();
+    }
+
+    function currentCarouselSignature(rows) {
+      const ids = (rows || []).map((row) => row.id || `${row.starts_at}-${row.title}`).join(",");
+      return `${displayConfig.mode || "airport"}|${airportPageSize()}|${ids}`;
     }
 
     function renderNow(rows) {
@@ -138,7 +152,12 @@
       }
       if (displayConfig.paused) return;
       displayRows = data.activities || [];
-      carouselPage = 0;
+      const signature = currentCarouselSignature(displayRows);
+      if (signature !== carouselSignature) {
+        carouselSignature = signature;
+        carouselPage = 0;
+        restartCarousel();
+      }
       renderCarousel();
       scheduleCarousel();
     }
@@ -153,8 +172,9 @@
     }
 
     window.addEventListener("resize", () => {
+      carouselSignature = "";
       renderCarousel();
-      scheduleCarousel();
+      restartCarousel();
     });
     updateClock();
     setInterval(updateClock, 1000);

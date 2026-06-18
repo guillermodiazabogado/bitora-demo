@@ -17,6 +17,12 @@ services:
         value: sqlite
       - key: QR_SQLITE_PATH
         value: acreditaciones.sqlite3
+      - key: QR_POSTGRES_DSN
+        sync: false
+      - key: QR_POSTGRES_POOL_MIN
+        value: "1"
+      - key: QR_POSTGRES_POOL_MAX
+        value: "10"
       - key: QR_AUTO_BACKUP_MINUTES
         value: "10"
       - key: QR_BACKUP_KEEP_LAST
