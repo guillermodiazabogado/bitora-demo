@@ -180,7 +180,7 @@ def main() -> None:
         assert_true(rows[0][:5] == ["Sala", "Actividad", "Fecha", "Hora inicio", "Hora fin"], "CSV de agenda tiene columnas incorrectas")
 
         dashboard_html = req(base, "GET", "/index.html", parse_json=False)
-        assert_true(b"Plantillas y Agenda" in dashboard_html, "Panel no incluye seccion Plantillas y Agenda")
+        assert_true(b"Archivos del evento y agenda" in dashboard_html, "Panel no incluye seccion de archivos")
 
         audit = req(base, "GET", f"/api/audit?event_id={imported['event_id']}")
         actions = {row["action"] for row in audit}

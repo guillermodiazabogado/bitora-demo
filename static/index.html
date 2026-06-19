@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css?v=20260619-reportes2">
+  <link rel="stylesheet" href="/styles.css?v=20260619-agenda-files">
 </head>
 <body>
   <header class="topbar">
@@ -267,44 +267,80 @@
 
         <section class="content">
           <div class="panel templates-panel">
-            <h2>Plantillas y Agenda</h2>
-            <div class="template-actions">
-              <div class="template-card">
-                <h3>Crear desde evento</h3>
-                <form id="cloneEventForm" class="stack">
-                  <select name="source_event_id" id="cloneEventSelect"></select>
-                  <input name="name" placeholder="Nombre del nuevo evento">
-                  <label class="toggle"><input name="copy_all" type="checkbox" checked> Copiar todo lo estructural</label>
-                  <button>Crear desde evento existente</button>
-                </form>
+            <div class="report-panel-head">
+              <div>
+                <h2>Archivos del evento y agenda</h2>
+                <p>Importa y exporta archivos. La agenda se administra desde planillas CSV o calendarios ICS.</p>
               </div>
-              <div class="template-card">
-                <h3>Exportar planillas</h3>
-                <div class="template-export-list">
-                  <a id="exportStructureLink" class="button ghost" href="#">Exportar estructura</a>
-                  <a id="exportAgendaLink" class="button ghost" href="#">Exportar agenda</a>
-                  <a id="exportAgendaIcsLink" class="button ghost" href="#">Exportar agenda ICS</a>
+            </div>
+            <div class="template-actions file-transfer-grid">
+              <section class="template-card file-transfer-card">
+                <div class="file-transfer-heading">
+                  <span class="file-transfer-step">1</span>
+                  <div>
+                    <h3>Exportar archivos</h3>
+                    <p>Descarga la configuracion o la agenda del evento seleccionado.</p>
+                  </div>
                 </div>
-              </div>
-              <div class="template-card">
-                <h3>Importar estructura</h3>
+                <div class="template-export-list">
+                  <a id="exportStructureLink" class="file-download-row" href="#">
+                    <span><strong>Estructura del evento</strong><small>Salas, tipos, cupos y configuracion</small></span>
+                    <b>JSON</b>
+                  </a>
+                  <a id="exportAgendaLink" class="file-download-row" href="#">
+                    <span><strong>Agenda en planilla</strong><small>Actividades, salas, fechas y horarios</small></span>
+                    <b>CSV</b>
+                  </a>
+                  <a id="exportAgendaIcsLink" class="file-download-row" href="#">
+                    <span><strong>Agenda calendario</strong><small>Compatible con Google, Outlook y Apple</small></span>
+                    <b>ICS</b>
+                  </a>
+                </div>
+              </section>
+              <section class="template-card file-transfer-card">
+                <div class="file-transfer-heading">
+                  <span class="file-transfer-step">2</span>
+                  <div>
+                    <h3>Importar estructura</h3>
+                    <p>Crea un evento desde un archivo JSON exportado por BITORA.</p>
+                  </div>
+                </div>
                 <form id="importStructureForm" class="stack">
-                  <textarea name="structure_json" placeholder="Pegar estructura JSON exportada"></textarea>
+                  <label class="file-picker file-picker-large">
+                    <span>Seleccionar archivo JSON</span>
+                    <input id="structureImportFile" type="file" accept=".json,application/json" required>
+                  </label>
+                  <div id="structureImportFileName" class="file-name">Ningun archivo seleccionado</div>
+                  <textarea name="structure_json" hidden></textarea>
                   <input name="name" placeholder="Nombre para el evento importado">
                   <button>Importar estructura</button>
                 </form>
-              </div>
-              <div class="template-card template-card-wide">
-                <h3>Importar agenda</h3>
+              </section>
+              <section class="template-card file-transfer-card template-card-wide">
+                <div class="file-transfer-heading">
+                  <span class="file-transfer-step">3</span>
+                  <div>
+                    <h3>Importar agenda</h3>
+                    <p>Selecciona una planilla CSV o un calendario ICS. No es necesario copiar contenido manualmente.</p>
+                  </div>
+                </div>
                 <form id="importAgendaForm" class="template-agenda-form">
-                  <textarea name="csv" placeholder="Sala,Actividad,Fecha,Hora inicio,Hora fin&#10;Auditorio,Charla demo,2026-07-01,10:00,11:00"></textarea>
-                  <textarea name="ics" placeholder="O pegar calendario ICS de Google, Outlook o Apple"></textarea>
+                  <label class="file-picker file-picker-large">
+                    <span>Seleccionar archivo CSV o ICS</span>
+                    <input id="agendaImportFile" type="file" accept=".csv,.ics,text/csv,text/calendar" required>
+                  </label>
+                  <div class="agenda-file-summary">
+                    <div id="agendaImportFileName" class="file-name">Ningun archivo seleccionado</div>
+                    <div class="file-format-badges"><span>CSV</span><span>ICS</span></div>
+                  </div>
+                  <textarea name="csv" hidden></textarea>
+                  <textarea name="ics" hidden></textarea>
                   <div class="template-agenda-actions">
                     <button name="preview" value="1" type="submit" class="ghost">Previsualizar agenda</button>
                     <button>Importar agenda</button>
                   </div>
                 </form>
-              </div>
+              </section>
             </div>
             <div id="templatesNotice" class="result"></div>
           </div>
@@ -1036,6 +1072,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260619-reportes2"></script>
+  <script src="/app.js?v=20260619-agenda-files"></script>
 </body>
 </html>

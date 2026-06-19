@@ -1700,15 +1700,64 @@ async function importEventStructure(event) {
     });
     $("#templatesNotice").innerHTML = `<div class="panel success">Estructura importada. ID ${result.event_id}</div>`;
     form.reset();
+    $("#structureImportFileName").textContent = "Ningun archivo seleccionado";
     await loadEvents();
   } catch (err) {
     $("#templatesNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
 }
 
+async function loadStructureImportFile(event) {
+  const file = event.target.files?.[0];
+  const nameBox = $("#structureImportFileName");
+  const field = $("#importStructureForm textarea[name='structure_json']");
+  if (!file) {
+    nameBox.textContent = "Ningun archivo seleccionado";
+    field.value = "";
+    return;
+  }
+  try {
+    field.value = await file.text();
+    JSON.parse(field.value);
+    nameBox.textContent = `${file.name} - listo para importar`;
+  } catch (err) {
+    field.value = "";
+    event.target.value = "";
+    nameBox.textContent = "El archivo JSON no es valido";
+    $("#templatesNotice").innerHTML = `<div class="panel danger">Selecciona un archivo JSON exportado por BITORA.</div>`;
+  }
+}
+
+async function loadAgendaImportFile(event) {
+  const file = event.target.files?.[0];
+  const form = $("#importAgendaForm");
+  const nameBox = $("#agendaImportFileName");
+  form.elements.csv.value = "";
+  form.elements.ics.value = "";
+  if (!file) {
+    nameBox.textContent = "Ningun archivo seleccionado";
+    return;
+  }
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (!["csv", "ics"].includes(extension)) {
+    event.target.value = "";
+    nameBox.textContent = "Formato no compatible";
+    $("#templatesNotice").innerHTML = `<div class="panel danger">La agenda debe estar en formato CSV o ICS.</div>`;
+    return;
+  }
+  const content = await file.text();
+  form.elements[extension].value = content;
+  nameBox.textContent = `${file.name} - ${Math.max(1, Math.round(file.size / 1024))} KB`;
+  $("#templatesNotice").innerHTML = "";
+}
+
 async function importAgenda(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (!form.elements.csv.value && !form.elements.ics.value) {
+    $("#templatesNotice").innerHTML = `<div class="panel danger">Selecciona un archivo CSV o ICS.</div>`;
+    return;
+  }
   const payload = {
     actor: state.currentUser,
     event_id: state.eventId,
@@ -1723,6 +1772,10 @@ async function importAgenda(event) {
       const result = await api("/api/agenda/import", { method: "POST", body: JSON.stringify(payload) });
       const errors = result.errors?.length ? ` Errores: ${result.errors.length}` : "";
       $("#templatesNotice").innerHTML = `<div class="panel ${result.ok ? "success" : "danger"}">Agenda: ${result.created} creadas, ${result.updated} actualizadas.${errors}</div>`;
+      if (result.ok) {
+        form.reset();
+        $("#agendaImportFileName").textContent = "Ningun archivo seleccionado";
+      }
       await Promise.all([loadAgenda(), loadReadiness(), loadAudit()]);
     }
   } catch (err) {
@@ -2064,9 +2117,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#prepareEventForm").addEventListener("submit", prepareRealEvent);
   $("#demoRealForm").addEventListener("submit", createDemoReal);
   $("#demoLive10Form")?.addEventListener("submit", createDemoLive10);
-  $("#cloneEventForm").addEventListener("submit", cloneEventFromTemplate);
+  $("#cloneEventForm")?.addEventListener("submit", cloneEventFromTemplate);
   $("#importStructureForm").addEventListener("submit", importEventStructure);
   $("#importAgendaForm").addEventListener("submit", importAgenda);
+  $("#structureImportFile")?.addEventListener("change", loadStructureImportFile);
+  $("#agendaImportFile")?.addEventListener("change", loadAgendaImportFile);
   $("#controlRoomRefresh").addEventListener("change", updateControlRoomLink);
   $("#controlRoomDark").addEventListener("change", updateControlRoomLink);
   $("#controlRoomCompact").addEventListener("change", updateControlRoomLink);

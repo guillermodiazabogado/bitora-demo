@@ -77,9 +77,9 @@ def main() -> None:
     register = html.split('<section id="register"', 1)[1].split('<section id="reception"', 1)[0]
 
     assert_true("Configuracion del evento" in configure, "Configuracion no esta centralizada")
-    assert_true("Plantillas y Agenda" in configure, "Plantillas y Agenda no esta en Configurar")
+    assert_true("Archivos del evento y agenda" in configure, "Archivos del evento y agenda no esta en Configurar")
     assert_true("Tipos y cupos" in configure, "Tipos y cupos no esta en Configurar")
-    assert_true("Configuracion del evento" not in reports and "Plantillas y Agenda" not in reports, "Reportes mezcla configuracion")
+    assert_true("Configuracion del evento" not in reports and "Archivos del evento y agenda" not in reports, "Reportes mezcla configuracion")
     assert_true("Gestion de participantes" in register and 'id="accreditations"' in register, "Gestion completa de participantes no esta en Inscribir")
     assert_true("Gestion de inscripciones" not in register and "reservationForm" not in register, "Inscribir conserva bloque viejo de inscripciones")
     assert_true("reservationForm" not in agenda and "Exportar inscripciones" not in agenda, "Agenda conserva gestion de inscripciones")
