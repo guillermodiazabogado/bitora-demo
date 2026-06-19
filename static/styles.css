@@ -4026,6 +4026,31 @@ code,
   gap: 16px;
 }
 
+.reports-analytics {
+  display: grid;
+  gap: 16px;
+}
+
+.reports-analytics > .section-head {
+  margin: 0;
+  padding: 20px 22px 0;
+}
+
+.reports-analytics > .section-head h2 {
+  margin: 3px 0 4px;
+}
+
+#reportsAnalyticsSlot {
+  display: grid;
+  gap: 16px;
+}
+
+.diagnostics-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .diagnostics-hero {
   align-items: center;
   display: flex;
@@ -4599,6 +4624,10 @@ code,
   }
 
   .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostics-operations-grid {
     grid-template-columns: 1fr;
   }
 

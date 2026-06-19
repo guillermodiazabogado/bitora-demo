@@ -73,8 +73,18 @@ function formData(form) {
 }
 
 function setView(name) {
+  if (name === "visualization") name = "reports";
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+}
+
+function organizeReportAndDiagnosticViews() {
+  const analytics = $("#visualization");
+  const slot = $("#reportsAnalyticsSlot");
+  if (analytics && slot && analytics.parentElement !== slot) {
+    slot.appendChild(analytics);
+    analytics.classList.remove("hidden");
+  }
 }
 
 async function loadEvents() {
@@ -104,7 +114,7 @@ async function loadAuth() {
     $("#logoutBtn").classList.remove("hidden");
     $("#diagnosticsNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
     $("#simulatorNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
-    $("#visualizationNav")?.classList.toggle(
+    $("#visualization")?.classList.toggle(
       "hidden",
       !["Super Admin", "Productor", "Coordinador"].includes(state.authUser.role),
     );
@@ -112,7 +122,7 @@ async function loadAuth() {
     $("#logoutBtn").classList.add("hidden");
     $("#diagnosticsNav")?.classList.add("hidden");
     $("#simulatorNav")?.classList.add("hidden");
-    $("#visualizationNav")?.classList.add("hidden");
+    $("#visualization")?.classList.add("hidden");
   }
 }
 
@@ -2027,11 +2037,12 @@ function stopCameraScan() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  organizeReportAndDiagnosticViews();
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
     setView(button.dataset.view);
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
-    if (button.dataset.view === "visualization") loadVisualization();
+    if (button.dataset.view === "reports") loadVisualization();
     const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
     history.replaceState(null, "", url);
   }));
@@ -2109,11 +2120,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (event.key === "Enter") validateAccess();
   });
   await loadEvents();
-  const initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  let initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  if (initialView === "visualization") initialView = "reports";
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
     setView(initialView);
     if (initialView === "diagnostics") await loadDiagnostics();
     if (initialView === "simulator") await loadSimulator();
-    if (initialView === "visualization") await loadVisualization();
+    if (initialView === "reports") await loadVisualization();
   }
 });

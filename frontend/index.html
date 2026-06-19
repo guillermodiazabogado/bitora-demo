@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css?v=20260619-8000">
+  <link rel="stylesheet" href="/styles.css?v=20260619-reportes2">
 </head>
 <body>
   <header class="topbar">
@@ -25,7 +25,6 @@
       <button data-view="access">Acceso</button>
       <button data-view="configure">Configurar Evento</button>
       <button data-view="reports">Reportes</button>
-      <button data-view="visualization" id="visualizationNav" class="hidden">Data Visualization</button>
       <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
       <button data-view="diagnostics" id="diagnosticsNav" class="hidden">Diagnostico Tecnico</button>
@@ -385,11 +384,11 @@
       </section>
     </section>
 
-    <section id="visualization" class="view">
+    <section id="visualization" class="reports-analytics hidden">
       <div class="section-head">
         <div>
           <span class="eyebrow">BITORA Data Visualization Engine</span>
-          <h1>Data Visualization</h1>
+          <h2>Visualizacion avanzada</h2>
           <p>Tendencias, conversion, demanda y proyecciones para decidir durante el evento.</p>
         </div>
         <div class="actions">
@@ -515,10 +514,11 @@
       <div class="section-head">
         <div>
           <h1>Reportes</h1>
-          <p>Analitica, sala de control, metricas, graficos e indicadores del evento.</p>
+          <p>Metricas, visualizaciones, monitoreo y exportaciones del evento.</p>
         </div>
       </div>
       <div class="content">
+        <div id="reportsAnalyticsSlot"></div>
         <div class="panel control-room-panel">
           <div class="report-panel-head">
             <div>
@@ -627,18 +627,6 @@
         <div class="panel participant-metrics-panel">
           <h2>Experiencia participante</h2>
           <div id="participantMetricsStatus" class="summary-grid"></div>
-        </div>
-        <div class="panel readiness-panel">
-          <h2>Checklist previa al evento</h2>
-          <div id="readinessStatus" class="readiness-status"></div>
-        </div>
-        <div class="panel system-panel">
-          <h2>Estado del sistema</h2>
-          <div id="systemStatus" class="system-status"></div>
-        </div>
-        <div class="panel network-panel">
-          <h2>Red local</h2>
-          <div id="networkStatus" class="network-status"></div>
         </div>
       </div>
     </section>
@@ -952,6 +940,20 @@
         </section>
         <div id="diagnosticsServices" class="diagnostics-services"></div>
         <div id="diagnosticsMetrics" class="summary-grid"></div>
+        <div class="diagnostics-operations-grid">
+          <section class="panel readiness-panel">
+            <h2>Preparacion operativa</h2>
+            <div id="readinessStatus" class="readiness-status"></div>
+          </section>
+          <section class="panel system-panel">
+            <h2>Estado del sistema</h2>
+            <div id="systemStatus" class="system-status"></div>
+          </section>
+          <section class="panel network-panel">
+            <h2>Conectividad y red</h2>
+            <div id="networkStatus" class="network-status"></div>
+          </section>
+        </div>
         <div class="diagnostics-grid">
           <section class="panel">
             <h2>Base de datos</h2>
@@ -1034,6 +1036,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260619-live10"></script>
+  <script src="/app.js?v=20260619-reportes2"></script>
 </body>
 </html>
