@@ -5,8 +5,11 @@ const source = (params.get("source") || params.get("utm_source") || "landing").t
 const sourceDetail = params.get("source_detail") || params.get("utm_campaign") || params.get("qr") || "";
 const sessionId = localStorage.getItem("captation_session") || crypto.randomUUID();
 localStorage.setItem("captation_session", sessionId);
+const waitingVisitorId = localStorage.getItem(`waiting_visitor_${eventId}`) || crypto.randomUUID();
+localStorage.setItem(`waiting_visitor_${eventId}`, waitingVisitorId);
 let currentEvent = null;
 let formStarted = false;
+let waitingTimer = null;
 
 const eventThemes = [
   { primary: "#4c2ea3", secondary: "#1b0f4e", accent: "#20c7b5", soft: "#f4f1ff" },
@@ -66,14 +69,42 @@ function formData(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   data.activity_ids = [];
   data.acepta_email = false;
-  data.acepta_whatsapp = false;
-  data.canal_preferido = "email";
+  data.acepta_whatsapp = Boolean(form.elements.acepta_whatsapp?.checked);
+  data.canal_preferido = data.acepta_whatsapp ? "whatsapp" : "email";
   data.source = source;
   data.source_detail = sourceDetail;
   data.device_type = deviceType();
   data.session_id = sessionId;
   data.channel = source === "whatsapp" ? "whatsapp" : "web";
+  data.waiting_room_token = $("#waitingRoomToken")?.value || "";
   return data;
+}
+
+function renderWaitingRoom(status) {
+  const panel = $("#waitingRoomPanel");
+  const form = $("#publicRegisterForm");
+  if (!status.enabled || status.status === "open" || status.status === "admitted") {
+    panel.classList.add("hidden");
+    form.classList.remove("hidden");
+    if (status.access_token) $("#waitingRoomToken").value = status.access_token;
+    if (waitingTimer) clearTimeout(waitingTimer);
+    return;
+  }
+  panel.classList.remove("hidden");
+  form.classList.add("hidden");
+  $("#waitingRoomTitle").textContent = status.status === "not_open" ? "Las inscripciones abriran proximamente" : "Estas en la sala de espera";
+  $("#waitingRoomMessage").textContent = status.message || "Estamos organizando el ingreso.";
+  $("#waitingRoomMetrics").innerHTML = status.status === "waiting" ? `
+    ${status.show_position ? `<div><strong>${status.position}</strong><span>Posicion</span></div>` : ""}
+    ${status.show_estimated_time ? `<div><strong>${status.estimated_minutes} min</strong><span>Espera estimada</span></div>` : ""}
+  ` : `<div><strong>${status.open_at ? new Date(status.open_at).toLocaleString() : "Proximamente"}</strong><span>Apertura</span></div>`;
+  waitingTimer = setTimeout(checkWaitingRoom, 3000);
+}
+
+async function checkWaitingRoom() {
+  const status = await api(`/api/waiting-room/status?event_id=${eventId}&visitor_id=${encodeURIComponent(waitingVisitorId)}`);
+  renderWaitingRoom(status);
+  return status;
 }
 
 function formatDate(value) {
@@ -120,6 +151,7 @@ async function loadEvent() {
   $("#sourceDetailInput").value = sourceDetail;
   $("#deviceInput").value = deviceType();
   $("#sessionInput").value = sessionId;
+  await checkWaitingRoom();
   track("landing_opened");
 }
 
@@ -149,16 +181,28 @@ async function register(event) {
   data.actor = "public";
   const resultBox = $("#publicResult");
   try {
+    if (data.acepta_whatsapp && !String(data.phone || "").replace(/\D/g, "").match(/^\d{10,15}$/)) {
+      throw new Error("Ingresa el telefono con codigo de pais y area para recibir WhatsApp.");
+    }
     const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
     formStarted = false;
+    const whatsapp = result.communications?.whatsapp;
+    const whatsappMessage = whatsapp?.status === "sent"
+      ? "La confirmacion por WhatsApp fue enviada."
+      : whatsapp?.status === "pending"
+        ? "La confirmacion por WhatsApp esta en proceso."
+        : whatsapp?.status === "error"
+          ? "Tu inscripcion esta confirmada. El WhatsApp no pudo enviarse y podes usar el portal."
+          : "Tu portal personal ya esta disponible.";
     resultBox.innerHTML = `
       <div class="panel success">
         <h2>Inscripcion confirmada</h2>
-        <p>Estamos abriendo tu portal personal.</p>
+        <p>${whatsappMessage}</p>
+        <a class="button" href="${result.portal_url}">Abrir mi portal y ver QR</a>
       </div>
     `;
     form.reset();
-    location.href = result.portal_url;
+    setTimeout(() => { location.href = result.portal_url; }, 3500);
   } catch (err) {
     resultBox.innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
@@ -181,6 +225,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         device_type: deviceType(),
         session_id: sessionId,
       }));
+    }
+    if ($("#waitingRoomPanel") && !$("#waitingRoomPanel").classList.contains("hidden")) {
+      navigator.sendBeacon?.("/api/waiting-room/abandon", JSON.stringify({ event_id: eventId, visitor_id: waitingVisitorId }));
     }
   });
   try {

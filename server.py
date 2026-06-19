@@ -78,7 +78,7 @@ SIMULATOR_STOP = threading.Event()
 SIMULATOR_THREAD: threading.Thread | None = None
 AUTO_BACKUP_MINUTES = int(os.environ.get("QR_AUTO_BACKUP_MINUTES", "10"))
 BACKUP_KEEP_LAST = int(os.environ.get("QR_BACKUP_KEEP_LAST", "24"))
-APP_VERSION = "RC1-stability-ready"
+APP_VERSION = "RC1-live-demo-10"
 APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development")).strip().lower() or "development"
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
@@ -1995,6 +1995,28 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
     return {"queued": queued, "sent": sent, "skipped": skipped, "errors": errors, "_email_queue_ids": email_queue_ids, "_whatsapp_queue_ids": whatsapp_queue_ids}
 
 
+def queue_registration_confirmation(db, event_id: int, accreditation_id: int, actor: str = "public") -> dict:
+    rows = [
+        row
+        for row in communication_audience_rows(db, event_id, "all")
+        if int(row["accreditation_id"]) == int(accreditation_id)
+    ]
+    if not rows:
+        return {"queued": 0, "sent": 0, "skipped": 1, "errors": 0, "_whatsapp_queue_ids": []}
+    return queue_communication(
+        db,
+        event_id=event_id,
+        actor=actor,
+        audience="registration",
+        channel="whatsapp",
+        template_code="registration_confirmation",
+        subject="Inscripcion confirmada",
+        content="Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}",
+        rows=rows,
+        process_now=True,
+    )
+
+
 def process_email_queue_item(queue_id: int) -> dict:
     with connect() as db:
         row = db.execute(
@@ -2113,7 +2135,39 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
     provider = create_whatsapp_provider()
     attempt = int(item.get("attempts") or 0) + 1
     max_attempts = max(1, int(item.get("max_attempts") or 3))
-    result = provider.send_message(to=item["recipient"], message=item["content"])
+    template_name = os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE", "").strip() if item.get("template_code") == "registration_confirmation" else ""
+    if template_name and not isinstance(provider, DemoWhatsAppProvider):
+        with connect() as db:
+            context = db.execute(
+                """
+                SELECT p.first_name, p.last_name, e.name AS event_name, a.token
+                FROM communication_queue q
+                JOIN people p ON p.id = q.person_id
+                JOIN events e ON e.id = q.event_id
+                LEFT JOIN accreditations a ON a.id = q.accreditation_id
+                WHERE q.id = ?
+                """,
+                (queue_id,),
+            ).fetchone()
+        values = {
+            "nombre": str(context["first_name"] if context else ""),
+            "apellido": str(context["last_name"] if context else ""),
+            "evento": str(context["event_name"] if context else ""),
+            "portal": public_link(f"/p.html?token={context['token'] if context else ''}"),
+        }
+        variable_names = [
+            value.strip().lower()
+            for value in os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE_VARIABLES", "nombre,evento,portal").split(",")
+            if value.strip()
+        ]
+        result = provider.send_template(
+            to=item["recipient"],
+            template=template_name,
+            variables=[values.get(name, "") for name in variable_names],
+            language=os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE_LANGUAGE", "es_AR").strip() or "es_AR",
+        )
+    else:
+        result = provider.send_message(to=item["recipient"], message=item["content"])
     status = result.status if result.ok else ("error" if attempt >= max_attempts else "pendiente")
     with DB_LOCK, connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -2537,6 +2591,92 @@ def import_event_structure(db: sqlite3.Connection, payload: dict, actor: str, na
     ensure_capacity_bags(db, event_id=event_id)
     audit(db, actor, "event.structure_imported", "event", event_id, {"activities": len(payload.get("activities") or []), "spaces": len(payload.get("spaces") or [])})
     return {"ok": True, "event_id": event_id, "activities": len(payload.get("activities") or []), "spaces": len(payload.get("spaces") or [])}
+
+
+def create_live_demo_event(db, actor: str, name: str) -> dict:
+    starts = datetime.now(timezone.utc) + timedelta(hours=1)
+    ends = starts + timedelta(hours=3)
+    event_id = insert_event_from_config(
+        db,
+        {
+            "name": name or "Experiencia BITORA en Vivo",
+            "description": "Experiencia en vivo de inscripcion, confirmacion, WhatsApp, portal participante y acceso QR.",
+            "venue": "Demo online BITORA",
+            "starts_at": starts.isoformat(timespec="minutes"),
+            "ends_at": ends.isoformat(timespec="minutes"),
+            "capacity": 10,
+            "activity_selection_mode": "optional_later",
+            "generar_certificados": False,
+            "controlar_asistencia": True,
+            "attendance_mode": "entry_only",
+            "captation_mode": "WEB_DIRECTA",
+            "activities_enabled": True,
+            "capacity_control_enabled": True,
+            "waitlist_enabled": True,
+        },
+        actor,
+        status="published",
+    )
+    db.execute("DELETE FROM accreditation_types WHERE event_id = ?", (event_id,))
+    db.execute(
+        """
+        INSERT INTO accreditation_types (event_id, name, capacity, access_enabled, created_at)
+        VALUES (?, 'General', 10, 1, ?)
+        """,
+        (event_id, now_iso()),
+    )
+    space_id = db.execute(
+        """
+        INSERT INTO spaces (event_id, name, capacity, responsible, transition_minutes, status, created_at)
+        VALUES (?, 'Sala Demo', 10, 'Equipo BITORA', 10, 'active', ?)
+        """,
+        (event_id, now_iso()),
+    ).lastrowid
+    activity_id = db.execute(
+        """
+        INSERT INTO activities (
+            event_id, space_id, title, description, speaker, activity_type,
+            starts_at, ends_at, capacity, reservation_mode, status, created_at
+        )
+        VALUES (?, ?, 'Recorrido BITORA en vivo',
+                'Demostracion completa del portal, agenda y acceso QR.',
+                'Equipo BITORA', 'Experiencia', ?, ?, 10, 'required', 'published', ?)
+        """,
+        (
+            event_id,
+            space_id,
+            (starts + timedelta(minutes=30)).isoformat(timespec="minutes"),
+            (starts + timedelta(minutes=75)).isoformat(timespec="minutes"),
+            now_iso(),
+        ),
+    ).lastrowid
+    ensure_capacity_bags(db, event_id=event_id, activity_id=activity_id)
+    db.execute(
+        """
+        INSERT INTO public_display_config (
+            event_id, mode, refresh_seconds, paused, message,
+            room_filter, status_filter, updated_at
+        )
+        VALUES (?, 'airport', 10, 0, 'Experiencia BITORA en vivo', '', '', ?)
+        ON CONFLICT(event_id) DO UPDATE SET message = excluded.message, updated_at = excluded.updated_at
+        """,
+        (event_id, now_iso()),
+    )
+    db.execute(
+        """
+        INSERT OR IGNORE INTO public_display_items (
+            event_id, activity_id, sort_order, visible, created_at
+        ) VALUES (?, ?, 1, 1, ?)
+        """,
+        (event_id, activity_id, now_iso()),
+    )
+    audit(db, actor, "demo.live10_created", "event", event_id, {"capacity": 10, "activity_id": activity_id})
+    return {
+        "event_id": event_id,
+        "capacity": 10,
+        "activity_id": activity_id,
+        "landing_url": public_link(f"/e.html?event_id={event_id}"),
+    }
 
 
 def normalize_import_time(value: str) -> str:
@@ -6893,6 +7033,27 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "event_id": event_id, "backup": backup_path.name})
                 return
 
+            if path == "/api/demo-live-10":
+                actor = data.get("actor", "Admin")
+                if str(data.get("confirm") or "").strip() != "LIVE10":
+                    self.send_json({"error": "Escribi LIVE10 para confirmar"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = create_live_demo_event(
+                        db,
+                        actor,
+                        str(data.get("name") or "Experiencia BITORA en Vivo").strip(),
+                    )
+                    db.execute("COMMIT")
+                result["landing_url"] = absolute_url(result["landing_url"], self)
+                self.send_json({"ok": True, **result}, 201)
+                return
+
             if path == "/api/demo-real":
                 actor = data.get("actor", "Admin")
                 if data.get("confirm", "").strip() != "DEMO":
@@ -7784,6 +7945,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if len(activity_ids) > 1:
                     self.send_json({"error": "Solo se permite inscribirse a una actividad por vez. Repeti el paso para sumar otra actividad."}, 400)
                     return
+                communication_result = {"queued": 0, "sent": 0, "skipped": 0, "errors": 0}
+                whatsapp_queue_ids: list[int] = []
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
@@ -7852,29 +8015,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                             person_id=registration["person_id"],
                         )
                         if data.get("actor") == "public":
-                            portal_url = public_link(f"/p.html?token={registration['token']}", self)
-                            communication_log(
+                            communication_result = queue_registration_confirmation(
                                 db,
                                 event_id,
-                                registration["person_id"],
                                 registration["id"],
-                                "email",
-                                "confirmacion",
-                                "Inscripcion confirmada",
-                                f"Tu inscripcion fue confirmada. Portal: {portal_url}",
-                                "demo",
+                                actor="public",
                             )
-                            communication_log(
-                                db,
-                                event_id,
-                                registration["person_id"],
-                                registration["id"],
-                                "whatsapp",
-                                "confirmacion",
-                                "Inscripcion confirmada",
-                                f"Tu inscripcion fue confirmada. Portal: {portal_url}",
-                                "demo",
-                            )
+                            whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
+                            communication_result.pop("_email_queue_ids", None)
                     reservations = []
                     for activity_id in activity_ids:
                         reservation = create_reservation(db, event_id, activity_id, registration["id"], "public" if data.get("actor") == "public" else "reception")
@@ -7889,7 +8037,40 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 {"event_id": event_id, "activity_id": activity_id, "accreditation_id": registration["id"], "status": reservation["status"]},
                             )
                     db.execute("COMMIT")
-                self.send_json({"ok": True, "token": registration["token"], "existing": registration.get("existing", False), "portal_url": public_link(f"/p.html?token={registration['token']}", self), "reservations": reservations}, 200 if registration.get("existing") else 201)
+                for queue_id in whatsapp_queue_ids:
+                    job_queue_service().enqueue(
+                        "whatsapp.send",
+                        {"queue_id": queue_id},
+                        priority="high",
+                        actor="public",
+                        event_id=event_id,
+                    )
+                if communication_result.get("errors"):
+                    whatsapp_status = "error"
+                elif whatsapp_queue_ids:
+                    whatsapp_status = "pending"
+                elif communication_result.get("sent"):
+                    whatsapp_status = "sent"
+                else:
+                    whatsapp_status = "skipped"
+                self.send_json(
+                    {
+                        "ok": True,
+                        "token": registration["token"],
+                        "existing": registration.get("existing", False),
+                        "portal_url": public_link(f"/p.html?token={registration['token']}", self),
+                        "reservations": reservations,
+                        "communications": {
+                            "whatsapp": {
+                                "status": whatsapp_status,
+                                "queued": int(communication_result.get("queued") or 0),
+                                "sent": int(communication_result.get("sent") or 0),
+                                "skipped": int(communication_result.get("skipped") or 0),
+                            }
+                        },
+                    },
+                    200 if registration.get("existing") else 201,
+                )
                 return
 
             if path == "/api/import-accreditations":

@@ -51,6 +51,7 @@ Contrato objetivo de la API central. Los nombres actuales se mantienen cuando ya
 - `GET /api/activity-detail`: detalle de actividad.
 - `GET /api/demo-real`: ejemplos y guia de demo real para el evento activo.
 - `POST /api/demo-real`: crear demo real con confirmacion `DEMO`.
+- `POST /api/demo-live-10`: crear una experiencia publicada y vacia con cupo 10 usando confirmacion `LIVE10`.
 
 ## Pantalla publica
 

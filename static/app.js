@@ -1636,6 +1636,33 @@ async function createDemoReal(event) {
   }
 }
 
+async function createDemoLive10(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  const notice = $("#prepareNotice");
+  if (data.confirm !== "LIVE10") {
+    notice.innerHTML = `<div class="panel danger">Escribi LIVE10 para confirmar.</div>`;
+    return;
+  }
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/demo-live-10", { method: "POST", body: JSON.stringify(data) });
+    notice.innerHTML = `
+      <div class="panel success">
+        <h3>Experiencia lista</h3>
+        <p>Evento vacio con cupo para ${result.capacity} personas.</p>
+        <a class="button" href="${result.landing_url}" target="_blank">Abrir landing para compartir</a>
+      </div>
+    `;
+    await loadEvents();
+    state.eventId = Number(result.event_id);
+    $("#eventSelect").value = String(result.event_id);
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
 async function cloneEventFromTemplate(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2025,6 +2052,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#eventForm").addEventListener("submit", createEvent);
   $("#prepareEventForm").addEventListener("submit", prepareRealEvent);
   $("#demoRealForm").addEventListener("submit", createDemoReal);
+  $("#demoLive10Form")?.addEventListener("submit", createDemoLive10);
   $("#cloneEventForm").addEventListener("submit", cloneEventFromTemplate);
   $("#importStructureForm").addEventListener("submit", importEventStructure);
   $("#importAgendaForm").addEventListener("submit", importAgenda);

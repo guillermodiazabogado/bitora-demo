@@ -2606,6 +2606,23 @@ code,
   margin: -5px 0 2px;
 }
 
+.public-register-only .communication-consent {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #425466;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.public-register-only .communication-consent input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
 .public-register-only .panel,
 .public-layout .panel {
   border-color: color-mix(in srgb, var(--event-primary), transparent 82%);

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inscripcion al evento</title>
-  <link rel="stylesheet" href="/styles.css?v=20260615-5001">
+  <link rel="stylesheet" href="/styles.css?v=20260619-live10">
 </head>
 <body class="public-body">
   <main class="public-page">
@@ -21,17 +21,28 @@
     </section>
 
     <section class="public-layout public-register-only">
+      <section id="waitingRoomPanel" class="panel waiting-room-panel hidden">
+        <span class="eyebrow">Sala de espera virtual</span>
+        <h2 id="waitingRoomTitle">Organizando el ingreso</h2>
+        <p id="waitingRoomMessage"></p>
+        <div id="waitingRoomMetrics" class="summary-grid"></div>
+      </section>
       <form id="publicRegisterForm" class="panel form-grid">
         <h2>Datos de acreditacion</h2>
         <input name="source" id="sourceInput" type="hidden">
         <input name="source_detail" id="sourceDetailInput" type="hidden">
         <input name="device_type" id="deviceInput" type="hidden">
         <input name="session_id" id="sessionInput" type="hidden">
+        <input name="waiting_room_token" id="waitingRoomToken" type="hidden">
         <input name="first_name" placeholder="Nombre" required>
         <input name="last_name" placeholder="Apellido" required>
         <input name="email" type="email" placeholder="Email" required>
         <input name="phone" placeholder="Telefono">
         <small class="phone-help">Ej: +54 9 299 4522126 para recibir WhatsApp correctamente.</small>
+        <label class="communication-consent">
+          <input name="acepta_whatsapp" type="checkbox">
+          <span>Quiero recibir la confirmacion y el acceso a mi portal por WhatsApp.</span>
+        </label>
         <input name="dni" placeholder="DNI">
         <input name="company" placeholder="Empresa / institucion">
         <input name="position" placeholder="Cargo">
@@ -46,6 +57,6 @@
       <strong>BITORA</strong>
     </footer>
   </main>
-  <script src="/public.js?v=20260615-5001"></script>
+  <script src="/public.js?v=20260619-live10"></script>
 </body>
 </html>

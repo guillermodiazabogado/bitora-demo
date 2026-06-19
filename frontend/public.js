@@ -69,8 +69,8 @@ function formData(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   data.activity_ids = [];
   data.acepta_email = false;
-  data.acepta_whatsapp = false;
-  data.canal_preferido = "email";
+  data.acepta_whatsapp = Boolean(form.elements.acepta_whatsapp?.checked);
+  data.canal_preferido = data.acepta_whatsapp ? "whatsapp" : "email";
   data.source = source;
   data.source_detail = sourceDetail;
   data.device_type = deviceType();
@@ -181,16 +181,28 @@ async function register(event) {
   data.actor = "public";
   const resultBox = $("#publicResult");
   try {
+    if (data.acepta_whatsapp && !String(data.phone || "").replace(/\D/g, "").match(/^\d{10,15}$/)) {
+      throw new Error("Ingresa el telefono con codigo de pais y area para recibir WhatsApp.");
+    }
     const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
     formStarted = false;
+    const whatsapp = result.communications?.whatsapp;
+    const whatsappMessage = whatsapp?.status === "sent"
+      ? "La confirmacion por WhatsApp fue enviada."
+      : whatsapp?.status === "pending"
+        ? "La confirmacion por WhatsApp esta en proceso."
+        : whatsapp?.status === "error"
+          ? "Tu inscripcion esta confirmada. El WhatsApp no pudo enviarse y podes usar el portal."
+          : "Tu portal personal ya esta disponible.";
     resultBox.innerHTML = `
       <div class="panel success">
         <h2>Inscripcion confirmada</h2>
-        <p>Estamos abriendo tu portal personal.</p>
+        <p>${whatsappMessage}</p>
+        <a class="button" href="${result.portal_url}">Abrir mi portal y ver QR</a>
       </div>
     `;
     form.reset();
-    location.href = result.portal_url;
+    setTimeout(() => { location.href = result.portal_url; }, 3500);
   } catch (err) {
     resultBox.innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
