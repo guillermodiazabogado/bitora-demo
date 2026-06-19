@@ -30,8 +30,9 @@ function sparkline(rows) {
 
 async function load() {
   try {
-    const [visual, diagnostics, communications] = await Promise.all([
+    const [visual, engine, diagnostics, communications] = await Promise.all([
       get(`/api/reports/visual-summary?event_id=${eventId}`),
+      get(`/api/data-visualization?event_id=${eventId}&dashboard=operational&period=today`),
       get("/api/diagnostics/status"),
       get(`/api/communications?event_id=${eventId}`),
     ]);
@@ -41,11 +42,18 @@ async function load() {
     $("#nocAccess").innerHTML = `<div class="noc-kpis"><b>${diagnostics.metrics.qr_per_minute}<small>QR/min</small></b><b>${diagnostics.metrics.accesses_per_minute}<small>Accesos/min</small></b><b>${diagnostics.metrics.p95_response_ms}<small>p95 ms</small></b></div>`;
     const totals = visual.totals;
     $("#nocAccreditations").innerHTML = `<div class="noc-kpis"><b>${totals.registered || 0}<small>Inscriptos</small></b><b>${totals.checked || 0}<small>Acreditados</small></b><b>${Math.max(0, Number(totals.registered || 0) - Number(totals.checked || 0) - Number(totals.cancelled || 0))}<small>Pendientes</small></b><b>${totals.cancelled || 0}<small>Cancelados</small></b></div>`;
-    $("#nocRooms").innerHTML = bars(visual.occupancy_by_room || []);
-    const alerts = [...(visual.operational_alerts || []), ...(diagnostics.alerts || [])];
+    const engineRooms = (engine.heatmaps?.rooms || []).map((row) => ({
+      room: row.label,
+      percentage: Number(row.percentage || 0),
+      present: Number(row.value || 0),
+      capacity: Number(row.capacity || 0),
+      color: Number(row.percentage || 0) > 60 ? "green" : Number(row.percentage || 0) >= 30 ? "yellow" : "red",
+    }));
+    $("#nocRooms").innerHTML = bars(engineRooms.length ? engineRooms : (visual.occupancy_by_room || []));
+    const alerts = [...(engine.predictive_alerts || []), ...(visual.operational_alerts || []), ...(diagnostics.alerts || [])];
     $("#nocAlerts").innerHTML = `<strong class="noc-alert-count ${alerts.length ? "warning" : "healthy"}">${alerts.length}</strong><span>${alerts.length ? "Requieren atencion" : "Sin alertas activas"}</span>`;
     $("#nocRejections").innerHTML = (visual.rejection_reasons || []).map((row) => `<div class="noc-list-row"><span>${row.label || "Otro"}</span><b>${row.value}</b></div>`).join("") || `<span class="noc-empty">Sin rechazos</span>`;
-    $("#nocFlow").innerHTML = sparkline(visual.access_by_time || []);
+    $("#nocFlow").innerHTML = sparkline(engine.series?.accesses || visual.access_by_time || []);
     $("#nocTerminals").innerHTML = `<div class="noc-kpis"><b>${diagnostics.event_health.active_terminals}<small>Terminales</small></b><b>${diagnostics.event_health.active_operators}<small>Operadores</small></b><b>${diagnostics.event_health.inactive_terminals}<small>Inactivas</small></b></div>`;
     const queue = communications.queue_metrics || {};
     $("#nocCommunications").innerHTML = `<div class="noc-kpis"><b>${queue.emails_sent || 0}<small>Enviados</small></b><b>${queue.pending || 0}<small>Pendientes</small></b><b>${queue.errors || 0}<small>Errores</small></b></div>`;

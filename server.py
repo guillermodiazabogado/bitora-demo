@@ -45,6 +45,7 @@ from backend.services.audit import AuditService
 from backend.services.backup import BackupService, PostgresBackupService
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.demo_real import DemoRealService
+from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider
 from backend.services.jobs import JobQueueService, JobWorker
@@ -85,6 +86,7 @@ ACCESS_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcio
 REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
+DATA_VISUALIZATION = DataVisualizationService(cache_seconds=8)
 
 
 def audit_service() -> AuditService:
@@ -608,6 +610,20 @@ def init_db() -> None:
                 updated_by TEXT NOT NULL DEFAULT 'system',
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS visualization_layouts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                owner TEXT NOT NULL,
+                name TEXT NOT NULL,
+                dashboard TEXT NOT NULL DEFAULT 'operational',
+                period TEXT NOT NULL DEFAULT 'event',
+                widgets TEXT NOT NULL DEFAULT '',
+                mode TEXT NOT NULL DEFAULT 'monitor',
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
         ensure_event_v3_columns(db)
@@ -662,6 +678,7 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_certificate_event ON certificate_eligibility(event_id, estado);
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
+        CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
         """
     )
 
@@ -4112,6 +4129,48 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result)
                 return
 
+            if path == "/api/data-visualization":
+                session = self.effective_user()
+                if not session or session.get("role") not in CONFIG_ROLES:
+                    self.send_json({"error": "Visualizacion avanzada disponible para administracion y operacion general"}, 403)
+                    return
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                period = query.get("period", ["event"])[0]
+                dashboard = query.get("dashboard", ["operational"])[0]
+                force = query.get("force", ["0"])[0].lower() in {"1", "true", "yes"}
+                with connect() as db:
+                    result = DATA_VISUALIZATION.collect(
+                        db,
+                        event_id,
+                        period=period,
+                        dashboard=dashboard,
+                        force=force,
+                    )
+                    if not result:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    audit(
+                        db,
+                        session["name"],
+                        "data_visualization.opened",
+                        "event",
+                        event_id,
+                        {"period": period, "dashboard": dashboard},
+                    )
+                self.send_json(result)
+                return
+
+            if path == "/api/data-visualization/layouts":
+                session = self.effective_user()
+                if not session or session.get("role") not in CONFIG_ROLES:
+                    self.send_json({"error": "Sin permiso para consultar layouts"}, 403)
+                    return
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    layouts = DATA_VISUALIZATION.list_layouts(db, event_id, session["name"])
+                self.send_json({"items": layouts})
+                return
+
             if path == "/api/jobs":
                 session = self.effective_user()
                 if not session or session.get("role") not in ADMIN_ROLES:
@@ -6096,6 +6155,32 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 ok = job_queue_service().cancel(int(data.get("job_id") or 0), actor)
                 self.send_json({"ok": ok}, 200 if ok else 409)
+                return
+
+            if path == "/api/data-visualization/layouts":
+                session = self.effective_user()
+                if not session or session.get("role") not in CONFIG_ROLES:
+                    self.send_json({"error": "Sin permiso para guardar layouts"}, 403)
+                    return
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    layout = DATA_VISUALIZATION.save_layout(db, event_id, session["name"], data, now_iso())
+                    audit(
+                        db,
+                        session["name"],
+                        "data_visualization.layout_saved",
+                        "visualization_layout",
+                        layout["id"],
+                        {"event_id": event_id, "dashboard": layout["dashboard"], "period": layout["period"]},
+                    )
+                self.send_json(layout)
                 return
 
             if path == "/api/simulator/control":

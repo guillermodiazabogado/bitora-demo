@@ -168,17 +168,29 @@
     }
 
     async function load() {
-      const response = await fetch(`/api/reports/visual-summary?event_id=${encodeURIComponent(eventId)}`);
-      const data = await response.json();
+      const [legacyResponse, engineResponse] = await Promise.all([
+        fetch(`/api/reports/visual-summary?event_id=${encodeURIComponent(eventId)}`),
+        fetch(`/api/data-visualization?event_id=${encodeURIComponent(eventId)}&dashboard=operational&period=today`),
+      ]);
+      const data = await legacyResponse.json();
+      const engine = engineResponse.ok ? await engineResponse.json() : {};
+      const engineRooms = (engine.heatmaps?.rooms || []).map((row) => ({
+        room: row.label,
+        percentage: Number(row.percentage || 0),
+        present: Number(row.value || 0),
+        capacity: Number(row.capacity || 0),
+        color: Number(row.percentage || 0) > 60 ? "green" : Number(row.percentage || 0) >= 30 ? "yellow" : "red",
+      }));
+      const mergedAlerts = [...(engine.predictive_alerts || []), ...(data.operational_alerts || [])];
       $("#roomTitle").textContent = data.event?.name || "BITORA";
       $("#roomRefreshLabel").textContent = `Actualiza cada ${refresh}s${rotate ? ` - rota cada ${rotate}s` : ""}`;
       const cards = [];
       if (blocks.has("kpis")) cards.push(kpis(data));
-      if (blocks.has("alerts")) cards.push(alerts(data.operational_alerts));
-      if (blocks.has("rooms")) cards.push(rooms(data.room_ranking));
-      if (blocks.has("heatmap")) cards.push(heatmap(data.room_heatmap));
+      if (blocks.has("alerts")) cards.push(alerts(mergedAlerts));
+      if (blocks.has("rooms")) cards.push(rooms(engineRooms.length ? engineRooms : data.room_ranking));
+      if (blocks.has("heatmap")) cards.push(heatmap(engineRooms.length ? engineRooms : data.room_heatmap));
       if (blocks.has("status")) cards.push(donut(data.accreditation_status_counts));
-      if (blocks.has("access")) cards.push(line("Flujo de ingresos", data.access_by_time));
+      if (blocks.has("access")) cards.push(line("Flujo de ingresos", engine.series?.accesses || data.access_by_time));
       if (blocks.has("activities")) cards.push(bars("Actividades criticas", data.critical_activities));
       if (blocks.has("rejections")) cards.push(bars("Motivos de rechazo", data.rejection_reasons, "warn-card rejection-card"));
       if (blocks.has("types")) cards.push(bars("Inscripciones por tipo", data.by_type));

@@ -20,6 +20,8 @@ const state = {
   communications: null,
   diagnostics: null,
   simulator: null,
+  visualization: null,
+  visualizationLayouts: [],
   demoReal: null,
   currentUser: "Admin",
   eventId: null,
@@ -29,6 +31,15 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 function setHref(selector, href) {
   const node = $(selector);
@@ -93,10 +104,15 @@ async function loadAuth() {
     $("#logoutBtn").classList.remove("hidden");
     $("#diagnosticsNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
     $("#simulatorNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
+    $("#visualizationNav")?.classList.toggle(
+      "hidden",
+      !["Super Admin", "Productor", "Coordinador"].includes(state.authUser.role),
+    );
   } else {
     $("#logoutBtn").classList.add("hidden");
     $("#diagnosticsNav")?.classList.add("hidden");
     $("#simulatorNav")?.classList.add("hidden");
+    $("#visualizationNav")?.classList.add("hidden");
   }
 }
 
@@ -216,6 +232,206 @@ async function controlSimulator(action) {
     await loadSimulator();
   } catch (err) {
     $("#simulatorNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+const visualizationLabels = {
+  accesses: "Accesos por minuto",
+  registrations: "Inscripciones por hora",
+  accreditations: "Acreditaciones por hora",
+  communications: "Comunicaciones por hora",
+  certificates: "Certificados emitidos",
+};
+
+function renderVisualizationLine(rows) {
+  const target = $("#visualizationTimeSeries");
+  const list = (rows || []).slice(-40);
+  if (!list.length) {
+    target.innerHTML = `<p class="empty">Todavia no hay datos para este periodo.</p>`;
+    return;
+  }
+  const width = 720;
+  const height = 210;
+  const max = Math.max(...list.map((row) => Number(row.value || 0)), 1);
+  const points = list.map((row, index) => {
+    const x = list.length === 1 ? width / 2 : index * width / (list.length - 1);
+    const y = height - 20 - (Number(row.value || 0) / max) * (height - 44);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const guides = [0.25, 0.5, 0.75].map((position) => {
+    const y = Math.round(height * position);
+    return `<line x1="0" y1="${y}" x2="${width}" y2="${y}"></line>`;
+  }).join("");
+  target.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Serie temporal">
+      <g class="viz-grid-lines">${guides}</g>
+      <polyline points="${points}"></polyline>
+      ${list.map((row, index) => {
+        const [x, y] = points.split(" ")[index].split(",");
+        return `<circle cx="${x}" cy="${y}" r="4"><title>${escapeHtml(row.label)}: ${Number(row.value || 0)}</title></circle>`;
+      }).join("")}
+    </svg>
+    <div class="viz-axis">
+      ${list.filter((_row, index) => index === 0 || index === list.length - 1 || index === Math.floor(list.length / 2))
+        .map((row) => `<span>${escapeHtml(String(row.label || "").slice(5))}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderVisualizationHeatmap(rows) {
+  const list = rows || [];
+  const max = Math.max(...list.map((row) => Number(row.percentage ?? row.value ?? 0)), 1);
+  $("#visualizationHeatmapGrid").innerHTML = list.slice(0, 20).map((row) => {
+    const raw = Number(row.percentage ?? row.value ?? 0);
+    const intensity = Math.max(0.12, raw / max);
+    return `<article style="--heat:${intensity.toFixed(2)}">
+      <strong>${escapeHtml(row.label || "Sin dato")}</strong>
+      <span>${raw}${row.percentage !== undefined ? "%" : ""}</span>
+      ${row.capacity !== undefined ? `<small>${Number(row.value || 0)} / ${Number(row.capacity || 0)}</small>` : ""}
+    </article>`;
+  }).join("") || `<p class="empty">Sin datos para construir el mapa.</p>`;
+}
+
+function renderVisualizationFunnel(rows) {
+  const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+  $("#visualizationFunnel").innerHTML = (rows || []).map((row, index) => `
+    <article style="--funnel-width:${Math.max(18, Number(row.value || 0) / max * 100)}%">
+      <div>
+        <span>${index + 1}</span>
+        <strong>${escapeHtml(row.label)}</strong>
+        <small>${Number(row.conversion || 0)}% del inicio</small>
+      </div>
+      <b>${Number(row.value || 0)}</b>
+      <i><em></em></i>
+      ${index ? `<small class="viz-loss">Perdida: ${Number(row.loss || 0)}</small>` : ""}
+    </article>
+  `).join("");
+}
+
+function renderVisualizationRanking(rows) {
+  const list = rows || [];
+  const max = Math.max(...list.map((row) => Number(row.value || 0)), 1);
+  $("#visualizationRanking").innerHTML = list.slice(0, 8).map((row, index) => `
+    <div class="viz-ranking-row">
+      <span>${index + 1}</span>
+      <div><strong>${escapeHtml(row.label)}</strong><i><b style="--w:${Number(row.value || 0) / max * 100}%"></b></i></div>
+      <em>${Number(row.value || 0)}</em>
+    </div>
+  `).join("") || `<p class="empty">Sin actividad suficiente para el ranking.</p>`;
+}
+
+function renderVisualizationScatter(rows) {
+  const list = (rows || []).slice(0, 24);
+  const maxX = Math.max(...list.map((row) => Number(row.x || 0)), 1);
+  const maxY = Math.max(...list.map((row) => Number(row.y || 0)), 1);
+  $("#visualizationScatter").innerHTML = list.length ? `
+    <div class="viz-scatter-stage">
+      <span class="viz-scatter-y">Asistencia</span>
+      ${list.map((row) => {
+        const x = 8 + Number(row.x || 0) / maxX * 84;
+        const y = 92 - Number(row.y || 0) / maxY * 82;
+        return `<i style="left:${x}%;top:${y}%"><title>${escapeHtml(row.label)}: ${row.y}/${row.x}</title></i>`;
+      }).join("")}
+      <span class="viz-scatter-x">Inscripcion</span>
+    </div>
+  ` : `<p class="empty">Sin datos comparables.</p>`;
+}
+
+function renderVisualization() {
+  const data = state.visualization;
+  if (!data) return;
+  const forecast = data.forecast || {};
+  $("#visualizationForecast").innerHTML = `
+    <article><span>Ritmo de inscripcion</span><strong>${forecast.registration_rate_per_hour || 0}/h</strong><small>Tendencia reciente</small></article>
+    <article><span>Proyeccion final</span><strong>${forecast.expected_final_registrations || 0}</strong><small>Sobre ${forecast.capacity || "sin limite"}</small></article>
+    <article><span>Ritmo de acceso</span><strong>${forecast.access_rate_per_minute || 0}/min</strong><small>Ultimos minutos</small></article>
+    <article><span>Ocupacion estimada</span><strong>${forecast.estimated_room_occupancy || 0}%</strong><small>Promedio de salas</small></article>
+  `;
+  $("#visualizationForecastDetail").innerHTML = `
+    <div><span>Inscripciones actuales</span><strong>${forecast.current_registrations || 0}</strong></div>
+    <div><span>Proyeccion final</span><strong>${forecast.expected_final_registrations || 0}</strong></div>
+    <div><span>Tiempo a cupo</span><strong>${forecast.hours_to_capacity == null ? "Sin riesgo" : `${forecast.hours_to_capacity} h`}</strong></div>
+    <div><span>Ocupacion esperada</span><strong>${forecast.estimated_room_occupancy || 0}%</strong></div>
+  `;
+  const seriesKey = $("#visualizationSeries")?.value || "accesses";
+  const seriesRows = data.series?.[seriesKey] || [];
+  $("#visualizationSeriesTitle").textContent = visualizationLabels[seriesKey] || "Serie temporal";
+  $("#visualizationSeriesTotal").textContent = seriesRows.reduce((total, row) => total + Number(row.value || 0), 0);
+  renderVisualizationLine(seriesRows);
+  const heatKey = $("#visualizationHeatmap")?.value || "rooms";
+  renderVisualizationHeatmap(data.heatmaps?.[heatKey] || []);
+  renderVisualizationFunnel(data.funnel || []);
+  renderVisualizationRanking(data.rankings?.activities || []);
+  renderVisualizationScatter(data.scatter?.attendance_vs_registration || []);
+  $("#visualizationAlerts").innerHTML = (data.predictive_alerts || []).map((alert) => `
+    <article class="${escapeHtml(alert.level || "warning")}">
+      <strong>${escapeHtml(alert.title)}</strong>
+      <span>${escapeHtml(alert.message)}</span>
+    </article>
+  `).join("") || `<article class="healthy"><strong>Operacion estable</strong><span>No se detectan riesgos predictivos.</span></article>`;
+  setHref("#visualizationNocLink", state.eventId ? `/noc.html?event_id=${state.eventId}&refresh=10` : "#");
+}
+
+async function loadVisualization(force = false) {
+  if (!state.eventId || !["Super Admin", "Productor", "Coordinador"].includes(state.authUser?.role)) return;
+  const dashboard = $("#visualizationDashboard")?.value || "operational";
+  const period = $("#visualizationPeriod")?.value || "event";
+  $("#visualizationNotice").innerHTML = `<div class="panel">Actualizando visualizaciones...</div>`;
+  try {
+    state.visualization = await api(`/api/data-visualization?event_id=${state.eventId}&dashboard=${dashboard}&period=${period}&force=${force ? 1 : 0}`);
+    const layouts = await api(`/api/data-visualization/layouts?event_id=${state.eventId}`);
+    state.visualizationLayouts = layouts.items || [];
+    $("#visualizationNotice").innerHTML = "";
+    renderVisualization();
+    renderVisualizationLayouts();
+  } catch (err) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderVisualizationLayouts() {
+  $("#visualizationLayouts").innerHTML = state.visualizationLayouts.map((layout) => `
+    <button type="button" class="ghost viz-layout-button" data-layout-id="${layout.id}">
+      <strong>${escapeHtml(layout.name)}</strong>
+      <span>${escapeHtml(layout.dashboard)} / ${escapeHtml(layout.period)}${Number(layout.is_default) ? " / predeterminado" : ""}</span>
+    </button>
+  `).join("") || `<span class="empty">Todavia no guardaste layouts.</span>`;
+  $$(".viz-layout-button").forEach((button) => button.addEventListener("click", () => {
+    const layout = state.visualizationLayouts.find((item) => Number(item.id) === Number(button.dataset.layoutId));
+    if (!layout) return;
+    $("#visualizationDashboard").value = layout.dashboard;
+    $("#visualizationPeriod").value = layout.period;
+    $("#visualizationLayoutMode").value = layout.mode;
+    loadVisualization();
+  }));
+}
+
+async function saveVisualizationLayout() {
+  const name = $("#visualizationLayoutName").value.trim();
+  if (!name) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">Escribi un nombre para el layout.</div>`;
+    return;
+  }
+  try {
+    await api("/api/data-visualization/layouts", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        name,
+        dashboard: $("#visualizationDashboard").value,
+        period: $("#visualizationPeriod").value,
+        widgets: (state.visualization?.widgets || []).join(","),
+        mode: $("#visualizationLayoutMode").value,
+        is_default: $("#visualizationLayoutDefault").checked,
+      }),
+    });
+    $("#visualizationLayoutName").value = "";
+    $("#visualizationNotice").innerHTML = `<div class="panel success">Layout guardado.</div>`;
+    const layouts = await api(`/api/data-visualization/layouts?event_id=${state.eventId}`);
+    state.visualizationLayouts = layouts.items || [];
+    renderVisualizationLayouts();
+  } catch (err) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1737,6 +1953,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setView(button.dataset.view);
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
+    if (button.dataset.view === "visualization") loadVisualization();
     const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
     history.replaceState(null, "", url);
   }));
@@ -1789,6 +2006,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     location.href = "/login.html";
   });
   $("#refreshDiagnosticsBtn")?.addEventListener("click", loadDiagnostics);
+  $("#refreshVisualizationBtn")?.addEventListener("click", () => loadVisualization(true));
+  $("#visualizationDashboard")?.addEventListener("change", () => loadVisualization());
+  $("#visualizationPeriod")?.addEventListener("change", () => loadVisualization());
+  $("#visualizationHeatmap")?.addEventListener("change", renderVisualization);
+  $("#visualizationSeries")?.addEventListener("change", renderVisualization);
+  $("#saveVisualizationLayoutBtn")?.addEventListener("click", saveVisualizationLayout);
   $("#diagnosticsLogFilter")?.addEventListener("change", renderDiagnosticsLogs);
   $$("[data-simulator-action]").forEach((button) => button.addEventListener("click", () => controlSimulator(button.dataset.simulatorAction)));
   $("#printFilteredBtn").addEventListener("click", printFilteredCredentials);
@@ -1812,5 +2035,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     setView(initialView);
     if (initialView === "diagnostics") await loadDiagnostics();
     if (initialView === "simulator") await loadSimulator();
+    if (initialView === "visualization") await loadVisualization();
   }
 });

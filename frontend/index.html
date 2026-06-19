@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css?v=20260618-6700">
+  <link rel="stylesheet" href="/styles.css?v=20260618-6800">
 </head>
 <body>
   <header class="topbar">
@@ -25,6 +25,7 @@
       <button data-view="access">Acceso</button>
       <button data-view="configure">Configurar Evento</button>
       <button data-view="reports">Reportes</button>
+      <button data-view="visualization" id="visualizationNav" class="hidden">Data Visualization</button>
       <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
       <button data-view="diagnostics" id="diagnosticsNav" class="hidden">Diagnostico Tecnico</button>
@@ -351,6 +352,131 @@
           <button>Guardar sala de espera</button>
         </form>
         <div id="waitingRoomConfigNotice" class="result"></div>
+      </section>
+    </section>
+
+    <section id="visualization" class="view">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">BITORA Data Visualization Engine</span>
+          <h1>Data Visualization</h1>
+          <p>Tendencias, conversion, demanda y proyecciones para decidir durante el evento.</p>
+        </div>
+        <div class="actions">
+          <button id="refreshVisualizationBtn" type="button">Actualizar</button>
+          <a id="visualizationNocLink" class="button ghost" href="#" target="_blank">Modo TV</a>
+        </div>
+      </div>
+
+      <section class="panel viz-toolbar">
+        <label>
+          <span>Dashboard</span>
+          <select id="visualizationDashboard">
+            <option value="operational">Operativo</option>
+            <option value="executive">Ejecutivo</option>
+            <option value="commercial">Comercial</option>
+            <option value="academic">Academico</option>
+          </select>
+        </label>
+        <label>
+          <span>Periodo</span>
+          <select id="visualizationPeriod">
+            <option value="today">Hoy</option>
+            <option value="7d">7 dias</option>
+            <option value="30d">30 dias</option>
+            <option value="event" selected>Evento completo</option>
+          </select>
+        </label>
+        <label>
+          <span>Vista de mapa</span>
+          <select id="visualizationHeatmap">
+            <option value="rooms">Salas</option>
+            <option value="activities">Actividades</option>
+            <option value="hours">Horarios</option>
+            <option value="access_points">Accesos</option>
+          </select>
+        </label>
+        <label>
+          <span>Serie temporal</span>
+          <select id="visualizationSeries">
+            <option value="accesses">Accesos</option>
+            <option value="registrations">Inscripciones</option>
+            <option value="accreditations">Acreditaciones</option>
+            <option value="communications">Comunicaciones</option>
+            <option value="certificates">Certificados</option>
+          </select>
+        </label>
+      </section>
+
+      <div id="visualizationNotice" class="result"></div>
+      <div id="visualizationForecast" class="viz-kpis"></div>
+
+      <div class="viz-grid">
+        <section class="panel viz-panel viz-span-2">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Serie temporal</span><h2 id="visualizationSeriesTitle">Accesos por minuto</h2></div>
+            <strong id="visualizationSeriesTotal">0</strong>
+          </div>
+          <div id="visualizationTimeSeries" class="viz-line-chart"></div>
+        </section>
+
+        <section class="panel viz-panel">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Proyeccion</span><h2>Forecast operativo</h2></div>
+          </div>
+          <div id="visualizationForecastDetail" class="viz-forecast"></div>
+        </section>
+
+        <section class="panel viz-panel viz-span-2">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Conversion</span><h2>Funnel operativo</h2></div>
+          </div>
+          <div id="visualizationFunnel" class="viz-funnel"></div>
+        </section>
+
+        <section class="panel viz-panel">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Demanda</span><h2>Mapa de calor</h2></div>
+          </div>
+          <div id="visualizationHeatmapGrid" class="viz-heatmap"></div>
+        </section>
+
+        <section class="panel viz-panel">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Ranking dinamico</span><h2>Actividades elegidas</h2></div>
+          </div>
+          <div id="visualizationRanking" class="viz-ranking"></div>
+        </section>
+
+        <section class="panel viz-panel">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Relacion</span><h2>Asistencia vs inscripcion</h2></div>
+          </div>
+          <div id="visualizationScatter" class="viz-scatter"></div>
+        </section>
+
+        <section class="panel viz-panel">
+          <div class="viz-panel-head">
+            <div><span class="eyebrow">Anticipacion</span><h2>Alertas predictivas</h2></div>
+          </div>
+          <div id="visualizationAlerts" class="viz-alerts"></div>
+        </section>
+      </div>
+
+      <section class="panel viz-layouts">
+        <div>
+          <span class="eyebrow">Layout personal</span>
+          <h2>Guardar vista</h2>
+          <p>Conserva el dashboard y periodo elegidos para este evento.</p>
+        </div>
+        <input id="visualizationLayoutName" maxlength="80" placeholder="Nombre del layout">
+        <select id="visualizationLayoutMode">
+          <option value="monitor">Monitor</option>
+          <option value="tv">TV</option>
+        </select>
+        <label class="toggle"><input id="visualizationLayoutDefault" type="checkbox"> Predeterminado</label>
+        <button id="saveVisualizationLayoutBtn" type="button">Guardar layout</button>
+        <div id="visualizationLayouts" class="viz-saved-layouts"></div>
       </section>
     </section>
 
@@ -877,6 +1003,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260618-6400"></script>
+  <script src="/app.js?v=20260618-6800"></script>
 </body>
 </html>

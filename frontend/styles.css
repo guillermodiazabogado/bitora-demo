@@ -4174,6 +4174,368 @@ code,
   margin-top: 12px;
 }
 
+.viz-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  margin-bottom: 16px;
+}
+
+.viz-toolbar label {
+  display: grid;
+  gap: 6px;
+}
+
+.viz-toolbar label span,
+.viz-panel .eyebrow,
+.viz-layouts .eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.viz-kpis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.viz-kpis article {
+  background: #102632;
+  border-left: 5px solid #2fc5c0;
+  border-radius: 6px;
+  color: #eef8fa;
+  display: grid;
+  gap: 4px;
+  min-height: 112px;
+  padding: 16px;
+}
+
+.viz-kpis span,
+.viz-kpis small {
+  color: #a8c7ce;
+}
+
+.viz-kpis strong {
+  font-size: 30px;
+}
+
+.viz-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.viz-panel {
+  box-shadow: none;
+  min-height: 310px;
+  overflow: hidden;
+}
+
+.viz-span-2 {
+  grid-column: span 2;
+}
+
+.viz-panel-head {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.viz-panel-head h2 {
+  margin: 3px 0 0;
+}
+
+.viz-panel-head > strong {
+  color: var(--brand);
+  font-size: 28px;
+}
+
+.viz-line-chart {
+  height: 230px;
+  min-width: 0;
+}
+
+.viz-line-chart svg {
+  height: 195px;
+  overflow: visible;
+  width: 100%;
+}
+
+.viz-line-chart polyline {
+  fill: none;
+  stroke: #0b7f86;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.viz-line-chart circle {
+  fill: #ffffff;
+  stroke: #0b7f86;
+  stroke-width: 3;
+}
+
+.viz-grid-lines line {
+  stroke: #d9e4e8;
+  stroke-dasharray: 5 5;
+  stroke-width: 1;
+}
+
+.viz-axis {
+  color: var(--muted);
+  display: flex;
+  font-size: 11px;
+  justify-content: space-between;
+}
+
+.viz-forecast {
+  display: grid;
+}
+
+.viz-forecast > div {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+}
+
+.viz-forecast span {
+  color: var(--muted);
+}
+
+.viz-funnel {
+  display: grid;
+  gap: 8px;
+}
+
+.viz-funnel article {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(145px, 0.85fr) 70px minmax(180px, 1.5fr) 90px;
+}
+
+.viz-funnel article > div {
+  align-items: center;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: 28px 1fr;
+}
+
+.viz-funnel article > div span {
+  align-items: center;
+  background: #102632;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  grid-row: span 2;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.viz-funnel article > div small,
+.viz-loss {
+  color: var(--muted);
+}
+
+.viz-funnel article > b {
+  font-size: 21px;
+  text-align: right;
+}
+
+.viz-funnel article > i {
+  background: #e4ecef;
+  border-radius: 3px;
+  display: block;
+  height: 12px;
+}
+
+.viz-funnel article > i em {
+  background: linear-gradient(90deg, #0b7f86, #35c68b);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: var(--funnel-width);
+}
+
+.viz-heatmap {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.viz-heatmap article {
+  background: rgba(11, 127, 134, var(--heat));
+  border: 1px solid rgba(11, 127, 134, 0.2);
+  border-radius: 5px;
+  color: #071a22;
+  display: grid;
+  min-height: 74px;
+  padding: 10px;
+}
+
+.viz-heatmap article span {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.viz-heatmap article small {
+  opacity: 0.72;
+}
+
+.viz-ranking {
+  display: grid;
+  gap: 9px;
+}
+
+.viz-ranking-row {
+  align-items: center;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 24px 1fr 42px;
+}
+
+.viz-ranking-row > span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.viz-ranking-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.viz-ranking-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-ranking-row i {
+  background: #e5edef;
+  height: 6px;
+}
+
+.viz-ranking-row i b {
+  background: #2aaea8;
+  display: block;
+  height: 100%;
+  width: var(--w);
+}
+
+.viz-ranking-row em {
+  font-style: normal;
+  font-weight: 700;
+  text-align: right;
+}
+
+.viz-scatter-stage {
+  background:
+    linear-gradient(#e5edef 1px, transparent 1px),
+    linear-gradient(90deg, #e5edef 1px, transparent 1px);
+  background-size: 25% 25%;
+  border-bottom: 2px solid #8da0a8;
+  border-left: 2px solid #8da0a8;
+  height: 220px;
+  margin: 10px 10px 22px 26px;
+  position: relative;
+}
+
+.viz-scatter-stage i {
+  background: rgba(11, 127, 134, 0.75);
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #0b7f86;
+  height: 12px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 12px;
+}
+
+.viz-scatter-x,
+.viz-scatter-y {
+  color: var(--muted);
+  font-size: 11px;
+  position: absolute;
+}
+
+.viz-scatter-x {
+  bottom: -22px;
+  right: 0;
+}
+
+.viz-scatter-y {
+  left: -28px;
+  top: -18px;
+}
+
+.viz-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+.viz-alerts article {
+  border-left: 4px solid #d58a12;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+}
+
+.viz-alerts article.critical {
+  border-left-color: #c6281c;
+}
+
+.viz-alerts article.healthy {
+  border-left-color: #19945a;
+}
+
+.viz-alerts span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.viz-layouts {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 1fr) 130px 170px auto;
+  margin-top: 16px;
+}
+
+.viz-layouts h2,
+.viz-layouts p {
+  margin-bottom: 4px;
+}
+
+.viz-saved-layouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.viz-layout-button {
+  display: grid;
+  height: auto;
+  justify-items: start;
+  min-width: 180px;
+  padding: 9px 12px;
+}
+
+.viz-layout-button span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 @media (max-width: 700px) {
   .email-test-form {
     grid-template-columns: 1fr;
@@ -4181,5 +4543,25 @@ code,
 
   .diagnostics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .viz-toolbar,
+  .viz-kpis,
+  .viz-grid,
+  .viz-layouts {
+    grid-template-columns: 1fr;
+  }
+
+  .viz-span-2,
+  .viz-saved-layouts {
+    grid-column: auto;
+  }
+
+  .viz-funnel article {
+    grid-template-columns: 1fr 55px;
+  }
+
+  .viz-funnel article > i {
+    grid-column: 1 / -1;
   }
 }

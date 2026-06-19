@@ -18,6 +18,10 @@ const state = {
   users: [],
   audit: [],
   communications: null,
+  diagnostics: null,
+  simulator: null,
+  visualization: null,
+  visualizationLayouts: [],
   demoReal: null,
   currentUser: "Admin",
   eventId: null,
@@ -27,6 +31,15 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 function setHref(selector, href) {
   const node = $(selector);
@@ -89,8 +102,336 @@ async function loadAuth() {
   if (state.authUser) {
     state.currentUser = state.authUser.name;
     $("#logoutBtn").classList.remove("hidden");
+    $("#diagnosticsNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
+    $("#simulatorNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
+    $("#visualizationNav")?.classList.toggle(
+      "hidden",
+      !["Super Admin", "Productor", "Coordinador"].includes(state.authUser.role),
+    );
   } else {
     $("#logoutBtn").classList.add("hidden");
+    $("#diagnosticsNav")?.classList.add("hidden");
+    $("#simulatorNav")?.classList.add("hidden");
+    $("#visualizationNav")?.classList.add("hidden");
+  }
+}
+
+function formatDuration(seconds) {
+  const value = Number(seconds || 0);
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  return `${days ? `${days}d ` : ""}${hours}h ${minutes}m`;
+}
+
+function renderDiagnosticsLogs() {
+  const filter = $("#diagnosticsLogFilter")?.value || "";
+  const logs = (state.diagnostics?.logs || []).filter((row) => !filter || row.level === filter);
+  $("#diagnosticsLogs").innerHTML = logs.map((row) => `
+    <article class="audit-row diagnostics-log ${row.level}">
+      <strong>${row.level.toUpperCase()} · ${row.module}</strong>
+      <span>${row.message}</span>
+      <small>${row.created_at}${row.detail ? ` · ${row.detail}` : ""}</small>
+    </article>
+  `).join("") || `<p class="empty">Sin logs para este filtro.</p>`;
+}
+
+async function loadDiagnostics() {
+  if (state.authUser?.role !== "Super Admin") {
+    $("#diagnosticsAccessDenied")?.classList.remove("hidden");
+    $("#diagnosticsContent")?.classList.add("hidden");
+    return;
+  }
+  $("#diagnosticsAccessDenied")?.classList.add("hidden");
+  $("#diagnosticsContent")?.classList.remove("hidden");
+  state.diagnostics = await api("/api/diagnostics/status");
+  const data = state.diagnostics;
+  const labels = { healthy: "Normal", warning: "Atencion", critical: "Critico" };
+  $("#diagnosticsTrafficLight").className = `diagnostics-light ${data.app_status}`;
+  $("#diagnosticsStatusText").textContent = labels[data.app_status] || data.app_status;
+  $("#diagnosticsMeta").textContent = `${data.meta.version} · ${data.meta.env} · ${new Date(data.meta.generated_at).toLocaleString()}`;
+  $("#diagnosticsServices").innerHTML = Object.entries(data.services).map(([key, item]) => `
+    <article class="diagnostics-service ${item.status}">
+      <span class="status-dot"></span>
+      <div><strong>${key.replace("_", " ")}</strong><small>${item.label}</small></div>
+    </article>
+  `).join("");
+  const metrics = data.metrics;
+  $("#diagnosticsMetrics").innerHTML = `
+    <div><strong>${formatDuration(metrics.uptime_seconds)}</strong><span>Uptime</span></div>
+    <div><strong>${metrics.average_response_ms} ms</strong><span>Respuesta promedio</span></div>
+    <div><strong>${metrics.p95_response_ms} ms</strong><span>p95</span></div>
+    <div><strong>${metrics.p99_response_ms} ms</strong><span>p99</span></div>
+    <div><strong>${metrics.requests_per_minute}</strong><span>Consultas/min</span></div>
+    <div><strong>${metrics.concurrent_users}</strong><span>Usuarios concurrentes</span></div>
+    <div><strong>${metrics.active_operators}</strong><span>Operadores activos</span></div>
+    <div><strong>${metrics.qr_per_minute}</strong><span>QR/min</span></div>
+    <div><strong>${metrics.accesses_per_minute}</strong><span>Accesos/min</span></div>
+  `;
+  const database = data.database;
+  $("#diagnosticsDatabase").innerHTML = `
+    <div><span>Motor activo</span><strong>${database.engine}</strong></div>
+    <div><span>Tamano</span><strong>${formatBytes(database.size_bytes)}</strong></div>
+    <div><span>Conexiones activas</span><strong>${database.active_connections}</strong></div>
+    <div><span>Consultas lentas</span><strong>${database.slow_queries}</strong></div>
+    <div><span>Ultima migracion</span><strong>${database.last_migration}</strong></div>
+    <div><span>Cache</span><strong>${data.cache.backend}</strong></div>
+  `;
+  const queues = data.queues;
+  $("#diagnosticsQueues").innerHTML = `
+    <div><span>Pendientes</span><strong>${queues.pending}</strong></div>
+    <div><span>Procesando</span><strong>${queues.processing}</strong></div>
+    <div><span>Completados</span><strong>${queues.completed}</strong></div>
+    <div><span>Fallidos 24 h</span><strong>${queues.failed}</strong></div>
+    <div><span>Reintentos</span><strong>${queues.retries}</strong></div>
+  `;
+  $("#diagnosticsExternal").innerHTML = `
+    <div><span>Ultimo backup</span><strong>${data.backups.last_success ? new Date(data.backups.last_success).toLocaleString() : "Sin backup"}</strong></div>
+    <div><span>Backups disponibles</span><strong>${data.backups.available}</strong></div>
+    <div><span>Webhook email 24 h</span><strong>${data.webhooks.items.email.total || 0}</strong></div>
+    <div><span>Webhook WhatsApp 24 h</span><strong>${data.webhooks.items.whatsapp.total || 0}</strong></div>
+    <div><span>Mercado Pago</span><strong>No configurado</strong></div>
+  `;
+  const eventHealth = data.event_health;
+  $("#diagnosticsEventHealth").innerHTML = `
+    <div><span>Eventos activos</span><strong>${eventHealth.active_events}</strong></div>
+    <div><span>Participantes conectados</span><strong>${eventHealth.connected_participants}</strong></div>
+    <div><span>Operadores conectados</span><strong>${eventHealth.active_operators}</strong></div>
+    <div><span>Terminales activas</span><strong>${eventHealth.active_terminals}</strong></div>
+    <div><span>Terminales inactivas</span><strong>${eventHealth.inactive_terminals}</strong></div>
+  `;
+  $("#diagnosticsAlerts").innerHTML = data.alerts.map((alert) => (
+    `<div class="alert ${alert.severity}"><strong>${alert.severity}</strong> ${alert.message}</div>`
+  )).join("") || `<div class="alert success">Sin alertas tecnicas activas.</div>`;
+  renderDiagnosticsLogs();
+}
+
+async function loadSimulator() {
+  if (!state.eventId || state.authUser?.role !== "Super Admin") return;
+  state.simulator = await api(`/api/simulator/status?event_id=${state.eventId}`);
+  const item = state.simulator;
+  $("#simulatorStatus").innerHTML = `
+    <div><strong>${item.status || "stopped"}</strong><span>Estado</span></div>
+    <div><strong>${item.mode || "medium"}</strong><span>Modo</span></div>
+    <div><strong>${item.participants_active || 0}</strong><span>Participantes activos</span></div>
+    <div><strong>${item.accesses_per_minute || 0}</strong><span>Accesos/min</span></div>
+    <div><strong>${item.rejections_per_minute || 0}</strong><span>Rechazos/min</span></div>
+    <div><strong>${item.active_terminals || 0}</strong><span>Terminales</span></div>
+  `;
+}
+
+async function controlSimulator(action) {
+  const form = $("#simulatorForm");
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  data.action = action;
+  try {
+    const result = await api("/api/simulator/control", { method: "POST", body: JSON.stringify(data) });
+    $("#simulatorNotice").innerHTML = `<div class="panel success">Simulador ${result.status}.</div>`;
+    await loadSimulator();
+  } catch (err) {
+    $("#simulatorNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+const visualizationLabels = {
+  accesses: "Accesos por minuto",
+  registrations: "Inscripciones por hora",
+  accreditations: "Acreditaciones por hora",
+  communications: "Comunicaciones por hora",
+  certificates: "Certificados emitidos",
+};
+
+function renderVisualizationLine(rows) {
+  const target = $("#visualizationTimeSeries");
+  const list = (rows || []).slice(-40);
+  if (!list.length) {
+    target.innerHTML = `<p class="empty">Todavia no hay datos para este periodo.</p>`;
+    return;
+  }
+  const width = 720;
+  const height = 210;
+  const max = Math.max(...list.map((row) => Number(row.value || 0)), 1);
+  const points = list.map((row, index) => {
+    const x = list.length === 1 ? width / 2 : index * width / (list.length - 1);
+    const y = height - 20 - (Number(row.value || 0) / max) * (height - 44);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const guides = [0.25, 0.5, 0.75].map((position) => {
+    const y = Math.round(height * position);
+    return `<line x1="0" y1="${y}" x2="${width}" y2="${y}"></line>`;
+  }).join("");
+  target.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Serie temporal">
+      <g class="viz-grid-lines">${guides}</g>
+      <polyline points="${points}"></polyline>
+      ${list.map((row, index) => {
+        const [x, y] = points.split(" ")[index].split(",");
+        return `<circle cx="${x}" cy="${y}" r="4"><title>${escapeHtml(row.label)}: ${Number(row.value || 0)}</title></circle>`;
+      }).join("")}
+    </svg>
+    <div class="viz-axis">
+      ${list.filter((_row, index) => index === 0 || index === list.length - 1 || index === Math.floor(list.length / 2))
+        .map((row) => `<span>${escapeHtml(String(row.label || "").slice(5))}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderVisualizationHeatmap(rows) {
+  const list = rows || [];
+  const max = Math.max(...list.map((row) => Number(row.percentage ?? row.value ?? 0)), 1);
+  $("#visualizationHeatmapGrid").innerHTML = list.slice(0, 20).map((row) => {
+    const raw = Number(row.percentage ?? row.value ?? 0);
+    const intensity = Math.max(0.12, raw / max);
+    return `<article style="--heat:${intensity.toFixed(2)}">
+      <strong>${escapeHtml(row.label || "Sin dato")}</strong>
+      <span>${raw}${row.percentage !== undefined ? "%" : ""}</span>
+      ${row.capacity !== undefined ? `<small>${Number(row.value || 0)} / ${Number(row.capacity || 0)}</small>` : ""}
+    </article>`;
+  }).join("") || `<p class="empty">Sin datos para construir el mapa.</p>`;
+}
+
+function renderVisualizationFunnel(rows) {
+  const max = Math.max(...(rows || []).map((row) => Number(row.value || 0)), 1);
+  $("#visualizationFunnel").innerHTML = (rows || []).map((row, index) => `
+    <article style="--funnel-width:${Math.max(18, Number(row.value || 0) / max * 100)}%">
+      <div>
+        <span>${index + 1}</span>
+        <strong>${escapeHtml(row.label)}</strong>
+        <small>${Number(row.conversion || 0)}% del inicio</small>
+      </div>
+      <b>${Number(row.value || 0)}</b>
+      <i><em></em></i>
+      ${index ? `<small class="viz-loss">Perdida: ${Number(row.loss || 0)}</small>` : ""}
+    </article>
+  `).join("");
+}
+
+function renderVisualizationRanking(rows) {
+  const list = rows || [];
+  const max = Math.max(...list.map((row) => Number(row.value || 0)), 1);
+  $("#visualizationRanking").innerHTML = list.slice(0, 8).map((row, index) => `
+    <div class="viz-ranking-row">
+      <span>${index + 1}</span>
+      <div><strong>${escapeHtml(row.label)}</strong><i><b style="--w:${Number(row.value || 0) / max * 100}%"></b></i></div>
+      <em>${Number(row.value || 0)}</em>
+    </div>
+  `).join("") || `<p class="empty">Sin actividad suficiente para el ranking.</p>`;
+}
+
+function renderVisualizationScatter(rows) {
+  const list = (rows || []).slice(0, 24);
+  const maxX = Math.max(...list.map((row) => Number(row.x || 0)), 1);
+  const maxY = Math.max(...list.map((row) => Number(row.y || 0)), 1);
+  $("#visualizationScatter").innerHTML = list.length ? `
+    <div class="viz-scatter-stage">
+      <span class="viz-scatter-y">Asistencia</span>
+      ${list.map((row) => {
+        const x = 8 + Number(row.x || 0) / maxX * 84;
+        const y = 92 - Number(row.y || 0) / maxY * 82;
+        return `<i style="left:${x}%;top:${y}%"><title>${escapeHtml(row.label)}: ${row.y}/${row.x}</title></i>`;
+      }).join("")}
+      <span class="viz-scatter-x">Inscripcion</span>
+    </div>
+  ` : `<p class="empty">Sin datos comparables.</p>`;
+}
+
+function renderVisualization() {
+  const data = state.visualization;
+  if (!data) return;
+  const forecast = data.forecast || {};
+  $("#visualizationForecast").innerHTML = `
+    <article><span>Ritmo de inscripcion</span><strong>${forecast.registration_rate_per_hour || 0}/h</strong><small>Tendencia reciente</small></article>
+    <article><span>Proyeccion final</span><strong>${forecast.expected_final_registrations || 0}</strong><small>Sobre ${forecast.capacity || "sin limite"}</small></article>
+    <article><span>Ritmo de acceso</span><strong>${forecast.access_rate_per_minute || 0}/min</strong><small>Ultimos minutos</small></article>
+    <article><span>Ocupacion estimada</span><strong>${forecast.estimated_room_occupancy || 0}%</strong><small>Promedio de salas</small></article>
+  `;
+  $("#visualizationForecastDetail").innerHTML = `
+    <div><span>Inscripciones actuales</span><strong>${forecast.current_registrations || 0}</strong></div>
+    <div><span>Proyeccion final</span><strong>${forecast.expected_final_registrations || 0}</strong></div>
+    <div><span>Tiempo a cupo</span><strong>${forecast.hours_to_capacity == null ? "Sin riesgo" : `${forecast.hours_to_capacity} h`}</strong></div>
+    <div><span>Ocupacion esperada</span><strong>${forecast.estimated_room_occupancy || 0}%</strong></div>
+  `;
+  const seriesKey = $("#visualizationSeries")?.value || "accesses";
+  const seriesRows = data.series?.[seriesKey] || [];
+  $("#visualizationSeriesTitle").textContent = visualizationLabels[seriesKey] || "Serie temporal";
+  $("#visualizationSeriesTotal").textContent = seriesRows.reduce((total, row) => total + Number(row.value || 0), 0);
+  renderVisualizationLine(seriesRows);
+  const heatKey = $("#visualizationHeatmap")?.value || "rooms";
+  renderVisualizationHeatmap(data.heatmaps?.[heatKey] || []);
+  renderVisualizationFunnel(data.funnel || []);
+  renderVisualizationRanking(data.rankings?.activities || []);
+  renderVisualizationScatter(data.scatter?.attendance_vs_registration || []);
+  $("#visualizationAlerts").innerHTML = (data.predictive_alerts || []).map((alert) => `
+    <article class="${escapeHtml(alert.level || "warning")}">
+      <strong>${escapeHtml(alert.title)}</strong>
+      <span>${escapeHtml(alert.message)}</span>
+    </article>
+  `).join("") || `<article class="healthy"><strong>Operacion estable</strong><span>No se detectan riesgos predictivos.</span></article>`;
+  setHref("#visualizationNocLink", state.eventId ? `/noc.html?event_id=${state.eventId}&refresh=10` : "#");
+}
+
+async function loadVisualization(force = false) {
+  if (!state.eventId || !["Super Admin", "Productor", "Coordinador"].includes(state.authUser?.role)) return;
+  const dashboard = $("#visualizationDashboard")?.value || "operational";
+  const period = $("#visualizationPeriod")?.value || "event";
+  $("#visualizationNotice").innerHTML = `<div class="panel">Actualizando visualizaciones...</div>`;
+  try {
+    state.visualization = await api(`/api/data-visualization?event_id=${state.eventId}&dashboard=${dashboard}&period=${period}&force=${force ? 1 : 0}`);
+    const layouts = await api(`/api/data-visualization/layouts?event_id=${state.eventId}`);
+    state.visualizationLayouts = layouts.items || [];
+    $("#visualizationNotice").innerHTML = "";
+    renderVisualization();
+    renderVisualizationLayouts();
+  } catch (err) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderVisualizationLayouts() {
+  $("#visualizationLayouts").innerHTML = state.visualizationLayouts.map((layout) => `
+    <button type="button" class="ghost viz-layout-button" data-layout-id="${layout.id}">
+      <strong>${escapeHtml(layout.name)}</strong>
+      <span>${escapeHtml(layout.dashboard)} / ${escapeHtml(layout.period)}${Number(layout.is_default) ? " / predeterminado" : ""}</span>
+    </button>
+  `).join("") || `<span class="empty">Todavia no guardaste layouts.</span>`;
+  $$(".viz-layout-button").forEach((button) => button.addEventListener("click", () => {
+    const layout = state.visualizationLayouts.find((item) => Number(item.id) === Number(button.dataset.layoutId));
+    if (!layout) return;
+    $("#visualizationDashboard").value = layout.dashboard;
+    $("#visualizationPeriod").value = layout.period;
+    $("#visualizationLayoutMode").value = layout.mode;
+    loadVisualization();
+  }));
+}
+
+async function saveVisualizationLayout() {
+  const name = $("#visualizationLayoutName").value.trim();
+  if (!name) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">Escribi un nombre para el layout.</div>`;
+    return;
+  }
+  try {
+    await api("/api/data-visualization/layouts", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        name,
+        dashboard: $("#visualizationDashboard").value,
+        period: $("#visualizationPeriod").value,
+        widgets: (state.visualization?.widgets || []).join(","),
+        mode: $("#visualizationLayoutMode").value,
+        is_default: $("#visualizationLayoutDefault").checked,
+      }),
+    });
+    $("#visualizationLayoutName").value = "";
+    $("#visualizationNotice").innerHTML = `<div class="panel success">Layout guardado.</div>`;
+    const layouts = await api(`/api/data-visualization/layouts?event_id=${state.eventId}`);
+    state.visualizationLayouts = layouts.items || [];
+    renderVisualizationLayouts();
+  } catch (err) {
+    $("#visualizationNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -127,6 +468,7 @@ function updateControlRoomLink() {
   if ($("#controlRoomLink")) {
     $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&compact=${compact}&rotate=${rotate}&max_rooms=${maxRooms}&max_alerts=${maxAlerts}&blocks=${encodeURIComponent(blocks)}` : "#";
   }
+  setHref("#nocLink", state.eventId ? `/noc.html?event_id=${state.eventId}&refresh=${refresh}` : "#");
 }
 
 function updateMetrics() {
@@ -159,6 +501,7 @@ function updateMetrics() {
   updateControlRoomLink();
   renderFeatureVisibility();
   renderLandingConfig();
+  renderWaitingRoomConfig();
 }
 
 function renderLandingConfig() {
@@ -176,6 +519,37 @@ function renderLandingConfig() {
     preview.style.backgroundImage = "";
     preview.innerHTML = `<strong>Fondo BITORA por defecto</strong><span>Arena #D2B89A · 16:9 · zona segura central</span>`;
     meta.textContent = "Sin imagen personalizada";
+  }
+}
+
+function renderWaitingRoomConfig() {
+  const form = $("#waitingRoomConfigForm");
+  const event = currentEvent();
+  if (!form || !event) return;
+  form.waiting_room_enabled.checked = Number(event.waiting_room_enabled || 0) === 1;
+  form.waiting_room_open_at.value = String(event.waiting_room_open_at || "").slice(0, 16);
+  form.users_allowed_per_minute.value = event.users_allowed_per_minute || 60;
+  form.turn_duration_minutes.value = event.turn_duration_minutes || 10;
+  form.show_position.checked = Number(event.show_waiting_position ?? 1) === 1;
+  form.show_estimated_time.checked = Number(event.show_estimated_time ?? 1) === 1;
+  form.waiting_message.value = event.waiting_message || "";
+}
+
+async function saveWaitingRoomConfig(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  data.waiting_room_enabled = form.waiting_room_enabled.checked;
+  data.show_position = form.show_position.checked;
+  data.show_estimated_time = form.show_estimated_time.checked;
+  try {
+    await api("/api/waiting-room/config", { method: "POST", body: JSON.stringify(data) });
+    $("#waitingRoomConfigNotice").innerHTML = `<div class="panel success">Sala de espera actualizada.</div>`;
+    await loadEvents();
+  } catch (err) {
+    $("#waitingRoomConfigNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
   }
 }
 
@@ -529,12 +903,30 @@ async function loadCommunications() {
   $("#communicationV5Metrics").innerHTML = `
     <div><strong>${Number(queueMetrics.emails_sent || 0)}</strong><span>Emails enviados</span></div>
     <div><strong>${Number(queueMetrics.emails_delivered || 0)}</strong><span>Emails entregados</span></div>
+    <div><strong>${Number(queueMetrics.emails_bounced || 0)}</strong><span>Rebotes</span></div>
+    <div><strong>${Number(queueMetrics.emails_failed || 0)}</strong><span>Email fallidos</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_sent || 0)}</strong><span>WhatsApp enviados</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_delivered || 0)}</strong><span>WhatsApp entregados</span></div>
     <div><strong>${Number(queueMetrics.whatsapp_read || 0)}</strong><span>WhatsApp leidos</span></div>
     <div><strong>${Number(queueMetrics.pending || 0)}</strong><span>Pendientes</span></div>
     <div><strong>${Number(queueMetrics.errors || 0)}</strong><span>Errores</span></div>
   `;
+  const emailProvider = providers.email || {};
+  const emailSummary = $("#emailConfigSummary");
+  if (emailSummary) {
+    emailSummary.innerHTML = `
+      <div><strong>${emailProvider.provider || "demo"}</strong><span>Proveedor activo</span></div>
+      <div><strong>${emailProvider.ready ? "Conectado" : "No configurado"}</strong><span>Estado</span></div>
+      <div><strong>${emailProvider.from || "Sin remitente"}</strong><span>Remitente</span></div>
+      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a</span></div>
+      <div><strong>${emailProvider.last_success ? new Date(emailProvider.last_success).toLocaleString() : "Sin envios"}</strong><span>Ultimo exitoso</span></div>
+      <div><strong>${emailProvider.last_error || "Sin errores"}</strong><span>Ultimo error</span></div>
+    `;
+  }
+  const emailTestForm = $("#emailTestForm");
+  if (emailTestForm) {
+    emailTestForm.classList.toggle("hidden", state.authUser?.role !== "Super Admin");
+  }
   $("#assistantMetrics").innerHTML = `
     <div><strong>${Number(assistantMetrics.received || 0)}</strong><span>Consultas</span></div>
     <div><strong>${Number(assistantMetrics.resolved || 0)}</strong><span>Resueltas</span></div>
@@ -1407,6 +1799,39 @@ async function sendDemoCommunication(event) {
   }
 }
 
+async function sendTestEmail(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const notice = $("#emailTestNotice");
+  try {
+    const result = await api("/api/communications/email/test", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: state.eventId,
+        actor: state.currentUser,
+        email: form.elements.email.value,
+      }),
+    });
+    notice.innerHTML = `<div class="panel success">Email de prueba procesado. Enviados: ${Number(result.sent || 0)}.</div>`;
+    await Promise.all([loadCommunications(), loadAudit()]);
+  } catch (err) {
+    notice.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function sendTestWhatsApp(event) {
+  event.preventDefault();
+  const data = formData(event.currentTarget);
+  data.event_id = state.eventId;
+  data.actor = state.currentUser;
+  try {
+    const result = await api("/api/communications/whatsapp/test", { method: "POST", body: JSON.stringify(data) });
+    $("#whatsappTestNotice").innerHTML = `<div class="panel success">WhatsApp en cola. Job ${result.queue_id}.</div>`;
+  } catch (err) {
+    $("#whatsappTestNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
 async function testAssistant(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1526,6 +1951,9 @@ function stopCameraScan() {
 document.addEventListener("DOMContentLoaded", async () => {
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
     setView(button.dataset.view);
+    if (button.dataset.view === "diagnostics") loadDiagnostics();
+    if (button.dataset.view === "simulator") loadSimulator();
+    if (button.dataset.view === "visualization") loadVisualization();
     const url = button.dataset.view === "dashboard" ? `${location.pathname}${location.search}` : `#${button.dataset.view}`;
     history.replaceState(null, "", url);
   }));
@@ -1561,9 +1989,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#importForm").addEventListener("submit", importAccreditations);
   $("#importFile").addEventListener("change", loadImportFile);
   $("#landingImageForm")?.addEventListener("submit", saveLandingImage);
+  $("#waitingRoomConfigForm")?.addEventListener("submit", saveWaitingRoomConfig);
   $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
+  $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
+  $("#whatsappTestForm")?.addEventListener("submit", sendTestWhatsApp);
   $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);
@@ -1574,6 +2005,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     await api("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
     location.href = "/login.html";
   });
+  $("#refreshDiagnosticsBtn")?.addEventListener("click", loadDiagnostics);
+  $("#refreshVisualizationBtn")?.addEventListener("click", () => loadVisualization(true));
+  $("#visualizationDashboard")?.addEventListener("change", () => loadVisualization());
+  $("#visualizationPeriod")?.addEventListener("change", () => loadVisualization());
+  $("#visualizationHeatmap")?.addEventListener("change", renderVisualization);
+  $("#visualizationSeries")?.addEventListener("change", renderVisualization);
+  $("#saveVisualizationLayoutBtn")?.addEventListener("click", saveVisualizationLayout);
+  $("#diagnosticsLogFilter")?.addEventListener("change", renderDiagnosticsLogs);
+  $$("[data-simulator-action]").forEach((button) => button.addEventListener("click", () => controlSimulator(button.dataset.simulatorAction)));
   $("#printFilteredBtn").addEventListener("click", printFilteredCredentials);
   $("#searchInput").addEventListener("input", () => loadAccreditations());
   $("#statusFilter").addEventListener("change", () => loadAccreditations());
@@ -1593,5 +2033,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
     setView(initialView);
+    if (initialView === "diagnostics") await loadDiagnostics();
+    if (initialView === "simulator") await loadSimulator();
+    if (initialView === "visualization") await loadVisualization();
   }
 });

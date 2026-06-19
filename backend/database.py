@@ -125,6 +125,7 @@ _ID_TABLES = {
     "spaces",
     "technical_logs",
     "users",
+    "visualization_layouts",
 }
 
 
