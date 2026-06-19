@@ -3891,7 +3891,7 @@ def public_static_path(path: str) -> bool:
 
 
 def public_api_get(path: str) -> bool:
-    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status"}
+    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
 
 
 def public_api_post(path: str) -> bool:
