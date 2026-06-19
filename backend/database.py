@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -149,16 +150,32 @@ def _postgres_connection(config: DatabaseConfig):
         from psycopg_pool import ConnectionPool
     except ImportError as exc:
         raise RuntimeError("PostgreSQL requiere psycopg_pool") from exc
-    if _POSTGRES_POOL is None:
-        _POSTGRES_POOL = ConnectionPool(
-            conninfo=config.postgres_dsn,
-            min_size=config.postgres_pool_min,
-            max_size=max(config.postgres_pool_min, config.postgres_pool_max),
-            kwargs={"autocommit": True, "row_factory": dict_row},
-            open=True,
-        )
-    raw = _POSTGRES_POOL.getconn()
-    return PostgresConnection(raw, _POSTGRES_POOL)
+    last_error = None
+    for attempt in range(2):
+        try:
+            if _POSTGRES_POOL is None:
+                _POSTGRES_POOL = ConnectionPool(
+                    conninfo=config.postgres_dsn,
+                    min_size=config.postgres_pool_min,
+                    max_size=max(config.postgres_pool_min, config.postgres_pool_max),
+                    kwargs={"autocommit": True, "row_factory": dict_row},
+                    open=True,
+                    check=ConnectionPool.check_connection,
+                )
+            raw = _POSTGRES_POOL.getconn(timeout=10)
+            raw.execute("SELECT 1")
+            return PostgresConnection(raw, _POSTGRES_POOL)
+        except Exception as exc:
+            last_error = exc
+            if _POSTGRES_POOL is not None:
+                try:
+                    _POSTGRES_POOL.close()
+                except Exception:
+                    pass
+                _POSTGRES_POOL = None
+            if attempt == 0:
+                time.sleep(0.25)
+    raise RuntimeError("No se pudo conectar temporalmente con PostgreSQL") from last_error
 
 
 class PostgresCursor:

@@ -188,6 +188,9 @@ async function loadDiagnostics() {
   $("#diagnosticsExternal").innerHTML = `
     <div><span>Ultimo backup</span><strong>${data.backups.last_success ? new Date(data.backups.last_success).toLocaleString() : "Sin backup"}</strong></div>
     <div><span>Backups disponibles</span><strong>${data.backups.available}</strong></div>
+    <div><span>Storage</span><strong>${data.storage?.label || "No configurado"}</strong></div>
+    <div><span>Disco libre</span><strong>${data.storage?.disk_free_percent ?? 0}%</strong></div>
+    <div><span>Archivos almacenados</span><strong>${data.storage?.files || 0}</strong></div>
     <div><span>Webhook email 24 h</span><strong>${data.webhooks.items.email.total || 0}</strong></div>
     <div><span>Webhook WhatsApp 24 h</span><strong>${data.webhooks.items.whatsapp.total || 0}</strong></div>
     <div><span>Mercado Pago</span><strong>No configurado</strong></div>

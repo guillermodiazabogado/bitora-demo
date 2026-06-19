@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import shutil
 from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -85,6 +86,7 @@ class DiagnosticsService:
         app_env: str,
         app_version: str,
         started_at: str,
+        storage_dir: Path | None = None,
     ) -> None:
         self.engine = engine
         self.db_path = db_path
@@ -92,6 +94,7 @@ class DiagnosticsService:
         self.app_env = app_env
         self.app_version = app_version
         self.started_at = started_at
+        self.storage_dir = storage_dir or db_path.parent
 
     def collect(
         self,
@@ -110,6 +113,7 @@ class DiagnosticsService:
         queues = self._queue_status(db, day_ago)
         webhooks = self._webhook_status(db, day_ago)
         backups = self._backup_status(auto_backup_minutes)
+        storage = self._storage_status()
         event_health = self._event_health(db, fifteen_minutes_ago, sessions)
         recent_errors = self._recent_technical_logs(db, levels=("error", "critical"), limit=50)
         recent_logs = self._recent_technical_logs(db, levels=(), limit=100)
@@ -140,9 +144,10 @@ class DiagnosticsService:
             },
             "backups": {"status": backups["status"], "label": backups["label"]},
             "webhooks": {"status": webhooks["status"], "label": webhooks["label"]},
+            "storage": {"status": storage["status"], "label": storage["label"]},
         }
 
-        alerts = self._alerts(runtime, database, queues, backups, webhooks)
+        alerts = self._alerts(runtime, database, queues, backups, webhooks, storage)
         waiting_room = self._waiting_room_status(db)
         simulator = self._simulator_status(db)
         global_status = "critical" if any(item["severity"] == "critical" for item in alerts) else (
@@ -185,6 +190,7 @@ class DiagnosticsService:
             "queues": queues,
             "webhooks": webhooks,
             "backups": backups,
+            "storage": storage,
             "event_health": event_health,
             "waiting_room": waiting_room,
             "simulator": simulator,
@@ -323,7 +329,7 @@ class DiagnosticsService:
         }
 
     def _backup_status(self, auto_backup_minutes: int) -> dict[str, Any]:
-        patterns = ("*.sqlite3", "bitora-postgres-*.json")
+        patterns = ("*.sqlite3", "bitora-postgres-*.json", "bitora-production-*.zip")
         files = sorted(
             [path for pattern in patterns for path in self.backup_dir.glob(pattern)],
             key=lambda path: path.stat().st_mtime,
@@ -353,6 +359,35 @@ class DiagnosticsService:
             "available": len(files),
             "last_error": None,
         }
+
+    def _storage_status(self) -> dict[str, Any]:
+        try:
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
+            usage = shutil.disk_usage(self.storage_dir)
+            files = [item for item in self.storage_dir.rglob("*") if item.is_file()]
+            used = sum(item.stat().st_size for item in files)
+            free_percent = round(usage.free * 100 / max(usage.total, 1), 1)
+            return {
+                "status": "warning" if free_percent < 10 else "online",
+                "label": "Poco espacio" if free_percent < 10 else "Disponible",
+                "path_mode": "portable",
+                "files": len(files),
+                "used_bytes": used,
+                "disk_total_bytes": usage.total,
+                "disk_free_bytes": usage.free,
+                "disk_free_percent": free_percent,
+            }
+        except OSError:
+            return {
+                "status": "offline",
+                "label": "No disponible",
+                "path_mode": "portable",
+                "files": 0,
+                "used_bytes": 0,
+                "disk_total_bytes": 0,
+                "disk_free_bytes": 0,
+                "disk_free_percent": 0,
+            }
 
     def _event_health(self, db, fifteen_minutes_ago: str, sessions: list[dict[str, Any]]) -> dict[str, Any]:
         active_events = int(
@@ -412,12 +447,15 @@ class DiagnosticsService:
         queues: dict[str, Any],
         backups: dict[str, Any],
         webhooks: dict[str, Any],
+        storage: dict[str, Any],
     ) -> list[dict[str, str]]:
         alerts: list[dict[str, str]] = []
         if not database["online"]:
             alerts.append({"severity": "critical", "code": "database_down", "message": "Base de datos desconectada"})
         if backups["status"] != "online":
             alerts.append({"severity": "warning", "code": "backup", "message": backups["label"]})
+        if storage["status"] != "online":
+            alerts.append({"severity": "warning", "code": "storage", "message": storage["label"]})
         if queues["failed_24h"]:
             alerts.append({"severity": "warning", "code": "jobs_failed", "message": f"{queues['failed_24h']} trabajos fallidos en 24 h"})
         if queues["pending"] > 100:

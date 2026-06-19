@@ -42,7 +42,7 @@ from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
 from backend.services.attendance import AttendanceService
 from backend.services.audit import AuditService
-from backend.services.backup import BackupService, PostgresBackupService
+from backend.services.backup import BackupService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
@@ -53,6 +53,7 @@ from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
 from backend.services.reservations import ReservationService
 from backend.services.whatsapp import DemoWhatsAppProvider, create_whatsapp_provider
+from backend.storage import StorageService
 from backend.verticals import normalize_project_type, registered_verticals, vertical_config
 
 
@@ -65,6 +66,10 @@ FRONTEND_DIR = ROOT / "frontend"
 LEGACY_STATIC_DIR = ROOT / "static"
 STATIC_DIR = FRONTEND_DIR if FRONTEND_DIR.exists() else LEGACY_STATIC_DIR
 BACKUP_DIR = ROOT / "backups"
+STORAGE_ROOT = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
+if not STORAGE_ROOT.is_absolute():
+    STORAGE_ROOT = ROOT / STORAGE_ROOT
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local").strip().lower() or "local"
 DB_LOCK = threading.Lock()
 BACKUP_STOP = threading.Event()
 WORKER: JobWorker | None = None
@@ -72,7 +77,7 @@ SIMULATOR_STOP = threading.Event()
 SIMULATOR_THREAD: threading.Thread | None = None
 AUTO_BACKUP_MINUTES = int(os.environ.get("QR_AUTO_BACKUP_MINUTES", "10"))
 BACKUP_KEEP_LAST = int(os.environ.get("QR_BACKUP_KEEP_LAST", "24"))
-APP_VERSION = "8.0-multivertical-ready"
+APP_VERSION = "8.0-production-pilot-ready"
 APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development")).strip().lower() or "development"
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
@@ -88,6 +93,7 @@ REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
 DATA_VISUALIZATION = DataVisualizationService(cache_seconds=8)
+STORAGE = StorageService(STORAGE_ROOT, STORAGE_BACKEND)
 
 
 def audit_service() -> AuditService:
@@ -120,6 +126,10 @@ def backup_service():
     return BackupService(DB_PATH, BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
 
 
+def production_backup_manager() -> ProductionBackupManager:
+    return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT)
+
+
 def diagnostics_service() -> DiagnosticsService:
     return DiagnosticsService(
         engine=DB_CONFIG.engine,
@@ -128,7 +138,82 @@ def diagnostics_service() -> DiagnosticsService:
         app_env=APP_ENV,
         app_version=APP_VERSION,
         started_at=STARTED_AT,
+        storage_dir=STORAGE_ROOT,
     )
+
+
+def validate_production_configuration(environment: dict[str, str] | None = None) -> dict:
+    env = environment or os.environ
+    app_env = str(env.get("APP_ENV", APP_ENV)).strip().lower()
+    base_url = str(env.get("BASE_URL", BASE_URL)).strip().rstrip("/")
+    db_engine = str(env.get("QR_DB_ENGINE", DB_CONFIG.engine)).strip().lower()
+    postgres_dsn = str(env.get("QR_POSTGRES_DSN", "")).strip()
+    https_required = str(env.get("HTTPS_REQUIRED", "")).lower() in {"1", "true", "yes", "si"}
+    require_login = str(env.get("QR_REQUIRE_LOGIN", "")).lower() in {"1", "true", "yes", "si"}
+    storage_backend = str(env.get("STORAGE_BACKEND", STORAGE_BACKEND)).strip().lower()
+    errors = []
+    warnings = []
+    if app_env not in {"development", "demo", "production"}:
+        errors.append("APP_ENV invalido")
+    if app_env == "production":
+        if not base_url.startswith("https://"):
+            errors.append("BASE_URL debe usar HTTPS")
+        if not https_required:
+            errors.append("HTTPS_REQUIRED debe estar activo")
+        if db_engine != "postgres":
+            errors.append("Produccion requiere PostgreSQL")
+        if not postgres_dsn:
+            errors.append("Falta QR_POSTGRES_DSN")
+        if not require_login:
+            errors.append("QR_REQUIRE_LOGIN debe estar activo")
+        if storage_backend == "local":
+            warnings.append("Storage local requiere disco persistente y backup externo")
+    return {
+        "ok": not errors,
+        "env": app_env,
+        "base_url_https": base_url.startswith("https://"),
+        "database_engine": db_engine,
+        "https_required": https_required,
+        "login_required": require_login,
+        "storage_backend": storage_backend,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def production_health_payload() -> tuple[dict, int]:
+    db_status = "online"
+    try:
+        with connect() as db:
+            db.execute("SELECT 1 AS ok").fetchone()
+            pending = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status IN ('pending', 'retrying', 'processing')").fetchone()["c"] or 0)
+            failed = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status = 'failed'").fetchone()["c"] or 0)
+    except Exception:
+        db_status = "offline"
+        pending = 0
+        failed = 0
+    backup_files = []
+    if BACKUP_DIR.exists():
+        backup_files = sorted(
+            [path for pattern in ("*.sqlite3", "*.json", "*.zip") for path in BACKUP_DIR.glob(pattern)],
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+    backup_status = "recent" if backup_files else "missing"
+    if backup_files and time.time() - backup_files[0].stat().st_mtime > 86400 * 2:
+        backup_status = "stale"
+    payload = {
+        "status": "ok" if db_status == "online" else "degraded",
+        "env": APP_ENV,
+        "version": APP_VERSION,
+        "db": db_status,
+        "jobs": {"status": "warning" if failed else "ok", "pending": pending, "failed": failed},
+        "cache": os.environ.get("CACHE_BACKEND", "disabled"),
+        "backup": backup_status,
+        "storage": {"backend": STORAGE_BACKEND, "ready": STORAGE.ready},
+        "uptime": RUNTIME_METRICS.snapshot()["uptime_seconds"],
+    }
+    return payload, 200 if db_status == "online" else 503
 
 
 def verify_backup_file(path: Path) -> dict:
@@ -153,6 +238,17 @@ def configured_base_url(handler: SimpleHTTPRequestHandler | None = None) -> str:
             return f"{proto}://{host}".rstrip("/")
     port = int(os.environ.get("PORT") or os.environ.get("QR_PORT") or "8787")
     return f"http://localhost:{port}"
+
+
+def request_uses_https(handler: SimpleHTTPRequestHandler) -> bool:
+    return (handler.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower() == "https"
+
+
+def should_force_https(handler: SimpleHTTPRequestHandler) -> bool:
+    if APP_ENV != "production" or not HTTPS_REQUIRED or request_uses_https(handler):
+        return False
+    host = (handler.headers.get("Host") or "").split(":", 1)[0].lower()
+    return host not in {"localhost", "127.0.0.1", "::1"}
 
 
 def absolute_url(path: str, handler: SimpleHTTPRequestHandler | None = None) -> str:
@@ -2853,12 +2949,20 @@ def audit(db: sqlite3.Connection, actor: str, action: str, entity_type: str, ent
 
 def technical_log(level: str, module: str, message: str, detail: str = "", request_path: str = "") -> None:
     safe_detail = str(detail or "")
+    safe_detail = re.sub(r"(?i)postgres(?:ql)?://[^\s,;]+", "postgresql://[REDACTED]", safe_detail)
     safe_detail = re.sub(
         r"(?i)(api[_-]?key|password|secret|token|postgres(?:ql)?://)[=: ]+[^\s,;]+",
         r"\1=[REDACTED]",
         safe_detail,
     )
-    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "EMAIL_WEBHOOK_SECRET"):
+    for secret_name in (
+        "EMAIL_API_KEY",
+        "QR_POSTGRES_DSN",
+        "EMAIL_WEBHOOK_SECRET",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_VERIFY_TOKEN",
+        "S3_SECRET_ACCESS_KEY",
+    ):
         secret = os.environ.get(secret_name, "")
         if secret:
             safe_detail = safe_detail.replace(secret, "[REDACTED]")
@@ -2882,6 +2986,18 @@ def technical_log(level: str, module: str, message: str, detail: str = "", reque
         pass
 
 
+def safe_public_error(exc: Exception) -> str:
+    if APP_ENV == "production":
+        return "Error interno controlado"
+    text = str(exc)
+    text = re.sub(r"(?i)postgres(?:ql)?://[^\s,;]+", "postgresql://[REDACTED]", text)
+    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN"):
+        secret = os.environ.get(secret_name, "")
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    return text[:500]
+
+
 def job_queue_service() -> JobQueueService:
     return JobQueueService(connect, audit, technical_log)
 
@@ -2896,8 +3012,8 @@ def handle_whatsapp_job(payload: dict) -> dict:
 
 def handle_backup_job(payload: dict) -> dict:
     started = time.perf_counter()
-    path = create_db_backup()
-    check = verify_backup_file(path)
+    path = create_operational_backup()
+    check = verify_operational_backup(path)
     if not check["ok"]:
         raise RuntimeError(f"Backup invalido: {check['detail']}")
     return {"file": path.name, "size": path.stat().st_size, "duration_ms": round((time.perf_counter() - started) * 1000, 2)}
@@ -3855,6 +3971,18 @@ def create_db_backup() -> Path:
     return backup_path
 
 
+def create_operational_backup() -> Path:
+    if APP_ENV == "production":
+        return production_backup_manager().create_bundle()
+    return create_db_backup()
+
+
+def verify_operational_backup(path: Path) -> dict:
+    if path.suffix.lower() == ".zip":
+        return production_backup_manager().verify_bundle(path)
+    return verify_backup_file(path)
+
+
 def prune_backups() -> None:
     return backup_service().prune()
     if BACKUP_KEEP_LAST <= 0 or not BACKUP_DIR.exists():
@@ -3881,7 +4009,7 @@ def auto_backup_loop() -> None:
 
 
 def start_auto_backup() -> threading.Thread | None:
-    if AUTO_BACKUP_MINUTES <= 0 or DB_CONFIG.engine == "postgres":
+    if AUTO_BACKUP_MINUTES <= 0:
         return None
     thread = threading.Thread(target=auto_backup_loop, name="auto-backup", daemon=True)
     thread.start()
@@ -4024,7 +4152,14 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/health":
-                self.send_json({"status": "ok", "env": APP_ENV, "version": APP_VERSION})
+                payload, status = production_health_payload()
+                self.send_json(payload, status)
+                return
+            if should_force_https(self):
+                target = absolute_url(parsed.path + (f"?{parsed.query}" if parsed.query else ""), self)
+                self.send_response(308)
+                self.send_header("Location", target)
+                self.end_headers()
                 return
             if parsed.path.startswith("/api/"):
                 self.handle_api_get(parsed.path, parse_qs(parsed.query))
@@ -4043,6 +4178,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         self._response_status = 200
         parsed = urlparse(self.path)
         try:
+            if should_force_https(self):
+                self.send_json({"error": "HTTPS requerido"}, 426)
+                return
             if parsed.path.startswith("/api/"):
                 self.handle_api_post(parsed.path)
                 return
@@ -6059,8 +6197,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/backup":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
-                backup_path = create_db_backup()
-                backup_check = verify_backup_file(backup_path)
+                backup_path = create_operational_backup()
+                backup_check = verify_operational_backup(backup_path)
                 session = self.effective_user()
                 with connect() as db:
                     audit(
@@ -6078,7 +6216,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_json({"error": "Ruta no encontrada"}, 404)
         except Exception as exc:
             technical_log("error", "api.get", "Error procesando solicitud", str(exc), path)
-            self.send_json({"error": str(exc)}, 500)
+            self.send_json({"error": safe_public_error(exc)}, 500)
 
     def handle_api_post(self, path: str) -> None:
         try:
@@ -7800,10 +7938,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_json({"error": "Ruta no encontrada"}, 404)
         except DB_INTEGRITY_ERRORS as exc:
             technical_log("warning", "api.post", "Dato duplicado o invalido", str(exc), path)
-            self.send_json({"error": "Dato duplicado o invalido", "detail": str(exc)}, 409)
+            payload = {"error": "Dato duplicado o invalido"}
+            if APP_ENV != "production":
+                payload["detail"] = safe_public_error(exc)
+            self.send_json(payload, 409)
         except Exception as exc:
             technical_log("error", "api.post", "Error procesando solicitud", str(exc), path)
-            self.send_json({"error": str(exc)}, 500)
+            self.send_json({"error": safe_public_error(exc)}, 500)
 
 
 class OperationalHTTPServer(ThreadingHTTPServer):
@@ -7820,8 +7961,27 @@ class _TextWriter:
 
 
 def main() -> None:
+    configuration = validate_production_configuration()
+    if APP_ENV == "production" and not configuration["ok"]:
+        raise RuntimeError("Configuracion productiva invalida: " + "; ".join(configuration["errors"]))
+    STORAGE.ensure()
     init_db()
     seed_if_empty()
+    technical_log(
+        "info",
+        "startup",
+        "BITORA iniciada",
+        json.dumps(
+            {
+                "env": APP_ENV,
+                "version": APP_VERSION,
+                "database": DB_CONFIG.engine,
+                "storage": STORAGE_BACKEND,
+                "warnings": configuration["warnings"],
+            },
+            ensure_ascii=True,
+        ),
+    )
     start_job_worker()
     start_simulator_loop()
     if APP_ENV in {"demo", "production"} and HTTPS_REQUIRED and not BASE_URL:

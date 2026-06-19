@@ -17,6 +17,7 @@ __pycache__/
 
 # Backups y salidas operativas locales
 backups/
+storage/
 *.log
 server.log
 server.err.log
