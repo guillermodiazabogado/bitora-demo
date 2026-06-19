@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.verticals import normalize_project_type, vertical_config
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -42,6 +43,7 @@ class DataVisualizationService:
         if not event_row:
             return None
         event = dict(event_row)
+        project_type = normalize_project_type(event.get("project_type"))
         since = self._period_start(period)
         payload = {
             "engine": "BITORA Data Visualization Engine",
@@ -50,6 +52,8 @@ class DataVisualizationService:
             "period": period,
             "dashboard": dashboard,
             "event": {key: event.get(key) for key in ("id", "name", "venue", "starts_at", "ends_at", "capacity", "status")},
+            "project_type": project_type,
+            "vertical": vertical_config(project_type),
             "heatmaps": self._heatmaps(db, event_id, since),
             "series": self._series(db, event_id, since),
             "funnel": self._funnel(db, event_id, since),
@@ -58,7 +62,7 @@ class DataVisualizationService:
         }
         payload["forecast"] = self._forecast(event, payload)
         payload["predictive_alerts"] = self._predictive_alerts(payload)
-        payload["widgets"] = self._widgets_for_dashboard(dashboard)
+        payload["widgets"] = self._widgets_for_dashboard(dashboard, project_type)
         with self._lock:
             self._cache[key] = (time.time() + self.cache_seconds, payload)
         return payload
@@ -455,7 +459,9 @@ class DataVisualizationService:
         return alerts[:8]
 
     @staticmethod
-    def _widgets_for_dashboard(dashboard: str) -> list[str]:
+    def _widgets_for_dashboard(dashboard: str, project_type: str = "conference") -> list[str]:
+        if project_type == "ticketing":
+            return ["ticketing_placeholder", "forecast", "communications"]
         widgets = {
             "operational": ["forecast", "access_series", "room_heatmap", "funnel", "alerts", "activity_ranking"],
             "executive": ["funnel", "registration_series", "forecast", "source_ranking", "attendance_scatter"],

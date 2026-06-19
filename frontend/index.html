@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css?v=20260618-6800">
+  <link rel="stylesheet" href="/styles.css?v=20260619-8000">
 </head>
 <body>
   <header class="topbar">
@@ -49,6 +49,12 @@
       </div>
 
       <div class="layout">
+        <section id="ticketingModeNotice" class="panel ticketing-placeholder hidden">
+          <span class="eyebrow">BITORA Multi Vertical</span>
+          <h2>Ticketing Mode</h2>
+          <strong>Arquitectura preparada. Funcionalidades en construccion.</strong>
+          <p>Este proyecto ya esta aislado como vertical Ticketing. Funciones, butacas, sectores, precios y pagos no estan habilitados en esta version.</p>
+        </section>
         <aside class="panel">
           <h2>Evento activo</h2>
           <select id="eventSelect"></select>
@@ -122,6 +128,14 @@
         <aside class="panel">
           <h2>Configuracion del evento</h2>
           <form id="eventForm" class="stack">
+            <label class="project-type-field">
+              <span>Tipo de Proyecto</span>
+              <select name="project_type">
+                <option value="conference">Conference</option>
+                <option value="ticketing">Ticketing</option>
+              </select>
+              <small>Conference: congresos y jornadas. Ticketing: espectaculos y funciones, estructura en construccion.</small>
+            </label>
             <input name="name" placeholder="Nombre del evento" required>
             <input name="venue" placeholder="Lugar">
             <div class="two">
@@ -174,6 +188,13 @@
           <details class="prepare-box">
             <summary>Preparar evento real</summary>
             <form id="prepareEventForm" class="stack">
+              <label class="project-type-field">
+                <span>Tipo de Proyecto</span>
+                <select name="project_type">
+                  <option value="conference">Conference</option>
+                  <option value="ticketing">Ticketing</option>
+                </select>
+              </label>
               <input name="name" placeholder="Nombre del evento real" required>
               <input name="venue" placeholder="Lugar">
               <div class="two">
@@ -408,6 +429,7 @@
         </label>
       </section>
 
+      <div id="visualizationVerticalNotice" class="ticketing-placeholder hidden"></div>
       <div id="visualizationNotice" class="result"></div>
       <div id="visualizationForecast" class="viz-kpis"></div>
 
@@ -1003,6 +1025,6 @@
     </section>
   </main>
 
-  <script src="/app.js?v=20260618-6800"></script>
+  <script src="/app.js?v=20260619-8000"></script>
 </body>
 </html>

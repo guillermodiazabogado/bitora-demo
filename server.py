@@ -53,6 +53,7 @@ from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
 from backend.services.reservations import ReservationService
 from backend.services.whatsapp import DemoWhatsAppProvider, create_whatsapp_provider
+from backend.verticals import normalize_project_type, registered_verticals, vertical_config
 
 
 ROOT = Path(__file__).resolve().parent
@@ -71,7 +72,7 @@ SIMULATOR_STOP = threading.Event()
 SIMULATOR_THREAD: threading.Thread | None = None
 AUTO_BACKUP_MINUTES = int(os.environ.get("QR_AUTO_BACKUP_MINUTES", "10"))
 BACKUP_KEEP_LAST = int(os.environ.get("QR_BACKUP_KEEP_LAST", "24"))
-APP_VERSION = "7.0-whatsapp-meta-ready"
+APP_VERSION = "8.0-multivertical-ready"
 APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development")).strip().lower() or "development"
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
@@ -206,6 +207,7 @@ def init_db() -> None:
                 starts_at TEXT NOT NULL DEFAULT '',
                 ends_at TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
+                project_type TEXT NOT NULL DEFAULT 'conference',
                 capacity INTEGER NOT NULL DEFAULT 0,
                 activities_enabled INTEGER NOT NULL DEFAULT 1,
                 capacity_control_enabled INTEGER NOT NULL DEFAULT 1,
@@ -632,6 +634,7 @@ def init_db() -> None:
         ensure_v4_4_columns(db)
         ensure_v6_1_email_schema(db)
         ensure_waiting_room_schema(db)
+        ensure_multivertical_schema(db)
         ensure_landing_config_columns(db)
         ensure_activity_access_window_columns(db)
         ensure_user_pin_column(db)
@@ -679,6 +682,7 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_events_project_type_status ON events(project_type, status);
         """
     )
 
@@ -744,6 +748,13 @@ def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+def ensure_multivertical_schema(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+    if "project_type" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN project_type TEXT NOT NULL DEFAULT 'conference'")
+    db.execute("UPDATE events SET project_type = 'conference' WHERE project_type IS NULL OR project_type = ''")
 
 
 def ensure_v4_1_columns(db: sqlite3.Connection) -> None:
@@ -2211,10 +2222,10 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
         "generar_certificados", "controlar_asistencia", "attendance_mode",
         "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
         "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
-        "activities_enabled", "capacity_control_enabled", "waitlist_enabled",
+        "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
     ]
     return {
-        "version": "4.8",
+        "version": "8.0",
         "exported_at": now_iso(),
         "event": {key: event.get(key) for key in allowed_event_keys if key in event},
         "types": [dict(row) for row in db.execute("SELECT name, capacity, access_enabled FROM accreditation_types WHERE event_id = ? ORDER BY id", (event_id,)).fetchall()],
@@ -2265,14 +2276,14 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
     cur = db.execute(
         """
         INSERT INTO events (
-            name, description, venue, starts_at, ends_at, status, capacity,
+            name, description, venue, starts_at, ends_at, status, project_type, capacity,
             activity_selection_mode, generar_certificados, controlar_asistencia,
             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
             capacity_control_enabled, waitlist_enabled, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             str(data.get("name") or "Evento").strip(),
@@ -2281,6 +2292,7 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             str(data.get("starts_at") or "").strip(),
             str(data.get("ends_at") or "").strip(),
             status,
+            normalize_project_type(data.get("project_type")),
             int(data.get("capacity") or 0),
             str(data.get("activity_selection_mode") or "optional_later").strip() or "optional_later",
             1 if truthy(data.get("generar_certificados", True)) else 0,
@@ -4070,6 +4082,21 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/app-config":
                 self.send_json(runtime_config(self))
+                return
+
+            if path == "/api/project-configuration":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    event = db.execute("SELECT id, project_type FROM events WHERE id = ?", (event_id,)).fetchone()
+                if not event:
+                    self.send_json({"error": "Evento inexistente"}, 404)
+                    return
+                self.send_json({
+                    "event_id": event_id,
+                    "project_type": normalize_project_type(event["project_type"]),
+                    "vertical": vertical_config(event["project_type"]),
+                    "available_verticals": registered_verticals(),
+                })
                 return
 
             if path == "/api/network-info":
@@ -6534,14 +6561,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                     cur = db.execute(
                         """
                         INSERT INTO events (
-                            name, description, venue, starts_at, ends_at, status, capacity,
+                            name, description, venue, starts_at, ends_at, status, project_type, capacity,
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
                             capacity_control_enabled, waitlist_enabled, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             data.get("name", "").strip(),
@@ -6550,6 +6577,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             data.get("starts_at", "").strip(),
                             data.get("ends_at", "").strip(),
                             data.get("status", "draft"),
+                            normalize_project_type(data.get("project_type")),
                             int(data.get("capacity") or 0),
                             data.get("activity_selection_mode", "optional_later").strip() or "optional_later",
                             1 if truthy(data.get("generar_certificados", True)) else 0,
@@ -6603,14 +6631,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                     cur = db.execute(
                         """
                         INSERT INTO events (
-                            name, description, venue, starts_at, ends_at, status, capacity,
+                            name, description, venue, starts_at, ends_at, status, project_type, capacity,
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
                             capacity_control_enabled, waitlist_enabled, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             name,
@@ -6618,6 +6646,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             venue,
                             starts_at,
                             ends_at,
+                            normalize_project_type(data.get("project_type")),
                             capacity,
                             data.get("activity_selection_mode", "optional_later").strip() or "optional_later",
                             1 if truthy(data.get("generar_certificados", True)) else 0,

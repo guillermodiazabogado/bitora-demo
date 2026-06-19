@@ -211,6 +211,7 @@ async function loadSimulator() {
   state.simulator = await api(`/api/simulator/status?event_id=${state.eventId}`);
   const item = state.simulator;
   $("#simulatorStatus").innerHTML = `
+    <div><strong>${currentProjectType() === "ticketing" ? "Ticketing" : "Conference"}</strong><span>Vertical</span></div>
     <div><strong>${item.status || "stopped"}</strong><span>Estado</span></div>
     <div><strong>${item.mode || "medium"}</strong><span>Modo</span></div>
     <div><strong>${item.participants_active || 0}</strong><span>Participantes activos</span></div>
@@ -340,6 +341,15 @@ function renderVisualizationScatter(rows) {
 function renderVisualization() {
   const data = state.visualization;
   if (!data) return;
+  const ticketing = data.project_type === "ticketing";
+  $("#visualizationVerticalNotice")?.classList.toggle("hidden", !ticketing);
+  if (ticketing) {
+    $("#visualizationVerticalNotice").innerHTML = `
+      <span class="eyebrow">Dashboard Ticketing</span>
+      <h2>Modelo visual preparado</h2>
+      <p>Ventas, sectores, ocupacion y canales se incorporaran cuando exista el modulo Ticketing. Los componentes actuales permanecen aislados.</p>
+    `;
+  }
   const forecast = data.forecast || {};
   $("#visualizationForecast").innerHTML = `
     <article><span>Ritmo de inscripcion</span><strong>${forecast.registration_rate_per_hour || 0}/h</strong><small>Tendencia reciente</small></article>
@@ -439,6 +449,29 @@ function currentEvent() {
   return state.events.find((event) => Number(event.id) === Number(state.eventId));
 }
 
+function currentProjectType() {
+  return String(currentEvent()?.project_type || "conference").toLowerCase();
+}
+
+function currentProjectModules() {
+  if (currentProjectType() === "ticketing") {
+    return {
+      registration: false,
+      reception: false,
+      agenda: false,
+      access: false,
+      ticketing: true,
+    };
+  }
+  return {
+    registration: true,
+    reception: true,
+    agenda: true,
+    access: true,
+    ticketing: false,
+  };
+}
+
 function eventFeature(name, fallback = true) {
   const event = currentEvent();
   if (!event || event[name] === undefined || event[name] === null) return fallback;
@@ -446,15 +479,30 @@ function eventFeature(name, fallback = true) {
 }
 
 function renderFeatureVisibility() {
+  const modules = currentProjectModules();
   const activitiesOn = eventFeature("activities_enabled", true);
   const capacityOn = eventFeature("capacity_control_enabled", true);
   const waitlistOn = eventFeature("waitlist_enabled", false);
-  document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn);
-  $("#agenda")?.classList.toggle("hidden", !activitiesOn);
+  document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration);
+  document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception);
+  document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn || !modules.agenda);
+  document.querySelector('[data-view="access"]')?.classList.toggle("hidden", !modules.access);
+  $("#agenda")?.classList.toggle("hidden", !activitiesOn || !modules.agenda);
   $("#displayConfigForm")?.closest(".panel")?.classList.toggle("hidden", !activitiesOn);
   $("#publicDisplayLink")?.classList.toggle("hidden", !activitiesOn);
   $$(".capacity-feature").forEach((node) => node.classList.toggle("hidden", !capacityOn));
   $$(".waitlist-feature").forEach((node) => node.classList.toggle("hidden", !waitlistOn));
+  $("#ticketingModeNotice")?.classList.toggle("hidden", !modules.ticketing);
+  $("#dashboard .layout")?.classList.toggle("ticketing-layout", modules.ticketing);
+  const activeView = $(".view.active")?.id;
+  if (
+    (activeView === "register" && !modules.registration)
+    || (activeView === "reception" && !modules.reception)
+    || (activeView === "agenda" && !modules.agenda)
+    || (activeView === "access" && !modules.access)
+  ) {
+    setView("dashboard");
+  }
 }
 
 function updateControlRoomLink() {

@@ -37,7 +37,7 @@ async function load() {
       get(`/api/communications?event_id=${eventId}`),
     ]);
     $("#nocEvent").textContent = visual.event.name;
-    $("#nocStatus").textContent = `${diagnostics.app_status.toUpperCase()} · actualiza cada ${refreshSeconds}s`;
+    $("#nocStatus").textContent = `${engine.vertical?.name || "Conference"} · ${diagnostics.app_status.toUpperCase()} · actualiza cada ${refreshSeconds}s`;
     $("#nocGeneral").innerHTML = `<strong class="noc-health ${diagnostics.app_status}">${visual.event_health}%</strong><span>${visual.event.venue || "Evento activo"}</span><small>${diagnostics.event_health.active_events} evento(s) activo(s)</small>`;
     $("#nocAccess").innerHTML = `<div class="noc-kpis"><b>${diagnostics.metrics.qr_per_minute}<small>QR/min</small></b><b>${diagnostics.metrics.accesses_per_minute}<small>Accesos/min</small></b><b>${diagnostics.metrics.p95_response_ms}<small>p95 ms</small></b></div>`;
     const totals = visual.totals;
