@@ -44,6 +44,7 @@ from backend.services.attendance import AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
+from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
@@ -77,7 +78,7 @@ SIMULATOR_STOP = threading.Event()
 SIMULATOR_THREAD: threading.Thread | None = None
 AUTO_BACKUP_MINUTES = int(os.environ.get("QR_AUTO_BACKUP_MINUTES", "10"))
 BACKUP_KEEP_LAST = int(os.environ.get("QR_BACKUP_KEEP_LAST", "24"))
-APP_VERSION = "8.0-production-pilot-ready"
+APP_VERSION = "RC1-stability-ready"
 APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development")).strip().lower() or "development"
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
@@ -92,7 +93,8 @@ ACCESS_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcio
 REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
-DATA_VISUALIZATION = DataVisualizationService(cache_seconds=8)
+DATA_VISUALIZATION = DataVisualizationService(cache_seconds=20)
+RESPONSE_CACHE = TTLCache(max_entries=160)
 STORAGE = StorageService(STORAGE_ROOT, STORAGE_BACKEND)
 
 
@@ -140,6 +142,22 @@ def diagnostics_service() -> DiagnosticsService:
         started_at=STARTED_AT,
         storage_dir=STORAGE_ROOT,
     )
+
+
+def cache_snapshot() -> dict:
+    response = RESPONSE_CACHE.snapshot()
+    visualization = DATA_VISUALIZATION.cache_snapshot()
+    hits = int(response["hits"]) + int(visualization["hits"])
+    misses = int(response["misses"]) + int(visualization["misses"])
+    total = hits + misses
+    return {
+        **response,
+        "hits": hits,
+        "misses": misses,
+        "hit_rate": round(hits * 100 / total, 1) if total else 0,
+        "size": int(response["size"]) + int(visualization["size"]),
+        "visualization": visualization,
+    }
 
 
 def validate_production_configuration(environment: dict[str, str] | None = None) -> dict:
@@ -208,7 +226,11 @@ def production_health_payload() -> tuple[dict, int]:
         "version": APP_VERSION,
         "db": db_status,
         "jobs": {"status": "warning" if failed else "ok", "pending": pending, "failed": failed},
-        "cache": os.environ.get("CACHE_BACKEND", "disabled"),
+        "cache": {
+            "backend": os.environ.get("CACHE_BACKEND", "memory-ttl"),
+            "enabled": True,
+            "hit_rate": cache_snapshot()["hit_rate"],
+        },
         "backup": backup_status,
         "storage": {"backend": STORAGE_BACKEND, "ready": STORAGE.ready},
         "uptime": RUNTIME_METRICS.snapshot()["uptime_seconds"],
@@ -779,6 +801,12 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
         CREATE INDEX IF NOT EXISTS idx_events_project_type_status ON events(project_type, status);
+        CREATE INDEX IF NOT EXISTS idx_access_logs_event_result_created ON access_logs(event_id, result, created_at);
+        CREATE INDEX IF NOT EXISTS idx_accreditations_event_checked_status ON accreditations(event_id, checked_in_at, status);
+        CREATE INDEX IF NOT EXISTS idx_communication_queue_status_scheduled ON communication_queue(status, scheduled_at, id);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_type, entity_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_activities_event_status_start ON activities(event_id, status, starts_at);
+        CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
         """
     )
 
@@ -4274,11 +4302,16 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if not session or session.get("role") not in ADMIN_ROLES:
                     self.send_json({"error": "Diagnostico disponible solo para Super Admin"}, 403)
                     return
+                cached = RESPONSE_CACHE.get("diagnostics-status")
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     result = diagnostics_service().collect(
                         db,
                         runtime={
                             **RUNTIME_METRICS.snapshot(),
+                            "cache": cache_snapshot(),
                             "worker_alive": bool(WORKER and WORKER.thread and WORKER.thread.is_alive()),
                             "worker_heartbeat_age": round(time.time() - WORKER.last_heartbeat, 2) if WORKER and WORKER.last_heartbeat else None,
                         },
@@ -4291,6 +4324,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         "label": "Conectado" if whatsapp_provider.ready else "No configurado",
                     }
                     audit(db, session["name"], "diagnostics.opened", "system", None, {"app_status": result["app_status"]})
+                RESPONSE_CACHE.set("diagnostics-status", result, 8)
                 self.send_json(result)
                 return
 
@@ -4303,6 +4337,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 period = query.get("period", ["event"])[0]
                 dashboard = query.get("dashboard", ["operational"])[0]
                 force = query.get("force", ["0"])[0].lower() in {"1", "true", "yes"}
+                cache_hits_before = DATA_VISUALIZATION.cache_snapshot()["hits"]
                 with connect() as db:
                     result = DATA_VISUALIZATION.collect(
                         db,
@@ -4314,14 +4349,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not result:
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
-                    audit(
-                        db,
-                        session["name"],
-                        "data_visualization.opened",
-                        "event",
-                        event_id,
-                        {"period": period, "dashboard": dashboard},
-                    )
+                    if DATA_VISUALIZATION.cache_snapshot()["hits"] == cache_hits_before:
+                        audit(
+                            db,
+                            session["name"],
+                            "data_visualization.opened",
+                            "event",
+                            event_id,
+                            {"period": period, "dashboard": dashboard},
+                        )
                 self.send_json(result)
                 return
 
@@ -4474,6 +4510,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/events":
+                cached = RESPONSE_CACHE.get("events")
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     rows = db.execute(
                         """
@@ -4486,7 +4526,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                         ORDER BY e.id DESC
                         """
                     ).fetchall()
-                self.send_json([dict(r) for r in rows])
+                payload = [dict(r) for r in rows]
+                RESPONSE_CACHE.set("events", payload, 15)
+                self.send_json(payload)
                 return
 
             if path == "/api/event-structure.json":
@@ -4587,6 +4629,12 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/reports/visual-summary":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
+                low_threshold = int(query.get("occupancy_low_threshold", ["30"])[0] or 30)
+                cache_key = f"visual-summary:{event_id}:{low_threshold}"
+                cached = RESPONSE_CACHE.get(cache_key)
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
                     if not event:
@@ -4668,7 +4716,6 @@ class AppHandler(SimpleHTTPRequestHandler):
                         ).fetchall()
                     ]
                     occupancy_by_room = []
-                    low_threshold = int(query.get("occupancy_low_threshold", ["30"])[0] or 30)
                     for row in occupancy_rows:
                         capacity = int(row.get("capacity") or 0)
                         present = int(row.get("present") or 0)
@@ -4785,7 +4832,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     alert_penalty = min(40, len(operational_alerts) * 8)
                     event_health = max(0, min(100, int(round((avg_occupancy + attendance_score) / 2 - rejection_penalty - alert_penalty, 0))))
                     audit(db, (self.session_user() or {}).get("name", "system"), "reports.visual_opened", "event", event_id, {"event_id": event_id})
-                self.send_json({
+                payload = {
                     "event": {key: event.get(key) for key in ("id", "name", "venue", "activities_enabled", "capacity_control_enabled", "waitlist_enabled")},
                     "generated_at": now_iso(),
                     "totals": totals,
@@ -4805,11 +4852,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "device_counts": device_counts,
                     "communication_status_counts": communication_status_counts,
                     "operator_activity": operator_activity,
-                })
+                }
+                RESPONSE_CACHE.set(cache_key, payload, 15)
+                self.send_json(payload)
                 return
 
             if path == "/api/event":
                 event_id = int(query.get("event_id", ["0"])[0])
+                cache_key = f"public-event:{event_id}"
+                cached = RESPONSE_CACHE.get(cache_key)
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     attendance_service().ensure_absences(db, event_id)
                     event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
@@ -4846,6 +4900,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     ]
                 event["activities"] = activities
                 event["types"] = types
+                RESPONSE_CACHE.set(cache_key, event, 15)
                 self.send_json(event)
                 return
 
@@ -5424,6 +5479,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/summary":
                 event_id = int(query.get("event_id", ["0"])[0])
+                cache_key = f"summary:{event_id}"
+                cached = RESPONSE_CACHE.get(cache_key)
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     event = row_to_dict(db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone())
                     if not event:
@@ -5506,17 +5566,17 @@ class AppHandler(SimpleHTTPRequestHandler):
                             (event_id,),
                         ).fetchone()
                     )
-                self.send_json(
-                    {
-                        "event": event,
-                        "accreditation": accreditation,
-                        "by_type": [dict(r) for r in by_type],
-                        "reservations": [dict(r) for r in reservations],
-                        "by_activity": [dict(r) for r in by_activity],
-                        "access": [dict(r) for r in access],
-                        "attendance": attendance,
-                    }
-                )
+                result = {
+                    "event": event,
+                    "accreditation": accreditation,
+                    "by_type": [dict(r) for r in by_type],
+                    "reservations": [dict(r) for r in reservations],
+                    "by_activity": [dict(r) for r in by_activity],
+                    "access": [dict(r) for r in access],
+                    "attendance": attendance,
+                }
+                RESPONSE_CACHE.set(cache_key, result, 8)
+                self.send_json(result)
                 return
 
             if path == "/api/readiness":
@@ -5690,6 +5750,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/public-display":
                 event_id = int(query.get("event_id", ["0"])[0])
+                cache_key = f"public-display:{event_id}"
+                cached = RESPONSE_CACHE.get(cache_key)
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     config = ensure_public_display_config(db, event_id)
                     selected_rows = db.execute(
@@ -5739,12 +5804,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "availability_color": availability["color"],
                         }
                         activities.append(item)
-                self.send_json({
+                payload = {
                     "config": config,
                     "activities": activities,
                     "selected_activity_ids": [int(row["activity_id"]) for row in selected_rows],
                     "has_selection": bool(selected_rows),
-                })
+                }
+                RESPONSE_CACHE.set(cache_key, payload, 8)
+                self.send_json(payload)
                 return
 
             if path == "/api/portal":
@@ -5769,6 +5836,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/communications":
                 event_id = int(query.get("event_id", ["0"])[0])
+                cache_key = f"communications:{event_id}"
+                cached = RESPONSE_CACHE.get(cache_key)
+                if cached is not None:
+                    self.send_json(cached)
+                    return
                 with connect() as db:
                     stats = dict(
                         db.execute(
@@ -5880,7 +5952,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()
-                self.send_json({
+                result = {
                     "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
                     "providers": {
                         "email": {
@@ -5907,7 +5979,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "tickets": tickets,
                     "logs": logs,
                     "templates": templates,
-                })
+                }
+                RESPONSE_CACHE.set(cache_key, result, 12)
+                self.send_json(result)
                 return
 
             if path == "/api/communications/history":
@@ -6223,6 +6297,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             data = read_json(self)
             if not self.require_api_auth(path, is_post=True):
                 return
+            RESPONSE_CACHE.invalidate()
+            DATA_VISUALIZATION.invalidate()
             session = self.session_user()
             if session and path not in {"/api/auth/login", "/api/auth/logout"}:
                 if path == "/api/validate":

@@ -57,6 +57,18 @@ class RuntimeMetrics:
         recent = [sample for sample in samples if sample.timestamp >= now - 60]
         durations = sorted(sample.duration_ms for sample in samples)
         recent_errors = sum(1 for sample in recent if sample.status >= 500)
+        path_counts = Counter(sample.path for sample in recent)
+        path_durations: dict[str, list[float]] = {}
+        for sample in samples:
+            path_durations.setdefault(sample.path, []).append(sample.duration_ms)
+        slowest = sorted(
+            (
+                {"path": path, "average_ms": round(sum(values) / len(values), 2), "samples": len(values)}
+                for path, values in path_durations.items()
+            ),
+            key=lambda item: item["average_ms"],
+            reverse=True,
+        )[:10]
         return {
             "uptime_seconds": int(now - started_at),
             "active_requests": active,
@@ -66,6 +78,8 @@ class RuntimeMetrics:
             "p95_response_ms": _percentile(durations, 0.95),
             "p99_response_ms": _percentile(durations, 0.99),
             "server_errors_per_minute": recent_errors,
+            "top_paths_last_minute": [{"path": path, "requests": count} for path, count in path_counts.most_common(10)],
+            "slowest_paths": slowest,
         }
 
 
@@ -136,7 +150,10 @@ class DiagnosticsService:
                 "status": "online" if self.engine == "postgres" and database["online"] else ("inactive" if self.engine != "postgres" else "offline"),
                 "label": "Conectado" if self.engine == "postgres" and database["online"] else ("No activo" if self.engine != "postgres" else "Error"),
             },
-            "cache": {"status": "inactive", "label": "No configurada"},
+            "cache": {
+                "status": "online" if runtime.get("cache", {}).get("enabled") else "inactive",
+                "label": f"{runtime.get('cache', {}).get('hit_rate', 0)}% hits" if runtime.get("cache", {}).get("enabled") else "No configurada",
+            },
             "jobs": {"status": queues["status"], "label": queues["label"]},
             "communications": {
                 "status": "warning" if queues["failed_24h"] else "online",
@@ -180,13 +197,7 @@ class DiagnosticsService:
                 "accesses_per_minute": access_per_minute,
             },
             "database": database,
-            "cache": {
-                "enabled": False,
-                "backend": "no configurada",
-                "hits": 0,
-                "misses": 0,
-                "size": 0,
-            },
+            "cache": runtime.get("cache", {"enabled": False, "backend": "no configurada", "hits": 0, "misses": 0, "size": 0}),
             "queues": queues,
             "webhooks": webhooks,
             "backups": backups,

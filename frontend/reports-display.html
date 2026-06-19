@@ -168,6 +168,7 @@
     }
 
     async function load() {
+      if (document.hidden) return;
       const [legacyResponse, engineResponse] = await Promise.all([
         fetch(`/api/reports/visual-summary?event_id=${encodeURIComponent(eventId)}`),
         fetch(`/api/data-visualization?event_id=${encodeURIComponent(eventId)}&dashboard=operational&period=today`),
@@ -206,7 +207,10 @@
     setInterval(tick, 1000);
     load();
     setInterval(load, refresh * 1000);
-    if (rotate) setInterval(() => { rotatePage += 1; load(); }, rotate * 1000);
+    if (rotate) setInterval(() => { rotatePage += 1; }, rotate * 1000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) load();
+    });
   </script>
 </body>
 </html>

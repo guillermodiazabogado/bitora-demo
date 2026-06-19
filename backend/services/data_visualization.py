@@ -20,6 +20,8 @@ class DataVisualizationService:
         self.cache_seconds = max(1, cache_seconds)
         self._cache: dict[tuple[int, str, str], tuple[float, dict[str, Any]]] = {}
         self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
 
     def collect(
         self,
@@ -37,7 +39,9 @@ class DataVisualizationService:
             with self._lock:
                 cached = self._cache.get(key)
                 if cached and cached[0] > time.time():
+                    self._hits += 1
                     return cached[1]
+                self._misses += 1
 
         event_row = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
         if not event_row:
@@ -73,6 +77,17 @@ class DataVisualizationService:
                 self._cache.clear()
             else:
                 self._cache = {key: value for key, value in self._cache.items() if key[0] != int(event_id)}
+
+    def cache_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            requests = self._hits + self._misses
+            return {
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": round(self._hits * 100 / requests, 1) if requests else 0,
+                "size": len(self._cache),
+                "ttl_seconds": self.cache_seconds,
+            }
 
     def list_layouts(self, db, event_id: int, owner: str) -> list[dict[str, Any]]:
         rows = db.execute(

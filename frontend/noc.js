@@ -29,6 +29,7 @@ function sparkline(rows) {
 }
 
 async function load() {
+  if (document.hidden) return;
   try {
     const [visual, engine, diagnostics, communications] = await Promise.all([
       get(`/api/reports/visual-summary?event_id=${eventId}`),
@@ -66,3 +67,6 @@ async function load() {
 setInterval(() => { $("#nocClock").textContent = new Date().toLocaleTimeString("es-AR"); }, 1000);
 load();
 setInterval(load, refreshSeconds * 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) load();
+});
