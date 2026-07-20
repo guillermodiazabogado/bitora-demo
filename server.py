@@ -309,6 +309,7 @@ def init_db() -> None:
             print(f"Migraciones PostgreSQL aplicadas: {', '.join(applied)}")
         with connect() as db:
             ensure_default_users(db)
+            bootstrap_event_user_access(db)
             ensure_default_types(db)
             ensure_default_spaces(db)
             ensure_capacity_bags(db)
@@ -498,6 +499,16 @@ def init_db() -> None:
                 pin_hash TEXT NOT NULL DEFAULT '',
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_event_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                role TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, event_id)
             );
 
             CREATE TABLE IF NOT EXISTS participant_communication_preferences (
@@ -756,10 +767,12 @@ def init_db() -> None:
         ensure_landing_config_columns(db)
         ensure_activity_access_window_columns(db)
         ensure_user_pin_column(db)
+        ensure_user_event_roles_schema(db)
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
         ensure_indexes(db)
         ensure_default_users(db)
+        bootstrap_event_user_access(db)
         ensure_default_types(db)
         ensure_default_spaces(db)
         ensure_capacity_bags(db)
@@ -800,6 +813,8 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_user_event_roles_user_event ON user_event_roles(user_id, event_id, active);
+        CREATE INDEX IF NOT EXISTS idx_user_event_roles_event_role ON user_event_roles(event_id, role, active);
         CREATE INDEX IF NOT EXISTS idx_events_project_type_status ON events(project_type, status);
         CREATE INDEX IF NOT EXISTS idx_access_logs_event_result_created ON access_logs(event_id, result, created_at);
         CREATE INDEX IF NOT EXISTS idx_accreditations_event_checked_status ON accreditations(event_id, checked_in_at, status);
@@ -1009,6 +1024,22 @@ def ensure_user_pin_column(db: sqlite3.Connection) -> None:
     columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
     if "pin_hash" not in columns:
         db.execute("ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_user_event_roles_schema(db: sqlite3.Connection) -> None:
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_event_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            role TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            UNIQUE(user_id, event_id)
+        )
+        """
+    )
 
 
 def ensure_reservation_bag_column(db: sqlite3.Connection) -> None:
@@ -1393,6 +1424,74 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
         row = db.execute("SELECT pin_hash FROM users WHERE name = ?", (name,)).fetchone()
         if row and not row["pin_hash"]:
             db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
+
+
+def user_by_name(db: sqlite3.Connection, name: str) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM users WHERE lower(name) = lower(?) AND active = 1", (str(name or "").strip(),)).fetchone()
+
+
+def assign_user_to_event(db: sqlite3.Connection, user_id: int, event_id: int, role: str) -> None:
+    db.execute(
+        """
+        INSERT INTO user_event_roles (user_id, event_id, role, active, created_at)
+        VALUES (?, ?, ?, 1, ?)
+        ON CONFLICT(user_id, event_id)
+        DO UPDATE SET role = excluded.role, active = 1
+        """,
+        (user_id, event_id, role, now_iso()),
+    )
+
+
+def ensure_super_admin_event_access(db: sqlite3.Connection, event_id: int) -> None:
+    users = db.execute("SELECT id, role FROM users WHERE active = 1 AND role = 'Super Admin'").fetchall()
+    for user in users:
+        assign_user_to_event(db, int(user["id"]), event_id, user["role"])
+
+
+def bootstrap_event_user_access(db: sqlite3.Connection) -> None:
+    events = db.execute("SELECT id FROM events").fetchall()
+    default_users = db.execute("SELECT id, role FROM users WHERE active = 1").fetchall()
+    for event in events:
+        event_id = int(event["id"])
+        existing = db.execute(
+            "SELECT COUNT(*) AS c FROM user_event_roles WHERE event_id = ? AND active = 1",
+            (event_id,),
+        ).fetchone()["c"]
+        if existing:
+            ensure_super_admin_event_access(db, event_id)
+            continue
+        for user in default_users:
+            assign_user_to_event(db, int(user["id"]), event_id, user["role"])
+
+
+def event_access_clause(session: dict | None, alias: str = "e") -> tuple[str, list[object]]:
+    if not session or session.get("role") == "Super Admin":
+        return "1 = 1", []
+    user_id = int(session.get("id") or 0)
+    if not user_id:
+        return "0 = 1", []
+    return (
+        f"""EXISTS (
+            SELECT 1 FROM user_event_roles uer
+            WHERE uer.event_id = {alias}.id AND uer.user_id = ? AND uer.active = 1
+        )""",
+        [user_id],
+    )
+
+
+def session_can_access_event(db: sqlite3.Connection, session: dict | None, event_id: int) -> bool:
+    if not event_id:
+        return True
+    if not session or session.get("role") == "Super Admin":
+        return True
+    user_id = int(session.get("id") or 0)
+    if not user_id:
+        return False
+    row = db.execute(
+        "SELECT 1 FROM user_event_roles WHERE user_id = ? AND event_id = ? AND active = 1",
+        (user_id, event_id),
+    ).fetchone()
+    return bool(row)
 
 
 def hash_pin(pin: str) -> str:
@@ -4287,7 +4386,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         return not self.login_required() or self.session_user() is not None
 
     def effective_user(self) -> dict | None:
-        return self.session_user() or ({"name": "Admin", "role": "Super Admin", "local": True} if not self.login_required() else None)
+        return self.session_user() or ({"id": 0, "name": "Admin", "role": "Super Admin", "local": True} if not self.login_required() else None)
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -4379,10 +4478,17 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if not self.require_api_auth(path, is_post=False):
                 return
+            if self.login_required() and not public_api_get(path) and "event_id" in query:
+                session = self.effective_user()
+                event_id_for_access = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not session_can_access_event(db, session, event_id_for_access):
+                        self.send_json({"error": "No tenes permiso para acceder a este evento"}, 403)
+                        return
             if path == "/api/auth/me":
                 session = self.effective_user()
                 if not session and not self.login_required():
-                    session = {"name": "Admin", "role": "Super Admin", "local": True}
+                    session = {"id": 0, "name": "Admin", "role": "Super Admin", "local": True}
                 self.send_json({"authenticated": bool(session), "user": session, "config": runtime_config(self)})
                 return
 
@@ -4650,24 +4756,29 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/events":
-                cached = RESPONSE_CACHE.get("events")
+                session = self.effective_user()
+                access_where, access_params = event_access_clause(session, "e")
+                cache_key = f"events:{session.get('id', 'local') if session else 'public'}:{session.get('role', '') if session else ''}"
+                cached = RESPONSE_CACHE.get(cache_key)
                 if cached is not None:
                     self.send_json(cached)
                     return
                 with connect() as db:
                     rows = db.execute(
-                        """
+                        f"""
                         SELECT e.*,
                                SUM(CASE WHEN a.status <> 'cancelled' THEN 1 ELSE 0 END) AS accreditation_count,
                                SUM(CASE WHEN a.checked_in_at IS NOT NULL AND a.status <> 'cancelled' THEN 1 ELSE 0 END) AS checked_in_count
                         FROM events e
                         LEFT JOIN accreditations a ON a.event_id = e.id
+                        WHERE {access_where}
                         GROUP BY e.id
                         ORDER BY e.id DESC
-                        """
+                        """,
+                        access_params,
                     ).fetchall()
                 payload = [dict(r) for r in rows]
-                RESPONSE_CACHE.set("events", payload, 15)
+                RESPONSE_CACHE.set(cache_key, payload, 15)
                 self.send_json(payload)
                 return
 
@@ -5051,6 +5162,33 @@ class AppHandler(SimpleHTTPRequestHandler):
                         "SELECT * FROM users WHERE active = 1 ORDER BY id"
                     ).fetchall()
                 self.send_json([dict(r) for r in rows])
+                return
+
+            if path == "/api/event-users":
+                session = self.effective_user()
+                if not session or session.get("role") not in CONFIG_ROLES:
+                    self.send_json({"error": "Sin permiso para ver equipo del evento"}, 403)
+                    return
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event:
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    rows = db.execute(
+                        """
+                        SELECT u.id AS user_id, u.name, u.role AS platform_role,
+                               COALESCE(uer.role, u.role) AS event_role,
+                               COALESCE(uer.active, 0) AS assigned
+                        FROM users u
+                        LEFT JOIN user_event_roles uer
+                          ON uer.user_id = u.id AND uer.event_id = ? AND uer.active = 1
+                        WHERE u.active = 1
+                        ORDER BY assigned DESC, u.id
+                        """,
+                        (event_id,),
+                    ).fetchall()
+                self.send_json({"items": [dict(row) for row in rows], "roles": sorted(CONFIG_ROLES | RECEPTION_ROLES | ACCESS_ROLES | {"Visualizador"})})
                 return
 
             if path == "/api/audit":
@@ -6445,6 +6583,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     data["operator"] = session["name"]
                 else:
                     data["actor"] = session["name"]
+            if self.login_required() and session and not public_api_post(path) and data.get("event_id"):
+                event_id_for_access = int(data.get("event_id") or 0)
+                with connect() as db:
+                    if not session_can_access_event(db, session, event_id_for_access):
+                        self.send_json({"error": "No tenes permiso para operar este evento"}, 403)
+                        return
 
             if path == "/api/waiting-room/join":
                 event_id = int(data.get("event_id") or 0)
@@ -6518,11 +6662,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                     self.send_json({"error": "Usuario o PIN incorrecto"}, 403)
                     return
                 token = secrets.token_urlsafe(32)
-                AUTH_SESSIONS[token] = {"name": user["name"], "role": user["role"], "created_at": time.time()}
+                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "created_at": time.time()}
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Set-Cookie", f"qr_session={token}; Path=/; HttpOnly; SameSite=Lax")
-                body = json.dumps({"ok": True, "user": {"name": user["name"], "role": user["role"]}}, ensure_ascii=False).encode("utf-8")
+                body = json.dumps({"ok": True, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"]}}, ensure_ascii=False).encode("utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -6949,10 +7093,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                             now_iso(),
                         ),
                     )
-                    ensure_default_types(db, cur.lastrowid)
-                    ensure_default_spaces(db, cur.lastrowid)
-                    audit(db, actor, "event.created", "event", cur.lastrowid, data)
-                self.send_json({"ok": True, "id": cur.lastrowid}, 201)
+                    event_id = int(cur.lastrowid)
+                    creator = user_by_name(db, actor)
+                    if creator:
+                        assign_user_to_event(db, int(creator["id"]), event_id, creator["role"])
+                    ensure_super_admin_event_access(db, event_id)
+                    ensure_default_types(db, event_id)
+                    ensure_default_spaces(db, event_id)
+                    audit(db, actor, "event.created", "event", event_id, data)
+                self.send_json({"ok": True, "id": event_id}, 201)
                 return
 
             if path == "/api/prepare-event":
@@ -7266,14 +7415,53 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                     db.execute(
                         """
-                        INSERT INTO users (name, role, active, created_at)
-                        VALUES (?, ?, 1, ?)
+                        INSERT INTO users (name, role, pin_hash, active, created_at)
+                        VALUES (?, ?, ?, 1, ?)
                         ON CONFLICT(name)
-                        DO UPDATE SET role = excluded.role, active = 1
+                        DO UPDATE SET role = excluded.role,
+                                      pin_hash = CASE WHEN excluded.pin_hash <> '' THEN excluded.pin_hash ELSE users.pin_hash END,
+                                      active = 1
                         """,
-                        (name, role, now_iso()),
+                        (name, role, hash_pin(str(data.get("pin") or "").strip()) if str(data.get("pin") or "").strip() else "", now_iso()),
                     )
                     audit(db, actor, "user.saved", "user", None, {"name": name, "role": role})
+                self.send_json({"ok": True})
+                return
+
+            if path == "/api/event-users":
+                session = self.effective_user()
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                user_id = int(data.get("user_id") or 0)
+                role = str(data.get("role") or "").strip()
+                assigned = truthy(data.get("assigned", True))
+                allowed_roles = CONFIG_ROLES | RECEPTION_ROLES | ACCESS_ROLES | {"Visualizador"}
+                if not session or session.get("role") not in CONFIG_ROLES:
+                    self.send_json({"error": "Sin permiso para modificar equipo del evento"}, 403)
+                    return
+                if not event_id or not user_id or not role:
+                    self.send_json({"error": "Faltan evento, usuario o rol"}, 400)
+                    return
+                if role not in allowed_roles:
+                    self.send_json({"error": "Rol no permitido"}, 400)
+                    return
+                with connect() as db:
+                    event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+                    user = db.execute("SELECT id, name FROM users WHERE id = ? AND active = 1", (user_id,)).fetchone()
+                    if not event or not user:
+                        self.send_json({"error": "Evento o usuario inexistente"}, 404)
+                        return
+                    if assigned:
+                        assign_user_to_event(db, user_id, event_id, role)
+                        action = "event_user.assigned"
+                    else:
+                        db.execute(
+                            "UPDATE user_event_roles SET active = 0 WHERE user_id = ? AND event_id = ?",
+                            (user_id, event_id),
+                        )
+                        action = "event_user.removed"
+                    ensure_super_admin_event_access(db, event_id)
+                    audit(db, actor, action, "event", event_id, {"user_id": user_id, "user": user["name"], "role": role})
                 self.send_json({"ok": True})
                 return
 

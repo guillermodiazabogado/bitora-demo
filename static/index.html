@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acreditaciones QR</title>
-  <link rel="stylesheet" href="/styles.css?v=20260619-agenda-files">
+  <link rel="stylesheet" href="/styles.css?v=20260720-operativa-usuarios">
 </head>
 <body>
   <header class="topbar">
@@ -18,6 +18,7 @@
     </label>
     <button id="logoutBtn" class="ghost" type="button">Salir</button>
     <nav>
+      <button data-view="owner" id="ownerNav">Mis eventos</button>
       <button data-view="dashboard" class="active">Panel</button>
       <button data-view="register">Inscribir</button>
       <button data-view="reception">Recepcion</button>
@@ -33,6 +34,19 @@
   </header>
 
   <main>
+    <section id="owner" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Mis eventos</h1>
+          <p>Tablero del propietario para crear eventos y entrar a la operacion de cada uno.</p>
+        </div>
+        <div class="actions">
+          <button type="button" data-view-target="configure">Crear evento</button>
+        </div>
+      </div>
+      <div id="ownerDashboard" class="owner-dashboard"></div>
+    </section>
+
     <section id="dashboard" class="view active">
       <div class="section-head">
         <div>
@@ -397,6 +411,11 @@
               <button>Enviar WhatsApp de prueba</button>
             </form>
             <div id="whatsappTestNotice" class="result"></div>
+          </div>
+          <div class="panel event-team-panel">
+            <h2>Equipo del evento</h2>
+            <p class="empty">Asigna quienes pueden operar este evento: productor, recepcion, accesos, verificadores y visualizadores.</p>
+            <div id="eventUsersList" class="event-users-list"></div>
           </div>
           <div class="panel types-panel">
             <h2>Tipos y cupos</h2>
@@ -866,6 +885,7 @@
               <option>Operador de acceso</option>
               <option>Visualizador</option>
             </select>
+            <input name="pin" type="password" inputmode="numeric" placeholder="PIN inicial o nuevo PIN">
             <button>Guardar usuario</button>
           </form>
           <div id="usersList" class="mini-list"></div>

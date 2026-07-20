@@ -16,6 +16,7 @@ const state = {
   networkInfo: null,
   authUser: null,
   users: [],
+  eventUsers: [],
   audit: [],
   communications: null,
   diagnostics: null,
@@ -94,15 +95,20 @@ async function loadEvents() {
   state.events = await api("/api/events");
   const select = $("#eventSelect");
   select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  const requestedEventId = Number(new URLSearchParams(location.search).get("event_id") || 0);
   if (previousEventId && state.events.some((event) => Number(event.id) === Number(previousEventId))) {
     select.value = String(previousEventId);
+  } else if (requestedEventId && state.events.some((event) => Number(event.id) === requestedEventId)) {
+    select.value = String(requestedEventId);
   }
   if ($("#cloneEventSelect")) {
     $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   }
   state.eventId = Number(select.value || state.events[0]?.id || 0);
   updateMetrics();
-  await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
+  renderOwnerDashboard();
+  if (!state.eventId) return;
+  await reloadCurrentEventData();
 }
 
 async function loadAuth() {
@@ -565,6 +571,87 @@ function updateMetrics() {
   renderWaitingRoomConfig();
 }
 
+function eventStatusLabel(status) {
+  if (status === "published") return "Publicado";
+  if (status === "draft") return "Borrador";
+  if (status === "closed") return "Finalizado";
+  return status || "Sin estado";
+}
+
+function renderOwnerDashboard() {
+  const panel = $("#ownerDashboard");
+  if (!panel) return;
+  if (!state.events.length) {
+    panel.innerHTML = `
+      <section class="panel owner-empty">
+        <h2>Todavia no hay eventos</h2>
+        <p>Crea el primer evento para comenzar a operar BITORA.</p>
+        <button type="button" data-view-target="configure">Crear evento</button>
+      </section>
+    `;
+  } else {
+    panel.innerHTML = state.events.map((event) => {
+      const total = Number(event.accreditation_count || 0);
+      const checked = Number(event.checked_in_count || 0);
+      const pending = Math.max(total - checked, 0);
+      return `
+        <article class="panel owner-event-card ${Number(event.id) === Number(state.eventId) ? "active" : ""}">
+          <div class="owner-event-head">
+            <div>
+              <span class="eyebrow">${eventStatusLabel(event.status)}</span>
+              <h2>${escapeHtml(event.name)}</h2>
+              <p>${escapeHtml(event.venue || "Sin lugar definido")}</p>
+            </div>
+            <strong>${event.project_type === "ticketing" ? "Ticketing" : "Conference"}</strong>
+          </div>
+          <div class="owner-event-metrics">
+            <div><strong>${total}</strong><span>Inscriptos</span></div>
+            <div><strong>${checked}</strong><span>Acreditados</span></div>
+            <div><strong>${pending}</strong><span>Pendientes</span></div>
+          </div>
+          <div class="owner-event-actions">
+            <button type="button" class="open-owner-event" data-id="${event.id}">Entrar al evento</button>
+            <a class="button ghost" href="/e.html?event_id=${event.id}" target="_blank">Landing</a>
+            <a class="button ghost" href="/display.html?event_id=${event.id}" target="_blank">Pantalla publica</a>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+  panel.querySelectorAll("[data-view-target]").forEach((button) => button.addEventListener("click", () => {
+    setView(button.dataset.viewTarget);
+    history.replaceState(null, "", `#${button.dataset.viewTarget}`);
+  }));
+  panel.querySelectorAll(".open-owner-event").forEach((button) => button.addEventListener("click", async () => {
+    state.eventId = Number(button.dataset.id);
+    $("#eventSelect").value = String(state.eventId);
+    updateMetrics();
+    await reloadCurrentEventData();
+    setView("dashboard");
+    history.replaceState(null, "", `/?event_id=${state.eventId}`);
+  }));
+}
+
+async function reloadCurrentEventData() {
+  if (!state.eventId) return;
+  await Promise.all([
+    loadTypes(),
+    loadAccreditations(),
+    loadAgenda(),
+    loadAlerts(),
+    loadSystemStatus(),
+    loadNetworkInfo(),
+    loadSummary(),
+    loadMarketing(),
+    loadReadiness(),
+    loadAudit(),
+    loadCommunications(),
+    loadDemoReal(),
+    loadLogs(),
+    loadEventUsers(),
+  ]);
+}
+
 function renderLandingConfig() {
   const preview = $("#landingPreview");
   if (!preview) return;
@@ -910,6 +997,48 @@ async function loadUsers() {
       <span>${row.role}</span>
     </div>
   `).join("");
+}
+
+async function loadEventUsers() {
+  const panel = $("#eventUsersList");
+  if (!panel || !state.eventId) return;
+  if (!["Super Admin", "Productor", "Coordinador"].includes(state.authUser?.role)) {
+    panel.innerHTML = `<p class="empty">Equipo visible solo para administracion del evento.</p>`;
+    return;
+  }
+  try {
+    const result = await api(`/api/event-users?event_id=${state.eventId}`);
+    state.eventUsers = result.items || [];
+    const roles = result.roles || ["Productor", "Coordinador", "Operador de recepcion", "Operador de acceso", "Visualizador"];
+    panel.innerHTML = state.eventUsers.map((row) => `
+      <form class="event-user-row ${Number(row.assigned) ? "assigned" : ""}" data-user-id="${row.user_id}">
+        <label class="toggle">
+          <input name="assigned" type="checkbox" ${Number(row.assigned) ? "checked" : ""}>
+          <span>${escapeHtml(row.name)}</span>
+        </label>
+        <select name="role">
+          ${roles.map((role) => `<option value="${role}" ${role === row.event_role ? "selected" : ""}>${role}</option>`).join("")}
+        </select>
+        <small>${escapeHtml(row.platform_role)}</small>
+        <button>Guardar</button>
+      </form>
+    `).join("") || `<p class="empty">Todavia no hay usuarios activos.</p>`;
+    panel.querySelectorAll(".event-user-row").forEach((form) => form.addEventListener("submit", saveEventUser));
+  } catch (err) {
+    panel.innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
+}
+
+async function saveEventUser(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.event_id = state.eventId;
+  data.user_id = form.dataset.userId;
+  data.assigned = form.elements.assigned.checked;
+  data.actor = state.currentUser;
+  await api("/api/event-users", { method: "POST", body: JSON.stringify(data) });
+  await Promise.all([loadEventUsers(), loadAudit()]);
 }
 
 async function loadNetworkInfo() {
@@ -1593,9 +1722,12 @@ async function createEvent(event) {
   const data = formData(form);
   data.status = "published";
   data.actor = state.currentUser;
-  await api("/api/events", { method: "POST", body: JSON.stringify(data) });
+  const result = await api("/api/events", { method: "POST", body: JSON.stringify(data) });
   form.reset();
+  state.eventId = Number(result.id || state.eventId || 0);
   await loadEvents();
+  setView("dashboard");
+  history.replaceState(null, "", `/?event_id=${state.eventId}`);
 }
 
 async function prepareRealEvent(event) {
@@ -1919,7 +2051,7 @@ async function saveUser(event) {
   data.actor = state.currentUser;
   await api("/api/users", { method: "POST", body: JSON.stringify(data) });
   form.reset();
-  await Promise.all([loadUsers(), loadAudit()]);
+  await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
 }
 
 async function sendDemoCommunication(event) {
@@ -2107,7 +2239,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
     updateMetrics();
-    await Promise.all([loadTypes(), loadAccreditations(), loadAgenda(), loadAlerts(), loadSystemStatus(), loadNetworkInfo(), loadSummary(), loadMarketing(), loadReadiness(), loadAudit(), loadCommunications(), loadDemoReal(), loadLogs()]);
+    renderOwnerDashboard();
+    await reloadCurrentEventData();
   });
   $("#currentUserSelect").addEventListener("change", (event) => {
     state.currentUser = event.target.value;
@@ -2177,6 +2310,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadEvents();
   let initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
   if (initialView === "visualization") initialView = "reports";
+  if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
+    initialView = "owner";
+  }
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
     setView(initialView);
     if (initialView === "diagnostics") await loadDiagnostics();
