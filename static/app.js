@@ -185,6 +185,8 @@ function renderPermissionsMatrix() {
   if (!target || !state.permissions?.matrix) return;
   const modules = Object.keys(MODULE_LABELS);
   const rows = Object.entries(state.permissions.matrix);
+  const locked = state.permissions.locked || {};
+  const editable = state.authUser?.role === "Super Admin";
   target.innerHTML = `
     <div class="permissions-table">
       <div class="permissions-head">
@@ -196,12 +198,53 @@ function renderPermissionsMatrix() {
         return `
           <div class="permissions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
-            ${modules.map((module) => `<span class="${allowed.has(module) ? "yes" : "no"}">${allowed.has(module) ? "Si" : "-"}</span>`).join("")}
+            ${modules.map((module) => {
+              const isAllowed = allowed.has(module);
+              const isLocked = (locked[role] || []).includes(module);
+              return `
+                <button
+                  type="button"
+                  class="permission-cell ${isAllowed ? "yes" : "no"} ${isLocked ? "locked" : ""}"
+                  data-role="${escapeHtml(role)}"
+                  data-module="${escapeHtml(module)}"
+                  data-allowed="${isAllowed ? "1" : "0"}"
+                  ${!editable || isLocked ? "disabled" : ""}
+                  title="${isLocked ? "Permiso base del sistema" : "Cambiar permiso"}"
+                >${isAllowed ? "Si" : "No"}</button>
+              `;
+            }).join("")}
           </div>
         `;
       }).join("")}
     </div>
   `;
+  target.querySelectorAll(".permission-cell:not(:disabled)").forEach((button) => {
+    button.addEventListener("click", savePermissionCell);
+  });
+}
+
+async function savePermissionCell(event) {
+  const button = event.currentTarget;
+  const role = button.dataset.role;
+  const module = button.dataset.module;
+  const allowed = button.dataset.allowed !== "1";
+  button.disabled = true;
+  button.textContent = "...";
+  try {
+    const result = await api("/api/permissions", {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, role, module, allowed }),
+    });
+    state.permissions.matrix = result.matrix;
+    state.permissions.locked = result.locked || state.permissions.locked || {};
+    renderPermissionsMatrix();
+    renderCurrentPermissionsSummary();
+    renderFeatureVisibility();
+  } catch (err) {
+    button.disabled = false;
+    button.textContent = button.dataset.allowed === "1" ? "Si" : "No";
+    alert(err.message);
+  }
 }
 
 function renderCurrentPermissionsSummary() {

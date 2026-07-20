@@ -91,6 +91,9 @@ CONFIG_ROLES = {"Super Admin", "Productor", "Coordinador"}
 RECEPTION_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion"}
 ACCESS_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion", "Operador de acceso"}
 VIEWER_ROLES = {"Visualizador"}
+LOCKED_PERMISSION_MODULES = {
+    "Super Admin": {"owner", "users"},
+}
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
@@ -125,6 +128,7 @@ PERMISSION_MATRIX = {
         "actions": ["view_audit", "technical_diagnostics"],
     },
 }
+PERMISSION_MODULES = sorted({module for config in PERMISSION_MATRIX.values() for module in config["modules"]})
 REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
@@ -544,6 +548,15 @@ def init_db() -> None:
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 UNIQUE(user_id, event_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL,
+                module TEXT NOT NULL,
+                allowed INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(role, module)
             );
 
             CREATE TABLE IF NOT EXISTS participant_communication_preferences (
@@ -1075,6 +1088,18 @@ def ensure_user_event_roles_schema(db: sqlite3.Connection) -> None:
         )
         """
     )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            module TEXT NOT NULL,
+            allowed INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            UNIQUE(role, module)
+        )
+        """
+    )
 
 
 def ensure_reservation_bag_column(db: sqlite3.Connection) -> None:
@@ -1546,6 +1571,53 @@ def session_effective_role(db: sqlite3.Connection, session: dict | None, event_i
         if row:
             return row["role"]
     return str(session.get("role") or "")
+
+
+def permission_matrix_from_db(db: sqlite3.Connection) -> dict[str, dict[str, list[str]]]:
+    matrix = {
+        role: {
+            "modules": list(config.get("modules", [])),
+            "actions": list(config.get("actions", [])),
+        }
+        for role, config in PERMISSION_MATRIX.items()
+    }
+    rows = db.execute("SELECT role, module, allowed FROM role_permissions").fetchall()
+    for row in rows:
+        role = str(row["role"])
+        module = str(row["module"])
+        if role not in matrix or module not in PERMISSION_MODULES:
+            continue
+        modules = set(matrix[role]["modules"])
+        if int(row["allowed"] or 0):
+            modules.add(module)
+        else:
+            modules.discard(module)
+        modules.update(LOCKED_PERMISSION_MODULES.get(role, set()))
+        matrix[role]["modules"] = [item for item in PERMISSION_MODULES if item in modules]
+    return matrix
+
+
+def locked_permission_modules_payload() -> dict[str, list[str]]:
+    return {role: sorted(modules) for role, modules in LOCKED_PERMISSION_MODULES.items()}
+
+
+def save_role_permission(db: sqlite3.Connection, role: str, module: str, allowed: bool) -> None:
+    if role not in PERMISSION_MATRIX:
+        raise ValueError("Rol no permitido")
+    if module not in PERMISSION_MODULES:
+        raise ValueError("Modulo no permitido")
+    if module in LOCKED_PERMISSION_MODULES.get(role, set()) and not allowed:
+        raise ValueError("Este permiso base no puede desactivarse")
+    db.execute(
+        """
+        INSERT INTO role_permissions (role, module, allowed, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(role, module)
+        DO UPDATE SET allowed = excluded.allowed,
+                      updated_at = excluded.updated_at
+        """,
+        (role, module, 1 if allowed else 0, now_iso()),
+    )
 
 
 def hash_pin(pin: str) -> str:
@@ -5265,14 +5337,16 @@ class AppHandler(SimpleHTTPRequestHandler):
                 role = query.get("role", [session.get("role") if session else "Visualizador"])[0]
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 effective_role = role
-                if event_id and session:
-                    with connect() as db:
+                with connect() as db:
+                    matrix = permission_matrix_from_db(db)
+                    if event_id and session:
                         effective_role = session_effective_role(db, session, event_id)
                 self.send_json({
                     "role": role,
                     "effective_role": effective_role,
-                    "matrix": PERMISSION_MATRIX,
-                    "roles": sorted(PERMISSION_MATRIX),
+                    "matrix": matrix,
+                    "roles": sorted(matrix),
+                    "locked": locked_permission_modules_payload(),
                 })
                 return
 
@@ -7548,6 +7622,29 @@ class AppHandler(SimpleHTTPRequestHandler):
                     ensure_super_admin_event_access(db, event_id)
                     audit(db, actor, action, "event", event_id, {"user_id": user_id, "user": user["name"], "role": role})
                 self.send_json({"ok": True})
+                return
+
+            if path == "/api/permissions":
+                session = self.effective_user()
+                actor = data.get("actor", session.get("name") if session else "Admin")
+                role = str(data.get("role") or "").strip()
+                module = str(data.get("module") or "").strip()
+                allowed = truthy(data.get("allowed", False))
+                if not role or not module:
+                    self.send_json({"error": "Faltan rol o modulo"}, 400)
+                    return
+                with connect() as db:
+                    if (session or {}).get("role") != "Super Admin":
+                        self.send_json({"error": "Solo Super Admin puede modificar permisos"}, 403)
+                        return
+                    try:
+                        save_role_permission(db, role, module, allowed)
+                    except ValueError as exc:
+                        self.send_json({"error": str(exc)}, 400)
+                        return
+                    audit(db, actor, "permissions.updated", "role", None, {"role": role, "module": module, "allowed": allowed})
+                    matrix = permission_matrix_from_db(db)
+                self.send_json({"ok": True, "matrix": matrix, "locked": locked_permission_modules_payload()})
                 return
 
             if path == "/api/communications/send":

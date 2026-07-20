@@ -55,6 +55,17 @@ def main():
             assert "access" in server.PERMISSION_MATRIX["Operador de acceso"]["modules"], "Acceso debe ver modulo QR"
             assert server.session_effective_role(db, {"id": int(visualizador["id"]), "role": "Visualizador"}, event_id) == "Coordinador", "El rol efectivo del evento debe pisar el rol base"
             assert server.can_actor(db, "Visualizador", {"Coordinador"}), "Un rol asignado al evento debe habilitar permisos operativos"
+            server.save_role_permission(db, "Visualizador", "communications", True)
+            custom_matrix = server.permission_matrix_from_db(db)
+            assert "communications" in custom_matrix["Visualizador"]["modules"], "La matriz editable debe guardar permisos activados"
+            server.save_role_permission(db, "Visualizador", "communications", False)
+            custom_matrix = server.permission_matrix_from_db(db)
+            assert "communications" not in custom_matrix["Visualizador"]["modules"], "La matriz editable debe guardar permisos desactivados"
+            try:
+                server.save_role_permission(db, "Super Admin", "users", False)
+                raise AssertionError("No debe permitir bloquear Usuarios al Super Admin")
+            except ValueError:
+                pass
 
             team = db.execute(
                 """

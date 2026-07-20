@@ -4867,7 +4867,7 @@ code,
 .permissions-head strong,
 .permissions-head span,
 .permissions-row strong,
-.permissions-row span {
+.permission-cell {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -4895,22 +4895,44 @@ code,
   color: var(--brand-dark);
 }
 
-.permissions-row span {
+.permission-cell {
+  background: #f6f8f9;
+  color: #9aa9af;
+  cursor: pointer;
   justify-content: center;
   font-size: 12px;
+  font-weight: 800;
+  padding: 0 6px;
   text-align: center;
+  width: 100%;
 }
 
-.permissions-row .yes {
+.permission-cell.yes {
   background: #e1f4f1;
   border-color: #a9d8d0;
   color: var(--brand-dark);
-  font-weight: 800;
 }
 
-.permissions-row .no {
+.permission-cell.no {
   background: #f6f8f9;
   color: #9aa9af;
+}
+
+.permission-cell:hover:not(:disabled) {
+  box-shadow: 0 0 0 3px rgba(11, 127, 134, 0.12);
+  transform: none;
+}
+
+.permission-cell.locked,
+.permission-cell:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.permission-cell.locked.yes {
+  background: #eef4f6;
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 .permission-summary {
