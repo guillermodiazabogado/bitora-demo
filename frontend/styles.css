@@ -100,10 +100,10 @@ button:hover,
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 38px rgba(10, 22, 28, 0.16);
   display: flex;
-  gap: 18px;
+  gap: 12px;
   justify-content: space-between;
   min-height: 64px;
-  padding: 12px 22px;
+  padding: 10px 14px;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -119,7 +119,7 @@ button:hover,
 
 .bitora-wordmark {
   color: inherit;
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 900;
   letter-spacing: 1px;
   line-height: 1;
@@ -143,7 +143,7 @@ small {
   align-items: center;
   display: flex;
   gap: 8px;
-  min-width: 260px;
+  min-width: 250px;
 }
 
 .user-picker span {
@@ -157,14 +157,18 @@ small {
 
 nav {
   display: flex;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 nav button {
   background: rgba(255, 255, 255, 0.07);
   color: #dbe7eb;
+  font-size: 15px;
+  min-height: 36px;
+  padding: 0 12px;
   white-space: nowrap;
 }
 
@@ -175,8 +179,8 @@ nav button.active {
 
 main {
   margin: 0 auto;
-  max-width: 1180px;
-  padding: 24px;
+  max-width: min(1240px, calc(100vw - 28px));
+  padding: 24px 14px;
 }
 
 .view {
@@ -220,7 +224,13 @@ h2 {
 .layout {
   display: grid;
   gap: 18px;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+}
+
+.layout > *,
+.content,
+.panel {
+  min-width: 0;
 }
 
 .panel {
@@ -305,6 +315,32 @@ h2 {
   gap: 8px;
 }
 
+#users .section-head {
+  margin-bottom: 14px;
+}
+
+#users .layout {
+  gap: 16px;
+  grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
+}
+
+#users .panel {
+  padding: 14px;
+}
+
+#users h1 {
+  font-size: 29px;
+}
+
+#users h2 {
+  font-size: 17px;
+}
+
+#users .content {
+  display: grid;
+  gap: 14px;
+}
+
 .event-user-row {
   align-items: center;
   background: #f8fbfb;
@@ -312,7 +348,7 @@ h2 {
   border-radius: 8px;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 220px) minmax(90px, auto) auto;
+  grid-template-columns: minmax(130px, 1fr) minmax(150px, 190px) minmax(70px, 92px) 86px;
   padding: 10px;
 }
 
@@ -322,6 +358,23 @@ h2 {
 
 .event-user-row .toggle {
   margin: 0;
+  min-width: 0;
+}
+
+.event-user-row .toggle span,
+.event-user-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-user-row select {
+  width: 100%;
+}
+
+.event-user-row button {
+  min-height: 36px;
+  padding: 0 10px;
 }
 
 .prepare-box {
@@ -4794,20 +4847,21 @@ code,
 .permissions-matrix {
   overflow-x: auto;
   padding-bottom: 4px;
+  width: 100%;
 }
 
 .permissions-table {
   display: grid;
   gap: 8px;
-  min-width: 1180px;
+  min-width: 980px;
 }
 
 .permissions-head,
 .permissions-row {
   align-items: stretch;
   display: grid;
-  gap: 6px;
-  grid-template-columns: 180px repeat(13, minmax(72px, 1fr));
+  gap: 5px;
+  grid-template-columns: 150px repeat(13, minmax(58px, 1fr));
 }
 
 .permissions-head strong,
@@ -4818,20 +4872,22 @@ code,
   border: 1px solid var(--line);
   border-radius: 7px;
   display: flex;
-  min-height: 42px;
-  padding: 8px;
+  min-height: 36px;
+  padding: 6px;
 }
 
 .permissions-head strong,
 .permissions-head span {
   background: #eef4f6;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.18;
 }
 
 .permissions-row strong {
   background: #ffffff;
+  font-size: 13px;
 }
 
 .permissions-row.current strong {
@@ -4841,6 +4897,7 @@ code,
 
 .permissions-row span {
   justify-content: center;
+  font-size: 12px;
   text-align: center;
 }
 
