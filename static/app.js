@@ -1410,7 +1410,10 @@ async function loadAgenda() {
 
 function renderContextAgendaPanels() {
   const targets = ["registerAgendaContext", "receptionAgendaContext"];
-  const rows = [...(state.activities || [])].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const allowedTypes = new Set(["charla", "workshop", "panel", "capacitacion", "networking"]);
+  const rows = [...(state.activities || [])]
+    .filter((row) => allowedTypes.has(String(row.activity_type || "").trim().toLowerCase()))
+    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   const html = rows.slice(0, 10).map((row) => `
     <article class="context-agenda-row">
       <time>${new Date(row.starts_at).toLocaleDateString()} ${new Date(row.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
@@ -1424,7 +1427,7 @@ function renderContextAgendaPanels() {
   targets.forEach((id) => {
     const panel = $(`#${id}`);
     if (!panel) return;
-    panel.innerHTML = html || `<p class="empty">Este evento todavia no tiene actividades cargadas.</p>`;
+    panel.innerHTML = html || `<p class="empty">Este evento todavia no tiene charlas cargadas.</p>`;
   });
 }
 

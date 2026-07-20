@@ -705,16 +705,6 @@
         <button>Inscribir y emitir credencial</button>
       </form>
       <div id="registerResult" class="result"></div>
-      <div class="panel context-agenda-panel">
-        <div class="context-panel-head">
-          <div>
-            <h2>Agenda de este evento</h2>
-            <p>Charlas y actividades disponibles dentro del evento activo.</p>
-          </div>
-          <button type="button" class="ghost" data-view-target="agenda">Administrar agenda</button>
-        </div>
-        <div id="registerAgendaContext" class="context-agenda-list"></div>
-      </div>
       <div class="panel">
         <h2>Gestion de participantes</h2>
         <div class="reception-tools">
@@ -756,6 +746,15 @@
         </form>
         <div id="accreditations" class="table"></div>
       </div>
+      <div class="panel context-agenda-panel">
+        <div class="context-panel-head">
+          <div>
+            <h2>Charlas de este evento</h2>
+            <p>Visualizacion de referencia. No administra agenda.</p>
+          </div>
+        </div>
+        <div id="registerAgendaContext" class="context-agenda-list"></div>
+      </div>
     </section>
 
     <section id="reception" class="view">
@@ -777,10 +776,9 @@
       <div class="panel context-agenda-panel">
         <div class="context-panel-head">
           <div>
-            <h2>Agenda de este evento</h2>
+            <h2>Charlas de este evento</h2>
             <p>Referencia rapida para orientar al participante en mostrador.</p>
           </div>
-          <button type="button" class="ghost" data-view-target="agenda">Ver agenda completa</button>
         </div>
         <div id="receptionAgendaContext" class="context-agenda-list"></div>
       </div>
