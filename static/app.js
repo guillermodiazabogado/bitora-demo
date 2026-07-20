@@ -60,6 +60,27 @@ const ACTION_LABELS = {
   view_reports: "Ver reportes",
   view_audit: "Ver auditoria",
   technical_diagnostics: "Diagnostico tecnico",
+  "communications.view": "Comunicaciones: ver centro",
+  "communications.create": "Comunicaciones: crear borrador",
+  "communications.edit": "Comunicaciones: editar borrador",
+  "communications.preview": "Comunicaciones: previsualizar",
+  "communications.select_audience": "Comunicaciones: elegir audiencia",
+  "communications.send": "Comunicaciones: enviar masivo",
+  "communications.schedule": "Comunicaciones: programar",
+  "communications.pause": "Comunicaciones: pausar cola",
+  "communications.resume": "Comunicaciones: reanudar cola",
+  "communications.cancel": "Comunicaciones: cancelar pendientes",
+  "communications.resend_individual": "Comunicaciones: reenviar individual",
+  "communications.view_history": "Comunicaciones: ver historial",
+  "communications.view_metrics": "Comunicaciones: ver metricas",
+  "communications.manage_templates": "Comunicaciones: gestionar plantillas",
+  "communications.approve_templates": "Comunicaciones: aprobar plantillas",
+  "communications.manage_providers": "Comunicaciones: configurar proveedores",
+  "communications.view_technical_logs": "Comunicaciones: logs tecnicos",
+  "communications.retry_failed": "Comunicaciones: reintentar fallidos",
+  "communications.export": "Comunicaciones: exportar",
+  "communications.view_personal_data": "Comunicaciones: ver datos personales",
+  "communications.manage_consent": "Comunicaciones: gestionar consentimiento",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -209,10 +230,24 @@ function renderPermissionsMatrix() {
   const target = $("#permissionsMatrix");
   if (!target || !state.permissions?.matrix) return;
   const modules = Object.keys(MODULE_LABELS);
+  const communicationActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("communications."));
   const rows = Object.entries(state.permissions.matrix);
   const locked = state.permissions.locked || {};
   const editable = state.authUser?.role === "Super Admin";
+  const renderCell = ({ role, code, allowed, lockedCell = false, kind }) => `
+    <button
+      type="button"
+      class="permission-cell ${allowed ? "yes" : "no"} ${lockedCell ? "locked" : ""}"
+      data-role="${escapeHtml(role)}"
+      data-${kind}="${escapeHtml(code)}"
+      data-kind="${kind}"
+      data-allowed="${allowed ? "1" : "0"}"
+      ${!editable || lockedCell ? "disabled" : ""}
+      title="${lockedCell ? "Permiso base del sistema" : "Cambiar permiso"}"
+    >${allowed ? "Si" : "No"}</button>
+  `;
   target.innerHTML = `
+    <h3 class="permissions-subtitle">Pestanas visibles</h3>
     <div class="permissions-table">
       <div class="permissions-head">
         <strong>Rol</strong>
@@ -226,18 +261,24 @@ function renderPermissionsMatrix() {
             ${modules.map((module) => {
               const isAllowed = allowed.has(module);
               const isLocked = (locked[role] || []).includes(module);
-              return `
-                <button
-                  type="button"
-                  class="permission-cell ${isAllowed ? "yes" : "no"} ${isLocked ? "locked" : ""}"
-                  data-role="${escapeHtml(role)}"
-                  data-module="${escapeHtml(module)}"
-                  data-allowed="${isAllowed ? "1" : "0"}"
-                  ${!editable || isLocked ? "disabled" : ""}
-                  title="${isLocked ? "Permiso base del sistema" : "Cambiar permiso"}"
-                >${isAllowed ? "Si" : "No"}</button>
-              `;
+              return renderCell({ role, code: module, allowed: isAllowed, lockedCell: isLocked, kind: "module" });
             }).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <h3 class="permissions-subtitle">Permisos finos de Comunicaciones</h3>
+    <div class="permissions-table permissions-actions-table">
+      <div class="permissions-head permissions-actions-head">
+        <strong>Rol</strong>
+        ${communicationActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
+      </div>
+      ${rows.map(([role, config]) => {
+        const allowed = new Set(config.actions || []);
+        return `
+          <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
+            <strong>${escapeHtml(role)}</strong>
+            ${communicationActions.map((action) => renderCell({ role, code: action, allowed: allowed.has(action), kind: "action" })).join("")}
           </div>
         `;
       }).join("")}
@@ -252,13 +293,15 @@ async function savePermissionCell(event) {
   const button = event.currentTarget;
   const role = button.dataset.role;
   const module = button.dataset.module;
+  const action = button.dataset.action;
+  const kind = button.dataset.kind || (action ? "action" : "module");
   const allowed = button.dataset.allowed !== "1";
   button.disabled = true;
   button.textContent = "...";
   try {
     const result = await api("/api/permissions", {
       method: "POST",
-      body: JSON.stringify({ actor: state.currentUser, role, module, allowed }),
+      body: JSON.stringify({ actor: state.currentUser, role, module, action, kind, allowed }),
     });
     state.permissions.matrix = result.matrix;
     state.permissions.locked = result.locked || state.permissions.locked || {};
@@ -1234,6 +1277,10 @@ async function loadAudit() {
 
 async function loadCommunications() {
   if (!state.eventId) return;
+  if (!canDo("communications.view")) {
+    $("#communicationNotice").innerHTML = `<div class="panel danger">No tenes permiso para acceder al Centro de Comunicaciones de este evento.</div>`;
+    return;
+  }
   state.communications = await api(`/api/communications?event_id=${state.eventId}`);
   const stats = state.communications.stats || {};
   const providers = state.communications.providers || {};
@@ -1251,7 +1298,7 @@ async function loadCommunications() {
     <div><strong>${Number(stats.with_both || 0)}</strong><span>Con ambos</span></div>
     <div><strong>${Number(stats.with_consent || 0)}</strong><span>Con consentimiento</span></div>
   `;
-  $("#communicationV5Metrics").innerHTML = `
+  $("#communicationV5Metrics").innerHTML = canDo("communications.view_metrics") ? `
     <div><strong>${Number(queueMetrics.emails_sent || 0)}</strong><span>Emails enviados</span></div>
     <div><strong>${Number(queueMetrics.emails_delivered || 0)}</strong><span>Emails entregados</span></div>
     <div><strong>${Number(queueMetrics.emails_bounced || 0)}</strong><span>Rebotes</span></div>
@@ -1261,7 +1308,7 @@ async function loadCommunications() {
     <div><strong>${Number(queueMetrics.whatsapp_read || 0)}</strong><span>WhatsApp leidos</span></div>
     <div><strong>${Number(queueMetrics.pending || 0)}</strong><span>Pendientes</span></div>
     <div><strong>${Number(queueMetrics.errors || 0)}</strong><span>Errores</span></div>
-  `;
+  ` : `<p class="empty">Requiere permiso de metricas.</p>`;
   const emailProvider = providers.email || {};
   const emailSummary = $("#emailConfigSummary");
   if (emailSummary) {
@@ -1276,7 +1323,16 @@ async function loadCommunications() {
   }
   const emailTestForm = $("#emailTestForm");
   if (emailTestForm) {
-    emailTestForm.classList.toggle("hidden", state.authUser?.role !== "Super Admin");
+    emailTestForm.classList.toggle("hidden", !canDo("communications.manage_providers"));
+  }
+  $("#whatsappTestForm")?.classList.toggle("hidden", !canDo("communications.manage_providers"));
+  $("#communicationForm")?.classList.toggle("hidden", !canDo("communications.create") && !canDo("communications.send"));
+  $("#communicationForm")?.querySelector('[name="audience"]')?.toggleAttribute("disabled", !canDo("communications.select_audience"));
+  $("#communicationForm")?.querySelector('[name="confirm"]')?.toggleAttribute("disabled", !canDo("communications.send"));
+  const communicationSubmit = $("#communicationForm")?.querySelector('button');
+  if (communicationSubmit) {
+    communicationSubmit.textContent = canDo("communications.send") ? "Crear cola de envio" : "Guardar borrador";
+    communicationSubmit.title = canDo("communications.send") ? "" : "Requiere autorizacion de envio para procesar la cola";
   }
   $("#assistantMetrics").innerHTML = `
     <div><strong>${Number(assistantMetrics.received || 0)}</strong><span>Consultas</span></div>
@@ -1290,6 +1346,7 @@ async function loadCommunications() {
       <span>${row.status} - ${new Date(row.created_at).toLocaleString()}</span>
     </div>
   `).join("") || `<p class="empty">Sin derivaciones humanas.</p>`;
+  $("#communicationTemplates").closest(".panel")?.classList.toggle("hidden", !canDo("communications.manage_templates") && !canDo("communications.create") && !canDo("communications.send"));
   $("#communicationTemplates").innerHTML = state.communications.templates.map((row) => `
     <button type="button" class="mini-row template-pick" data-code="${row.code}" data-type="${row.tipo}" data-subject="${row.asunto}" data-content="${row.contenido}">
       <strong>${row.name}</strong>
@@ -1308,7 +1365,8 @@ async function loadCommunications() {
       <code>${row.audience}</code>
     </article>
   `).join("") || `<p class="empty">Cola vacia.</p>`;
-  $("#communicationLogs").innerHTML = state.communications.logs.map((row) => `
+  $("#communicationLogs").closest(".panel")?.classList.toggle("hidden", !canDo("communications.view_history"));
+  $("#communicationLogs").innerHTML = canDo("communications.view_history") ? state.communications.logs.map((row) => `
     <article class="audit-row">
       <div>
         <strong>${row.asunto || row.tipo}</strong>
@@ -1316,7 +1374,7 @@ async function loadCommunications() {
       </div>
       <code>${row.tipo}</code>
     </article>
-  `).join("") || `<p class="empty">Todavia no hay comunicaciones registradas.</p>`;
+  `).join("") || `<p class="empty">Todavia no hay comunicaciones registradas.</p>` : `<p class="empty">Requiere permiso para ver historial.</p>`;
   $$(".template-pick").forEach((button) => button.addEventListener("click", () => {
     const form = $("#communicationForm");
     form.elements.type.value = button.dataset.type;
@@ -2242,11 +2300,16 @@ async function saveUser(event) {
 async function sendDemoCommunication(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  if (!canDo("communications.create") && !canDo("communications.send")) {
+    $("#communicationNotice").innerHTML = `<div class="panel danger">No tenes permiso para crear comunicaciones en este evento.</div>`;
+    return;
+  }
   const data = formData(form);
   data.event_id = state.eventId;
   data.actor = state.currentUser;
   data.template_code = form.dataset.templateCode || form.elements.type.value;
   data.type = form.elements.type.value;
+  data.confirm = canDo("communications.send") && form.elements.confirm.checked;
   try {
     const result = await api("/api/communications/send", { method: "POST", body: JSON.stringify(data) });
     $("#communicationNotice").innerHTML = `<div class="panel success">Cola creada: ${result.queued}. Enviados/simulados: ${result.sent}. Omitidos: ${result.skipped}. Errores: ${result.errors}.</div>`;

@@ -4936,12 +4936,26 @@ code,
   min-width: 980px;
 }
 
+.permissions-subtitle {
+  font-size: 15px;
+  margin: 10px 0 8px;
+}
+
+.permissions-actions-table {
+  min-width: 1720px;
+}
+
 .permissions-head,
 .permissions-row {
   align-items: stretch;
   display: grid;
   gap: 5px;
   grid-template-columns: 150px repeat(13, minmax(58px, 1fr));
+}
+
+.permissions-actions-head,
+.permissions-actions-row {
+  grid-template-columns: 150px repeat(21, minmax(70px, 1fr));
 }
 
 .permissions-head strong,

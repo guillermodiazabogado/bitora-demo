@@ -94,22 +94,45 @@ VIEWER_ROLES = {"Visualizador"}
 LOCKED_PERMISSION_MODULES = {
     "Super Admin": {"owner", "users"},
 }
+COMMUNICATION_PERMISSION_CODES = [
+    "communications.view",
+    "communications.create",
+    "communications.edit",
+    "communications.preview",
+    "communications.select_audience",
+    "communications.send",
+    "communications.schedule",
+    "communications.pause",
+    "communications.resume",
+    "communications.cancel",
+    "communications.resend_individual",
+    "communications.view_history",
+    "communications.view_metrics",
+    "communications.manage_templates",
+    "communications.approve_templates",
+    "communications.manage_providers",
+    "communications.view_technical_logs",
+    "communications.retry_failed",
+    "communications.export",
+    "communications.view_personal_data",
+    "communications.manage_consent",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent"],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
-        "actions": ["manual_accredit", "register_participants"],
+        "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data"],
     },
     "Operador de acceso": {
         "modules": ["access"],
@@ -117,18 +140,19 @@ PERMISSION_MATRIX = {
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports"],
-        "actions": ["view_reports"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
-        "actions": ["communicate", "view_reports"],
+        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data"],
     },
     "Soporte tecnico": {
         "modules": ["dashboard", "audit", "diagnostics"],
-        "actions": ["view_audit", "technical_diagnostics"],
+        "actions": ["view_audit", "technical_diagnostics", "communications.view", "communications.view_metrics", "communications.view_technical_logs", "communications.retry_failed", "communications.manage_providers"],
     },
 }
 PERMISSION_MODULES = sorted({module for config in PERMISSION_MATRIX.values() for module in config["modules"]})
+PERMISSION_ACTIONS = sorted({action for config in PERMISSION_MATRIX.values() for action in config["actions"]})
 REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
@@ -557,6 +581,15 @@ def init_db() -> None:
                 allowed INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
                 UNIQUE(role, module)
+            );
+
+            CREATE TABLE IF NOT EXISTS role_action_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL,
+                action TEXT NOT NULL,
+                allowed INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(role, action)
             );
 
             CREATE TABLE IF NOT EXISTS participant_communication_preferences (
@@ -1100,6 +1133,18 @@ def ensure_user_event_roles_schema(db: sqlite3.Connection) -> None:
         )
         """
     )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS role_action_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            action TEXT NOT NULL,
+            allowed INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            UNIQUE(role, action)
+        )
+        """
+    )
 
 
 def ensure_reservation_bag_column(db: sqlite3.Connection) -> None:
@@ -1594,6 +1639,18 @@ def permission_matrix_from_db(db: sqlite3.Connection) -> dict[str, dict[str, lis
             modules.discard(module)
         modules.update(LOCKED_PERMISSION_MODULES.get(role, set()))
         matrix[role]["modules"] = [item for item in PERMISSION_MODULES if item in modules]
+    action_rows = db.execute("SELECT role, action, allowed FROM role_action_permissions").fetchall()
+    for row in action_rows:
+        role = str(row["role"])
+        action = str(row["action"])
+        if role not in matrix or action not in PERMISSION_ACTIONS:
+            continue
+        actions = set(matrix[role]["actions"])
+        if int(row["allowed"] or 0):
+            actions.add(action)
+        else:
+            actions.discard(action)
+        matrix[role]["actions"] = [item for item in PERMISSION_ACTIONS if item in actions]
     return matrix
 
 
@@ -1618,6 +1675,67 @@ def save_role_permission(db: sqlite3.Connection, role: str, module: str, allowed
         """,
         (role, module, 1 if allowed else 0, now_iso()),
     )
+
+
+def save_role_action_permission(db: sqlite3.Connection, role: str, action: str, allowed: bool) -> None:
+    if role not in PERMISSION_MATRIX:
+        raise ValueError("Rol no permitido")
+    if action not in PERMISSION_ACTIONS:
+        raise ValueError("Permiso no permitido")
+    db.execute(
+        """
+        INSERT INTO role_action_permissions (role, action, allowed, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(role, action)
+        DO UPDATE SET allowed = excluded.allowed,
+                      updated_at = excluded.updated_at
+        """,
+        (role, action, 1 if allowed else 0, now_iso()),
+    )
+
+
+def user_has_permission(db: sqlite3.Connection, session: dict | None, event_id: int, permission_code: str) -> bool:
+    if not session:
+        return False
+    if str(session.get("role") or "") == "Super Admin":
+        return True
+    if not session_can_access_event(db, session, event_id):
+        return False
+    role = session_effective_role(db, session, event_id)
+    matrix = permission_matrix_from_db(db)
+    return permission_code in set(matrix.get(role, {}).get("actions", []))
+
+
+def mask_email(value: str) -> str:
+    text = str(value or "")
+    if "@" not in text:
+        return "***"
+    name, domain = text.split("@", 1)
+    if len(name) <= 3:
+        return f"{name[:1]}***@{domain}"
+    return f"{name[:3]}***@{domain}"
+
+
+def mask_phone(value: str) -> str:
+    digits = re.sub(r"\D+", "", str(value or ""))
+    if len(digits) <= 4:
+        return "***"
+    return f"+{digits[:2]} {digits[2:5]} *** **{digits[-2:]}"
+
+
+def mask_communication_personal_data(payload):
+    if isinstance(payload, list):
+        return [mask_communication_personal_data(item) for item in payload]
+    if isinstance(payload, dict):
+        row = dict(payload)
+        for key in ("email", "preferred_email"):
+            if key in row:
+                row[key] = mask_email(row[key])
+        for key in ("phone", "preferred_phone", "recipient"):
+            if key in row:
+                row[key] = mask_phone(row[key]) if re.search(r"\d", str(row[key] or "")) else mask_email(row[key])
+        return row
+    return payload
 
 
 def hash_pin(pin: str) -> str:
@@ -4529,6 +4647,24 @@ class AppHandler(SimpleHTTPRequestHandler):
     def effective_user(self) -> dict | None:
         return self.session_user() or ({"id": 0, "name": "Admin", "role": "Super Admin", "local": True} if not self.login_required() else None)
 
+    def require_event_permission(self, db: sqlite3.Connection, event_id: int, permission_code: str, action: str) -> tuple[bool, dict | None]:
+        session = self.effective_user()
+        actor = (session or {}).get("name", "anonimo")
+        event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not session or not event:
+            audit(db, actor, "permission.denied", "event", event_id or None, {"permission": permission_code, "action": action, "reason": "no_session_or_event"})
+            self.send_json({"error": "No tenes permiso para operar este evento."}, 403)
+            return False, session
+        if str(session.get("role") or "") != "Super Admin" and not session_can_access_event(db, session, event_id):
+            audit(db, actor, "permission.denied", "event", event_id, {"permission": permission_code, "action": action, "reason": "event_not_assigned"})
+            self.send_json({"error": "No tenes permiso para operar este evento."}, 403)
+            return False, session
+        if not user_has_permission(db, session, event_id, permission_code):
+            audit(db, actor, "permission.denied", "event", event_id, {"permission": permission_code, "action": action, "reason": "missing_permission", "role": session_effective_role(db, session, event_id)})
+            self.send_json({"error": "No tenes permiso para esta accion en este evento."}, 403)
+            return False, session
+        return True, session
+
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -6273,12 +6409,13 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/communications":
                 event_id = int(query.get("event_id", ["0"])[0])
-                cache_key = f"communications:{event_id}"
-                cached = RESPONSE_CACHE.get(cache_key)
-                if cached is not None:
-                    self.send_json(cached)
-                    return
                 with connect() as db:
+                    ok, session = self.require_event_permission(db, event_id, "communications.view", "communications.view")
+                    if not ok:
+                        return
+                    can_view_metrics = user_has_permission(db, session, event_id, "communications.view_metrics")
+                    can_view_personal = user_has_permission(db, session, event_id, "communications.view_personal_data")
+                    can_view_technical = user_has_permission(db, session, event_id, "communications.view_technical_logs")
                     stats = dict(
                         db.execute(
                             """
@@ -6389,6 +6526,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()
+                if not can_view_personal:
+                    logs = mask_communication_personal_data(logs)
+                    queue = mask_communication_personal_data(queue)
+                    tickets = mask_communication_personal_data(tickets)
                 result = {
                     "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
                     "providers": {
@@ -6410,14 +6551,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                         },
                     },
                     "stats": stats,
-                    "queue_metrics": queue_metrics,
-                    "assistant_metrics": assistant_metrics,
+                    "queue_metrics": queue_metrics if can_view_metrics else {},
+                    "assistant_metrics": assistant_metrics if can_view_metrics else {},
                     "queue": queue,
                     "tickets": tickets,
                     "logs": logs,
                     "templates": templates,
+                    "permissions": {
+                        "view_personal_data": can_view_personal,
+                        "view_metrics": can_view_metrics,
+                        "view_technical_logs": can_view_technical,
+                    },
                 }
-                RESPONSE_CACHE.set(cache_key, result, 12)
                 self.send_json(result)
                 return
 
@@ -6430,9 +6575,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                     where += " AND l.person_id = ?"
                     params.append(person_id)
                 with connect() as db:
+                    ok, session = self.require_event_permission(db, event_id, "communications.view_history", "communications.view_history")
+                    if not ok:
+                        return
+                    can_view_personal = user_has_permission(db, session, event_id, "communications.view_personal_data")
                     rows = db.execute(
                         f"""
-                        SELECT l.*, p.first_name, p.last_name
+                        SELECT l.*, p.first_name, p.last_name, p.email, p.phone
                         FROM communication_logs l
                         JOIN people p ON p.id = l.person_id
                         WHERE {where}
@@ -6441,12 +6590,17 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         params,
                     ).fetchall()
-                self.send_json([dict(r) for r in rows])
+                payload = [dict(r) for r in rows]
+                self.send_json(payload if can_view_personal else mask_communication_personal_data(payload))
                 return
 
             if path == "/api/communications/assistant/history":
                 event_id = int(query.get("event_id", ["0"])[0])
                 with connect() as db:
+                    ok, session = self.require_event_permission(db, event_id, "communications.view_history", "communications.assistant_history")
+                    if not ok:
+                        return
+                    can_view_personal = user_has_permission(db, session, event_id, "communications.view_personal_data")
                     rows = db.execute(
                         """
                         SELECT h.*, p.first_name, p.last_name
@@ -6458,7 +6612,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchall()
-                self.send_json([dict(r) for r in rows])
+                payload = [dict(r) for r in rows]
+                self.send_json(payload if can_view_personal else mask_communication_personal_data(payload))
                 return
 
             if path == "/api/demo-real":
@@ -7629,26 +7784,32 @@ class AppHandler(SimpleHTTPRequestHandler):
                 actor = data.get("actor", session.get("name") if session else "Admin")
                 role = str(data.get("role") or "").strip()
                 module = str(data.get("module") or "").strip()
+                action_code = str(data.get("action") or "").strip()
+                kind = str(data.get("kind") or ("action" if action_code else "module")).strip()
                 allowed = truthy(data.get("allowed", False))
-                if not role or not module:
-                    self.send_json({"error": "Faltan rol o modulo"}, 400)
+                if not role or (kind == "module" and not module) or (kind == "action" and not action_code):
+                    self.send_json({"error": "Faltan rol o permiso"}, 400)
                     return
                 with connect() as db:
                     if (session or {}).get("role") != "Super Admin":
                         self.send_json({"error": "Solo Super Admin puede modificar permisos"}, 403)
                         return
                     try:
-                        save_role_permission(db, role, module, allowed)
+                        if kind == "action":
+                            save_role_action_permission(db, role, action_code, allowed)
+                            audit_payload = {"role": role, "action": action_code, "allowed": allowed}
+                        else:
+                            save_role_permission(db, role, module, allowed)
+                            audit_payload = {"role": role, "module": module, "allowed": allowed}
                     except ValueError as exc:
                         self.send_json({"error": str(exc)}, 400)
                         return
-                    audit(db, actor, "permissions.updated", "role", None, {"role": role, "module": module, "allowed": allowed})
+                    audit(db, actor, "permissions.updated", "role", None, audit_payload)
                     matrix = permission_matrix_from_db(db)
                 self.send_json({"ok": True, "matrix": matrix, "locked": locked_permission_modules_payload()})
                 return
 
             if path == "/api/communications/send":
-                actor = data.get("actor", "Admin")
                 event_id = int(data.get("event_id") or 0)
                 channel = data.get("channel", "email").strip() or "email"
                 message_type = data.get("type", "aviso operativo").strip() or "aviso operativo"
@@ -7662,17 +7823,26 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    accreditation_id = int(data.get("accreditation_id") or 0)
+                    confirm_send = truthy(data.get("confirm", True))
+                    required_permission = "communications.resend_individual" if accreditation_id else ("communications.send" if confirm_send else "communications.create")
+                    ok, session = self.require_event_permission(db, event_id, required_permission, "communications.send")
+                    if not ok:
                         db.execute("ROLLBACK")
-                        self.send_json(deny_message(actor), 403)
+                        return
+                    actor = session["name"]
+                    if not accreditation_id and audience != "all" and not user_has_permission(db, session, event_id, "communications.select_audience"):
+                        audit(db, actor, "permission.denied", "event", event_id, {"permission": "communications.select_audience", "action": "communications.send", "audience": audience})
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "No tenes permiso para seleccionar audiencias en este evento."}, 403)
                         return
                     if accreditation_id:
                         rows = communication_audience_rows(db, event_id, "all")
                         recipients = [row for row in rows if int(row["accreditation_id"]) == accreditation_id]
                     else:
                         recipients = communication_audience_rows(db, event_id, audience, data.get("filters") or {})
-                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
-                    audit(db, actor, "communications.queued", "event", event_id, {"channel": channel, "audience": audience, "template": template_code, **result})
+                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=confirm_send)
+                    audit(db, actor, "communications.queued", "event", event_id, {"permission": required_permission, "role": session_effective_role(db, session, event_id), "channel": channel, "audience": audience, "template": template_code, **result})
                     db.execute("COMMIT")
                 queue_ids = result.pop("_email_queue_ids", [])
                 whatsapp_ids = result.pop("_whatsapp_queue_ids", [])
@@ -7691,7 +7861,6 @@ class AppHandler(SimpleHTTPRequestHandler):
                 data["channel"] = "email" if path.endswith("/email/send") else "whatsapp"
                 path = "/api/communications/send"
                 # Fall through is not possible inside this handler, so repeat with the normalized payload.
-                actor = data.get("actor", "Admin")
                 event_id = int(data.get("event_id") or 0)
                 channel = data["channel"]
                 audience = data.get("audience", "all").strip() or "all"
@@ -7703,13 +7872,21 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    confirm_send = truthy(data.get("confirm", True))
+                    required_permission = "communications.send" if confirm_send else "communications.create"
+                    ok, session = self.require_event_permission(db, event_id, required_permission, f"communications.{channel}_send")
+                    if not ok:
                         db.execute("ROLLBACK")
-                        self.send_json(deny_message(actor), 403)
+                        return
+                    actor = session["name"]
+                    if audience != "all" and not user_has_permission(db, session, event_id, "communications.select_audience"):
+                        audit(db, actor, "permission.denied", "event", event_id, {"permission": "communications.select_audience", "action": f"communications.{channel}_send", "audience": audience})
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "No tenes permiso para seleccionar audiencias en este evento."}, 403)
                         return
                     recipients = communication_audience_rows(db, event_id, audience, data.get("filters") or {})
-                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=truthy(data.get("confirm", True)))
-                    audit(db, actor, f"communications.{channel}_queued", "event", event_id, {"audience": audience, **result})
+                    result = queue_communication(db, event_id=event_id, actor=actor, audience=audience, channel=channel, template_code=template_code, subject=subject, content=content, rows=recipients, process_now=confirm_send)
+                    audit(db, actor, f"communications.{channel}_queued", "event", event_id, {"permission": required_permission, "role": session_effective_role(db, session, event_id), "audience": audience, **result})
                     db.execute("COMMIT")
                 queue_ids = result.pop("_email_queue_ids", [])
                 whatsapp_ids = result.pop("_whatsapp_queue_ids", [])
@@ -7725,7 +7902,6 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/communications/email/test":
-                actor = data.get("actor", "Admin")
                 event_id = int(data.get("event_id") or 0)
                 recipient = str(data.get("email") or "").strip()
                 if not event_id or "@" not in recipient:
@@ -7733,10 +7909,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, ADMIN_ROLES):
+                    ok, session = self.require_event_permission(db, event_id, "communications.manage_providers", "communications.email_test")
+                    if not ok:
                         db.execute("ROLLBACK")
-                        self.send_json(deny_message(actor), 403)
                         return
+                    actor = session["name"]
                     row = db.execute(
                         """
                         SELECT a.id AS accreditation_id, a.token, a.type, a.status,
@@ -7777,14 +7954,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/communications/whatsapp/test":
-                actor = data.get("actor", "Admin")
                 event_id = int(data.get("event_id") or 0)
                 phone = str(data.get("phone") or "").strip()
                 message = str(data.get("message") or "Prueba operativa BITORA").strip()
                 with connect() as db:
-                    if not can_actor(db, actor, ADMIN_ROLES):
-                        self.send_json(deny_message(actor), 403)
+                    ok, session = self.require_event_permission(db, event_id, "communications.manage_providers", "communications.whatsapp_test")
+                    if not ok:
                         return
+                    actor = session["name"]
                     person = db.execute("SELECT id FROM people WHERE phone = ? LIMIT 1", (phone,)).fetchone()
                     if not person:
                         person_id = db.execute("INSERT INTO people (first_name, last_name, email, phone, created_at) VALUES ('Prueba', 'WhatsApp', ?, ?, ?)", (f"wa-{secrets.token_hex(4)}@bitora.test", phone, now_iso())).lastrowid
@@ -7805,14 +7982,17 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/communications/email/retry":
-                actor = data.get("actor", "Admin")
                 queue_id = int(data.get("queue_id") or 0)
                 if not queue_id:
                     self.send_json({"error": "Falta queue_id"}, 400)
                     return
                 with connect() as db:
-                    if not can_actor(db, actor, ADMIN_ROLES):
-                        self.send_json(deny_message(actor), 403)
+                    queue_row = db.execute("SELECT event_id FROM communication_queue WHERE id = ?", (queue_id,)).fetchone()
+                    if not queue_row:
+                        self.send_json({"error": "Mensaje inexistente"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, int(queue_row["event_id"]), "communications.retry_failed", "communications.email_retry")
+                    if not ok:
                         return
                 result = process_email_queue_item(queue_id)
                 self.send_json(result, 200 if result["ok"] or result["status"] == "pendiente" else 502)
@@ -7843,6 +8023,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                 message = str(data.get("message") or "").strip()
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
+                    ok, session = self.require_event_permission(db, event_id, "communications.view", "communications.assistant_message")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
                     answer = assistant_reply(db, event_id, phone, message)
                     participant = answer.get("participant") or {}
                     db.execute(
@@ -7852,7 +8036,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id, participant.get("person_id"), participant.get("accreditation_id"), phone, message, answer["reply"], answer["intent"], answer["status"], now_iso()),
                     )
-                    audit(db, data.get("actor", "assistant"), "communications.assistant_message", "event", event_id, {"intent": answer["intent"], "status": answer["status"]})
+                    audit(db, session["name"], "communications.assistant_message", "event", event_id, {"permission": "communications.view", "intent": answer["intent"], "status": answer["status"]})
                     db.execute("COMMIT")
                 self.send_json({k: v for k, v in answer.items() if k != "participant"})
                 return
