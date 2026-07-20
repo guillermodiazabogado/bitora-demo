@@ -90,6 +90,41 @@ ADMIN_ROLES = {"Super Admin"}
 CONFIG_ROLES = {"Super Admin", "Productor", "Coordinador"}
 RECEPTION_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion"}
 ACCESS_ROLES = {"Super Admin", "Productor", "Coordinador", "Operador de recepcion", "Operador de acceso"}
+VIEWER_ROLES = {"Visualizador"}
+PERMISSION_MATRIX = {
+    "Super Admin": {
+        "modules": ["owner", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics"],
+    },
+    "Productor": {
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team"],
+    },
+    "Coordinador": {
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit"],
+    },
+    "Operador de recepcion": {
+        "modules": ["dashboard", "register", "reception", "agenda"],
+        "actions": ["manual_accredit", "register_participants"],
+    },
+    "Operador de acceso": {
+        "modules": ["access"],
+        "actions": ["scan_qr"],
+    },
+    "Visualizador": {
+        "modules": ["dashboard", "agenda", "reports"],
+        "actions": ["view_reports"],
+    },
+    "Comunicaciones": {
+        "modules": ["dashboard", "agenda", "reports", "communications"],
+        "actions": ["communicate", "view_reports"],
+    },
+    "Soporte tecnico": {
+        "modules": ["dashboard", "audit", "diagnostics"],
+        "actions": ["view_audit", "technical_diagnostics"],
+    },
+}
 REPOSITORY = create_repository(DB_CONFIG.engine)
 DB_INTEGRITY_ERRORS = integrity_error_types()
 RUNTIME_METRICS = RuntimeMetrics()
@@ -1412,6 +1447,8 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
         ("Recepcion", "Operador de recepcion", "2222"),
         ("Acceso", "Operador de acceso", "3333"),
         ("Visualizador", "Visualizador", "4444"),
+        ("Comunicaciones", "Comunicaciones", "5555"),
+        ("Soporte", "Soporte tecnico", "6666"),
     ]
     for name, role, pin in defaults:
         db.execute(
@@ -1492,6 +1529,23 @@ def session_can_access_event(db: sqlite3.Connection, session: dict | None, event
         (user_id, event_id),
     ).fetchone()
     return bool(row)
+
+
+def session_effective_role(db: sqlite3.Connection, session: dict | None, event_id: int = 0) -> str:
+    if not session:
+        return ""
+    if event_id and session.get("role") != "Super Admin":
+        row = db.execute(
+            """
+            SELECT role
+            FROM user_event_roles
+            WHERE event_id = ? AND user_id = ? AND active = 1
+            """,
+            (event_id, int(session.get("id") or 0)),
+        ).fetchone()
+        if row:
+            return row["role"]
+    return str(session.get("role") or "")
 
 
 def hash_pin(pin: str) -> str:
@@ -3493,7 +3547,22 @@ def actor_role(db: sqlite3.Connection, actor: str) -> str:
 
 
 def can_actor(db: sqlite3.Connection, actor: str, allowed_roles: set[str]) -> bool:
-    return actor_role(db, actor) in allowed_roles
+    role = actor_role(db, actor)
+    if role in allowed_roles:
+        return True
+    user = user_by_name(db, actor)
+    if not user:
+        return False
+    row = db.execute(
+        """
+        SELECT 1
+        FROM user_event_roles
+        WHERE user_id = ? AND active = 1 AND role IN ({})
+        LIMIT 1
+        """.format(",".join("?" for _ in allowed_roles)),
+        [int(user["id"]), *sorted(allowed_roles)],
+    ).fetchone()
+    return bool(row)
 
 
 def deny_message(actor: str) -> dict:
@@ -5166,11 +5235,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/event-users":
                 session = self.effective_user()
-                if not session or session.get("role") not in CONFIG_ROLES:
-                    self.send_json({"error": "Sin permiso para ver equipo del evento"}, 403)
-                    return
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
+                    if session_effective_role(db, session, event_id) not in CONFIG_ROLES:
+                        self.send_json({"error": "Sin permiso para ver equipo del evento"}, 403)
+                        return
                     event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
                     if not event:
                         self.send_json({"error": "Evento inexistente"}, 404)
@@ -5188,7 +5257,23 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchall()
-                self.send_json({"items": [dict(row) for row in rows], "roles": sorted(CONFIG_ROLES | RECEPTION_ROLES | ACCESS_ROLES | {"Visualizador"})})
+                self.send_json({"items": [dict(row) for row in rows], "roles": sorted(set(PERMISSION_MATRIX))})
+                return
+
+            if path == "/api/permissions":
+                session = self.effective_user()
+                role = query.get("role", [session.get("role") if session else "Visualizador"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                effective_role = role
+                if event_id and session:
+                    with connect() as db:
+                        effective_role = session_effective_role(db, session, event_id)
+                self.send_json({
+                    "role": role,
+                    "effective_role": effective_role,
+                    "matrix": PERMISSION_MATRIX,
+                    "roles": sorted(PERMISSION_MATRIX),
+                })
                 return
 
             if path == "/api/audit":
@@ -7435,10 +7520,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 user_id = int(data.get("user_id") or 0)
                 role = str(data.get("role") or "").strip()
                 assigned = truthy(data.get("assigned", True))
-                allowed_roles = CONFIG_ROLES | RECEPTION_ROLES | ACCESS_ROLES | {"Visualizador"}
-                if not session or session.get("role") not in CONFIG_ROLES:
-                    self.send_json({"error": "Sin permiso para modificar equipo del evento"}, 403)
-                    return
+                allowed_roles = set(PERMISSION_MATRIX)
                 if not event_id or not user_id or not role:
                     self.send_json({"error": "Faltan evento, usuario o rol"}, 400)
                     return
@@ -7446,6 +7528,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                     self.send_json({"error": "Rol no permitido"}, 400)
                     return
                 with connect() as db:
+                    if session_effective_role(db, session, event_id) not in CONFIG_ROLES:
+                        self.send_json({"error": "Sin permiso para modificar equipo del evento"}, 403)
+                        return
                     event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
                     user = db.execute("SELECT id, name FROM users WHERE id = ? AND active = 1", (user_id,)).fetchone()
                     if not event or not user:

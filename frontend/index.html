@@ -25,6 +25,7 @@
       <button data-view="agenda">Agenda</button>
       <button data-view="access">Acceso</button>
       <button data-view="configure">Configurar Evento</button>
+      <button data-view="users">Usuarios y Permisos</button>
       <button data-view="reports">Reportes</button>
       <button data-view="communications">Comunicaciones</button>
       <button data-view="audit">Auditoria</button>
@@ -411,11 +412,6 @@
               <button>Enviar WhatsApp de prueba</button>
             </form>
             <div id="whatsappTestNotice" class="result"></div>
-          </div>
-          <div class="panel event-team-panel">
-            <h2>Equipo del evento</h2>
-            <p class="empty">Asigna quienes pueden operar este evento: productor, recepcion, accesos, verificadores y visualizadores.</p>
-            <div id="eventUsersList" class="event-users-list"></div>
           </div>
           <div class="panel types-panel">
             <h2>Tipos y cupos</h2>
@@ -865,16 +861,16 @@
       </div>
     </section>
 
-    <section id="audit" class="view">
+    <section id="users" class="view">
       <div class="section-head">
         <div>
-          <h1>Auditoria</h1>
-          <p>Registro de acciones relevantes del evento.</p>
+          <h1>Usuarios y Permisos</h1>
+          <p>Administra usuarios, equipo del evento y permisos visibles por rol.</p>
         </div>
       </div>
       <div class="layout">
         <aside class="panel">
-          <h2>Usuario operativo</h2>
+          <h2>Usuario del sistema</h2>
           <form id="userForm" class="stack">
             <input name="name" placeholder="Nombre" required>
             <select name="role" required>
@@ -884,6 +880,8 @@
               <option>Operador de recepcion</option>
               <option>Operador de acceso</option>
               <option>Visualizador</option>
+              <option>Comunicaciones</option>
+              <option>Soporte tecnico</option>
             </select>
             <input name="pin" type="password" inputmode="numeric" placeholder="PIN inicial o nuevo PIN">
             <button>Guardar usuario</button>
@@ -891,8 +889,33 @@
           <div id="usersList" class="mini-list"></div>
         </aside>
         <section class="content">
-          <div id="auditList" class="audit-list"></div>
+          <div class="panel">
+            <h2>Equipo asignado a este evento</h2>
+            <p class="empty">Marca quien participa de este evento y con que rol operativo.</p>
+            <div id="eventUsersList" class="event-users-list"></div>
+          </div>
+          <div class="panel">
+            <h2>Matriz de permisos recomendada</h2>
+            <p class="empty">Visibilidad por rol. Las acciones criticas se validan tambien en backend.</p>
+            <div id="permissionsMatrix" class="permissions-matrix"></div>
+          </div>
+          <div class="panel">
+            <h2>Permisos del usuario actual</h2>
+            <div id="currentPermissionsSummary" class="permission-summary"></div>
+          </div>
         </section>
+      </div>
+    </section>
+
+    <section id="audit" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Auditoria</h1>
+          <p>Registro de acciones relevantes del evento.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div id="auditList" class="audit-list"></div>
       </div>
     </section>
 

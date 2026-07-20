@@ -17,6 +17,7 @@ const state = {
   authUser: null,
   users: [],
   eventUsers: [],
+  permissions: null,
   audit: [],
   communications: null,
   diagnostics: null,
@@ -28,6 +29,37 @@ const state = {
   eventId: null,
   cameraStream: null,
   scanning: false,
+};
+
+const MODULE_LABELS = {
+  owner: "Mis eventos",
+  dashboard: "Panel",
+  register: "Inscribir",
+  reception: "Recepcion",
+  agenda: "Agenda",
+  access: "Acceso QR",
+  configure: "Configurar Evento",
+  users: "Usuarios y Permisos",
+  reports: "Reportes",
+  communications: "Comunicaciones",
+  audit: "Auditoria",
+  diagnostics: "Diagnostico Tecnico",
+  simulator: "Simulador Vivo",
+};
+
+const ACTION_LABELS = {
+  create_event: "Crear eventos",
+  manage_users: "Administrar usuarios",
+  manage_event_team: "Asignar equipo",
+  configure_event: "Configurar evento",
+  import_export: "Importar / exportar",
+  communicate: "Comunicaciones",
+  manual_accredit: "Recepcion y acreditacion",
+  register_participants: "Inscribir participantes",
+  scan_qr: "Validar QR",
+  view_reports: "Ver reportes",
+  view_audit: "Ver auditoria",
+  technical_diagnostics: "Diagnostico tecnico",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -105,6 +137,7 @@ async function loadEvents() {
     $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   }
   state.eventId = Number(select.value || state.events[0]?.id || 0);
+  await loadPermissions();
   updateMetrics();
   renderOwnerDashboard();
   if (!state.eventId) return;
@@ -118,18 +151,76 @@ async function loadAuth() {
   if (state.authUser) {
     state.currentUser = state.authUser.name;
     $("#logoutBtn").classList.remove("hidden");
-    $("#diagnosticsNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
-    $("#simulatorNav")?.classList.toggle("hidden", state.authUser.role !== "Super Admin");
-    $("#visualization")?.classList.toggle(
-      "hidden",
-      !["Super Admin", "Productor", "Coordinador"].includes(state.authUser.role),
-    );
   } else {
     $("#logoutBtn").classList.add("hidden");
-    $("#diagnosticsNav")?.classList.add("hidden");
-    $("#simulatorNav")?.classList.add("hidden");
-    $("#visualization")?.classList.add("hidden");
   }
+}
+
+function effectiveRole() {
+  return state.permissions?.effective_role || state.authUser?.role || "Visualizador";
+}
+
+function permissionsFor(role = effectiveRole()) {
+  return state.permissions?.matrix?.[role] || { modules: [], actions: [] };
+}
+
+function canSeeModule(module) {
+  return permissionsFor().modules.includes(module);
+}
+
+function canDo(action) {
+  return permissionsFor().actions.includes(action);
+}
+
+async function loadPermissions() {
+  if (!state.authUser) return;
+  const suffix = state.eventId ? `?event_id=${state.eventId}` : "";
+  state.permissions = await api(`/api/permissions${suffix}`);
+  renderPermissionsMatrix();
+  renderCurrentPermissionsSummary();
+}
+
+function renderPermissionsMatrix() {
+  const target = $("#permissionsMatrix");
+  if (!target || !state.permissions?.matrix) return;
+  const modules = Object.keys(MODULE_LABELS);
+  const rows = Object.entries(state.permissions.matrix);
+  target.innerHTML = `
+    <div class="permissions-table">
+      <div class="permissions-head">
+        <strong>Rol</strong>
+        ${modules.map((module) => `<span>${MODULE_LABELS[module]}</span>`).join("")}
+      </div>
+      ${rows.map(([role, config]) => {
+        const allowed = new Set(config.modules || []);
+        return `
+          <div class="permissions-row ${role === effectiveRole() ? "current" : ""}">
+            <strong>${escapeHtml(role)}</strong>
+            ${modules.map((module) => `<span class="${allowed.has(module) ? "yes" : "no"}">${allowed.has(module) ? "Si" : "-"}</span>`).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderCurrentPermissionsSummary() {
+  const target = $("#currentPermissionsSummary");
+  if (!target || !state.permissions) return;
+  const config = permissionsFor();
+  target.innerHTML = `
+    <div class="permission-role-card">
+      <span class="eyebrow">Rol efectivo</span>
+      <h3>${escapeHtml(effectiveRole())}</h3>
+      <p>Usuario: ${escapeHtml(state.authUser?.name || "-")} ${state.permissions.role !== state.permissions.effective_role ? `- rol base: ${escapeHtml(state.permissions.role)}` : ""}</p>
+    </div>
+    <div class="permission-chip-list">
+      ${(config.modules || []).map((module) => `<span>${MODULE_LABELS[module] || module}</span>`).join("")}
+    </div>
+    <div class="permission-action-list">
+      ${(config.actions || []).map((action) => `<span>${ACTION_LABELS[action] || action}</span>`).join("")}
+    </div>
+  `;
 }
 
 function formatDuration(seconds) {
@@ -402,7 +493,7 @@ function renderVisualization() {
 }
 
 async function loadVisualization(force = false) {
-  if (!state.eventId || !["Super Admin", "Productor", "Coordinador"].includes(state.authUser?.role)) return;
+  if (!state.eventId || !canSeeModule("reports")) return;
   const dashboard = $("#visualizationDashboard")?.value || "operational";
   const period = $("#visualizationPeriod")?.value || "event";
   $("#visualizationNotice").innerHTML = `<div class="panel">Actualizando visualizaciones...</div>`;
@@ -502,10 +593,14 @@ function renderFeatureVisibility() {
   const activitiesOn = eventFeature("activities_enabled", true);
   const capacityOn = eventFeature("capacity_control_enabled", true);
   const waitlistOn = eventFeature("waitlist_enabled", false);
-  document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration);
-  document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception);
-  document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn || !modules.agenda);
-  document.querySelector('[data-view="access"]')?.classList.toggle("hidden", !modules.access);
+  $$("nav button[data-view]").forEach((button) => {
+    const view = button.dataset.view;
+    button.classList.toggle("hidden", !canSeeModule(view));
+  });
+  document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration || !canSeeModule("register"));
+  document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception || !canSeeModule("reception"));
+  document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn || !modules.agenda || !canSeeModule("agenda"));
+  document.querySelector('[data-view="access"]')?.classList.toggle("hidden", !modules.access || !canSeeModule("access"));
   $("#agenda")?.classList.toggle("hidden", !activitiesOn || !modules.agenda);
   $("#displayConfigForm")?.closest(".panel")?.classList.toggle("hidden", !activitiesOn);
   $("#publicDisplayLink")?.classList.toggle("hidden", !activitiesOn);
@@ -515,12 +610,13 @@ function renderFeatureVisibility() {
   $("#dashboard .layout")?.classList.toggle("ticketing-layout", modules.ticketing);
   const activeView = $(".view.active")?.id;
   if (
-    (activeView === "register" && !modules.registration)
+    !canSeeModule(activeView)
+    || (activeView === "register" && !modules.registration)
     || (activeView === "reception" && !modules.reception)
     || (activeView === "agenda" && !modules.agenda)
     || (activeView === "access" && !modules.access)
   ) {
-    setView("dashboard");
+    setView(canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard");
   }
 }
 
@@ -1002,14 +1098,14 @@ async function loadUsers() {
 async function loadEventUsers() {
   const panel = $("#eventUsersList");
   if (!panel || !state.eventId) return;
-  if (!["Super Admin", "Productor", "Coordinador"].includes(state.authUser?.role)) {
+  if (!canSeeModule("users")) {
     panel.innerHTML = `<p class="empty">Equipo visible solo para administracion del evento.</p>`;
     return;
   }
   try {
     const result = await api(`/api/event-users?event_id=${state.eventId}`);
     state.eventUsers = result.items || [];
-    const roles = result.roles || ["Productor", "Coordinador", "Operador de recepcion", "Operador de acceso", "Visualizador"];
+    const roles = result.roles || Object.keys(state.permissions?.matrix || {});
     panel.innerHTML = state.eventUsers.map((row) => `
       <form class="event-user-row ${Number(row.assigned) ? "assigned" : ""}" data-user-id="${row.user_id}">
         <label class="toggle">
@@ -2224,6 +2320,7 @@ function stopCameraScan() {
 document.addEventListener("DOMContentLoaded", async () => {
   organizeReportAndDiagnosticViews();
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
+    if (!canSeeModule(button.dataset.view)) return;
     setView(button.dataset.view);
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
@@ -2233,11 +2330,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }));
   $$("[data-view-target]").forEach((button) => button.addEventListener("click", () => {
     const target = button.dataset.viewTarget;
+    if (!canSeeModule(target)) return;
     setView(target);
     history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
     state.eventId = Number(event.target.value);
+    await loadPermissions();
     updateMetrics();
     renderOwnerDashboard();
     await reloadCurrentEventData();
@@ -2312,6 +2411,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (initialView === "visualization") initialView = "reports";
   if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
     initialView = "owner";
+  }
+  if (initialView && !canSeeModule(initialView)) {
+    initialView = permissionsFor().modules[0] || "dashboard";
   }
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
     setView(initialView);

@@ -43,6 +43,19 @@ def main():
             assert int(admin_rows) == 1, "Super Admin debe quedar asignado al evento"
 
             server.assign_user_to_event(db, int(productor["id"]), event_id, "Productor")
+            visualizador = server.user_by_name(db, "Visualizador")
+            assert visualizador, "Debe existir usuario Visualizador"
+            server.assign_user_to_event(db, int(visualizador["id"]), event_id, "Coordinador")
+
+            assert "Comunicaciones" in server.PERMISSION_MATRIX, "Debe existir rol Comunicaciones"
+            assert "Soporte tecnico" in server.PERMISSION_MATRIX, "Debe existir rol Soporte tecnico"
+            assert "users" in server.PERMISSION_MATRIX["Productor"]["modules"], "Productor debe poder administrar equipo del evento"
+            assert "diagnostics" in server.PERMISSION_MATRIX["Soporte tecnico"]["modules"], "Soporte tecnico debe ver diagnostico"
+            assert "configure" not in server.PERMISSION_MATRIX["Operador de acceso"]["modules"], "Acceso no debe configurar eventos"
+            assert "access" in server.PERMISSION_MATRIX["Operador de acceso"]["modules"], "Acceso debe ver modulo QR"
+            assert server.session_effective_role(db, {"id": int(visualizador["id"]), "role": "Visualizador"}, event_id) == "Coordinador", "El rol efectivo del evento debe pisar el rol base"
+            assert server.can_actor(db, "Visualizador", {"Coordinador"}), "Un rol asignado al evento debe habilitar permisos operativos"
+
             team = db.execute(
                 """
                 SELECT u.name, uer.role
@@ -55,6 +68,7 @@ def main():
             ).fetchall()
             payload = [dict(row) for row in team]
             assert any(row["name"] == "Productor" and row["role"] == "Productor" for row in payload), "Productor asignado"
+            assert any(row["name"] == "Visualizador" and row["role"] == "Coordinador" for row in payload), "Visualizador asignado como Coordinador"
 
             where, params = server.event_access_clause({"id": int(productor["id"]), "name": "Productor", "role": "Productor"}, "e")
             visible = db.execute(f"SELECT COUNT(*) AS c FROM events e WHERE {where}", params).fetchone()["c"]
