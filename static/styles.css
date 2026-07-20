@@ -206,6 +206,23 @@ main {
   justify-content: flex-end;
 }
 
+.event-scope-control label {
+  align-items: start;
+  display: grid;
+  gap: 5px;
+  min-width: 280px;
+}
+
+.event-scope-control span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-scope-control select {
+  min-height: 40px;
+}
+
 h1,
 h2,
 p {
@@ -313,6 +330,69 @@ h2 {
 .event-users-list {
   display: grid;
   gap: 8px;
+}
+
+.context-agenda-panel {
+  margin: 16px 0;
+}
+
+.context-panel-head {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.context-panel-head h2 {
+  margin-bottom: 4px;
+}
+
+.context-panel-head p {
+  margin: 0;
+}
+
+.context-agenda-list {
+  display: grid;
+  gap: 8px;
+}
+
+.context-agenda-row {
+  align-items: center;
+  background: #f8fbfb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 132px minmax(0, 1fr) 130px;
+  padding: 10px 12px;
+}
+
+.context-agenda-row time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.context-agenda-row strong,
+.context-agenda-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-agenda-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.context-agenda-row small {
+  background: #edf3f4;
+  border-radius: 999px;
+  color: var(--ink);
+  justify-self: end;
+  padding: 6px 9px;
+  white-space: nowrap;
 }
 
 #users .section-head {
@@ -4976,6 +5056,25 @@ code,
 }
 
 @media (max-width: 700px) {
+  .event-scope-control,
+  .event-scope-control label,
+  .context-panel-head {
+    width: 100%;
+  }
+
+  .context-panel-head {
+    display: grid;
+  }
+
+  .context-agenda-row {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .context-agenda-row small {
+    justify-self: start;
+  }
+
   .email-test-form {
     grid-template-columns: 1fr;
   }

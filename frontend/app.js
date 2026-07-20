@@ -126,7 +126,7 @@ async function loadEvents() {
   const previousEventId = state.eventId;
   state.events = await api("/api/events");
   const select = $("#eventSelect");
-  select.innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
+  select.innerHTML = eventOptionsHtml();
   const requestedEventId = Number(new URLSearchParams(location.search).get("event_id") || 0);
   if (previousEventId && state.events.some((event) => Number(event.id) === Number(previousEventId))) {
     select.value = String(previousEventId);
@@ -137,10 +137,35 @@ async function loadEvents() {
     $("#cloneEventSelect").innerHTML = state.events.map((event) => `<option value="${event.id}">${event.name}</option>`).join("");
   }
   state.eventId = Number(select.value || state.events[0]?.id || 0);
+  syncEventSelectors();
   await loadPermissions();
   updateMetrics();
   renderOwnerDashboard();
   if (!state.eventId) return;
+  await reloadCurrentEventData();
+}
+
+function eventOptionsHtml() {
+  return state.events.map((event) => `<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("");
+}
+
+function syncEventSelectors() {
+  ["eventSelect", "usersEventSelect"].forEach((id) => {
+    const select = $(`#${id}`);
+    if (!select) return;
+    if (select.options.length !== state.events.length) {
+      select.innerHTML = eventOptionsHtml();
+    }
+    select.value = String(state.eventId || "");
+  });
+}
+
+async function selectActiveEvent(eventId) {
+  state.eventId = Number(eventId || 0);
+  syncEventSelectors();
+  await loadPermissions();
+  updateMetrics();
+  renderOwnerDashboard();
   await reloadCurrentEventData();
 }
 
@@ -762,10 +787,7 @@ function renderOwnerDashboard() {
     history.replaceState(null, "", `#${button.dataset.viewTarget}`);
   }));
   panel.querySelectorAll(".open-owner-event").forEach((button) => button.addEventListener("click", async () => {
-    state.eventId = Number(button.dataset.id);
-    $("#eventSelect").value = String(state.eventId);
-    updateMetrics();
-    await reloadCurrentEventData();
+    await selectActiveEvent(button.dataset.id);
     setView("dashboard");
     history.replaceState(null, "", `/?event_id=${state.eventId}`);
   }));
@@ -1375,6 +1397,7 @@ async function loadAgenda() {
       <button type="button" class="display-toggle" data-id="${row.id}">Pantalla</button>
     </article>
   `}).join("") || `<p class="empty">Todavia no hay actividades cargadas.</p>`;
+  renderContextAgendaPanels();
   renderReservationSelectors();
   renderAccessActivitySelector();
   renderReservations();
@@ -1383,6 +1406,26 @@ async function loadAgenda() {
     if (event.target.closest("a,button")) return;
     openActivityDetail(row.dataset.id);
   }));
+}
+
+function renderContextAgendaPanels() {
+  const targets = ["registerAgendaContext", "receptionAgendaContext"];
+  const rows = [...(state.activities || [])].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const html = rows.slice(0, 10).map((row) => `
+    <article class="context-agenda-row">
+      <time>${new Date(row.starts_at).toLocaleDateString()} ${new Date(row.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+      <div>
+        <strong>${escapeHtml(row.title)}</strong>
+        <span>${escapeHtml(row.space_name || "Sin sala")} - ${escapeHtml(row.activity_type || "Actividad")}</span>
+      </div>
+      <small>${activityCapacityLabel(row)}</small>
+    </article>
+  `).join("");
+  targets.forEach((id) => {
+    const panel = $(`#${id}`);
+    if (!panel) return;
+    panel.innerHTML = html || `<p class="empty">Este evento todavia no tiene actividades cargadas.</p>`;
+  });
 }
 
 function activityCapacityLabel(row) {
@@ -2378,11 +2421,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
-    state.eventId = Number(event.target.value);
-    await loadPermissions();
-    updateMetrics();
-    renderOwnerDashboard();
-    await reloadCurrentEventData();
+    await selectActiveEvent(event.target.value);
+  });
+  $("#usersEventSelect")?.addEventListener("change", async (event) => {
+    await selectActiveEvent(event.target.value);
   });
   $("#currentUserSelect").addEventListener("change", (event) => {
     state.currentUser = event.target.value;
