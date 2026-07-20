@@ -5121,3 +5121,47 @@ code,
     grid-column: 1 / -1;
   }
 }
+
+.restore-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.restore-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.restore-summary > div {
+  background: #f8fbfc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.restore-summary span,
+.restore-summary small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+}
+
+.restore-summary strong {
+  display: block;
+  font-size: 19px;
+  margin-top: 4px;
+}
+
+.restore-run-form {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.danger-zone {
+  background: #fff8f7;
+  border: 1px solid #efc3bd;
+  border-radius: 8px;
+  padding: 10px;
+}

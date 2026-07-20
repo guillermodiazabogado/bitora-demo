@@ -281,6 +281,19 @@
         </aside>
 
         <section class="content">
+          <div class="panel action-backup">
+            <h2>Backups y Recuperacion</h2>
+            <p class="empty">Subi un ZIP de evento, verificá el manifiesto y restauralo de forma controlada. Por defecto se crea un evento nuevo en borrador.</p>
+            <form id="eventRestoreInspectForm" class="stack">
+              <label class="file-picker file-picker-large">
+                <span>Seleccionar backup ZIP de evento</span>
+                <input id="eventRestoreFile" name="backup_file" type="file" accept=".zip,application/zip">
+              </label>
+              <div id="eventRestoreFileName" class="file-name">Ningun archivo seleccionado</div>
+              <button type="submit">Inspeccionar backup</button>
+            </form>
+            <div id="eventRestorePreview" class="restore-preview"></div>
+          </div>
           <div class="panel templates-panel">
             <div class="report-panel-head">
               <div>

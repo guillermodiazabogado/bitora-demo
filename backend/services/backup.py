@@ -8,6 +8,7 @@ import tempfile
 import zipfile
 from collections.abc import Callable
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 
@@ -292,7 +293,9 @@ class EventBackupService:
         data = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
         manifest = {
             "version": 1,
+            "schema_version": 1,
             "scope": "event",
+            "backup_type": "event",
             "event_id": event_id,
             "created_at": payload["created_at"],
             "created_by": actor,
@@ -357,12 +360,440 @@ class EventBackupService:
             return {
                 "format": "bitora.event.backup",
                 "version": 1,
+                "schema_version": 1,
                 "event_id": event_id,
                 "created_at": datetime.now().isoformat(timespec="seconds"),
                 "created_by": actor,
                 "database_engine": getattr(db, "engine", "sqlite"),
                 "tables": tables,
             }
+
+
+class EventRestoreService:
+    """Validates and restores event backup bundles with ID remapping."""
+
+    MAX_BACKUP_BYTES = 25 * 1024 * 1024
+    SUPPORTED_SCHEMA_VERSIONS = {1}
+    INSERT_ORDER = [
+        "accreditation_types",
+        "spaces",
+        "activities",
+        "capacity_bags",
+        "public_display_config",
+        "public_display_items",
+        "participant_announcements",
+        "communication_templates",
+        "people",
+        "participant_communication_preferences",
+        "accreditations",
+        "reservations",
+        "activity_attendance",
+        "certificate_eligibility",
+        "access_logs",
+        "communication_logs",
+        "communication_queue",
+        "email_delivery_events",
+        "communication_assistant_history",
+        "communication_tickets",
+        "captation_events",
+        "conversation_sources",
+        "jobs",
+        "waiting_room_visitors",
+        "simulator_state",
+        "visualization_layouts",
+        "audit_logs",
+        "event_users",
+    ]
+
+    def __init__(
+        self,
+        connect: Callable,
+        lock,
+        token_factory: Callable[[], str],
+        now: Callable[[], str],
+        *,
+        app_version: str = "",
+        backup_service: EventBackupService | None = None,
+    ) -> None:
+        self.connect = connect
+        self.lock = lock
+        self.token_factory = token_factory
+        self.now = now
+        self.app_version = app_version
+        self.backup_service = backup_service
+
+    def inspect_bytes(self, raw: bytes, filename: str = "backup.zip") -> dict:
+        manifest, payload, warnings = self._read_bundle(raw, filename)
+        tables = payload.get("tables") or {}
+        event = (tables.get("events") or [{}])[0]
+        conflicts = []
+        with self.connect() as db:
+            existing_event = db.execute("SELECT id, name FROM events WHERE id = ?", (int(payload.get("event_id") or 0),)).fetchone()
+            if existing_event:
+                conflicts.append({"type": "source_event_exists", "event_id": existing_event["id"], "name": existing_event["name"]})
+            for person in tables.get("people") or []:
+                email = str(person.get("email") or "").strip().lower()
+                if email:
+                    existing = db.execute("SELECT id, first_name, last_name, email FROM people WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+                    if existing:
+                        conflicts.append({"type": "person_reused", "email": _mask_email(email), "existing_id": existing["id"]})
+        counts = {name: len(rows) for name, rows in tables.items()}
+        return {
+            "ok": True,
+            "restore_id": "",
+            "recommended_mode": "new_event",
+            "compatible": True,
+            "event": {
+                "source_event_id": payload.get("event_id"),
+                "name": event.get("name") or "Evento restaurado",
+                "status": event.get("status") or "",
+                "created_at": event.get("created_at") or "",
+            },
+            "manifest": {
+                "version": manifest.get("version"),
+                "schema_version": manifest.get("schema_version", payload.get("schema_version", 1)),
+                "backup_type": manifest.get("backup_type") or manifest.get("scope"),
+                "created_at": manifest.get("created_at"),
+                "created_by": manifest.get("created_by"),
+                "app_version": manifest.get("app_version"),
+                "database_engine": manifest.get("database_engine"),
+                "sha256": (manifest.get("payload") or {}).get("sha256"),
+            },
+            "counts": {
+                "participants": counts.get("people", 0),
+                "accreditations": counts.get("accreditations", 0),
+                "activities": counts.get("activities", 0),
+                "reservations": counts.get("reservations", 0),
+                "accesses": counts.get("access_logs", 0),
+                "attendance": counts.get("activity_attendance", 0),
+                "certificates": counts.get("certificate_eligibility", 0),
+                "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
+                "templates": counts.get("communication_templates", 0),
+                "users_assigned": counts.get("event_users", 0),
+                "tables": counts,
+            },
+            "warnings": warnings,
+            "conflicts": conflicts,
+            "personal_data_masked": True,
+        }
+
+    def restore_bytes(
+        self,
+        raw: bytes,
+        *,
+        mode: str = "new_event",
+        actor: str = "system",
+        new_event_name: str = "",
+        target_event_id: int = 0,
+        confirm_text: str = "",
+    ) -> dict:
+        manifest, payload, warnings = self._read_bundle(raw, "restore.zip")
+        mode = str(mode or "new_event").strip()
+        if mode not in {"new_event", "overwrite"}:
+            raise ValueError("Modo de restauracion invalido")
+        if mode == "overwrite" and confirm_text != "RESTAURAR EVENTO":
+            raise ValueError("Confirmacion reforzada invalida")
+        started = datetime.now()
+        preventive_backup = None
+        if mode == "overwrite":
+            if not target_event_id:
+                raise ValueError("Falta evento destino")
+            if self.backup_service is None:
+                raise ValueError("Backup preventivo no disponible")
+            preventive_backup = self.backup_service.create_event_bundle(target_event_id, actor)
+        with self.lock, self.connect() as db:
+            try:
+                db.execute("BEGIN IMMEDIATE")
+            except Exception:
+                db.execute("BEGIN")
+            try:
+                if mode == "overwrite":
+                    new_event_id = target_event_id
+                    self._delete_event_scope(db, target_event_id)
+                    self._restore_event_row(db, payload, new_event_id, actor, new_event_name, overwrite=True)
+                else:
+                    new_event_id = self._create_event_row(db, payload, actor, new_event_name)
+
+                maps: dict[str, dict[int, int]] = {
+                    "events": {int(payload.get("event_id") or 0): new_event_id},
+                    "people": {},
+                    "spaces": {},
+                    "activities": {},
+                    "capacity_bags": {},
+                    "accreditations": {},
+                    "reservations": {},
+                    "communication_queue": {},
+                }
+                token_map: dict[str, str] = {}
+                conflicts: list[dict] = []
+                for table in self.INSERT_ORDER:
+                    if table == "people":
+                        self._restore_people(db, payload, maps, conflicts)
+                    elif table == "event_users":
+                        self._restore_event_users(db, payload, maps, conflicts)
+                    elif table in {"audit_logs"}:
+                        self._restore_generic(db, table, payload, maps, token_map, actor, audit=True)
+                    elif table not in {"people", "event_users"}:
+                        self._restore_generic(db, table, payload, maps, token_map, actor)
+
+                self._validate_restored(db, payload, new_event_id)
+                duration_ms = int((datetime.now() - started).total_seconds() * 1000)
+                self._audit(
+                    db,
+                    actor,
+                    "backup.event_restored",
+                    "event",
+                    new_event_id,
+                    {
+                        "mode": mode,
+                        "source_event_id": payload.get("event_id"),
+                        "target_event_id": target_event_id or None,
+                        "new_event_id": new_event_id,
+                        "checksum": (manifest.get("payload") or {}).get("sha256"),
+                        "preventive_backup": preventive_backup.name if preventive_backup else "",
+                        "warnings": warnings,
+                        "conflicts": conflicts,
+                        "duration_ms": duration_ms,
+                    },
+                )
+                db.execute("COMMIT")
+                return {
+                    "ok": True,
+                    "mode": mode,
+                    "event_id": new_event_id,
+                    "source_event_id": payload.get("event_id"),
+                    "name": self._event_name(db, new_event_id),
+                    "warnings": warnings,
+                    "conflicts": conflicts,
+                    "token_regenerated": len(token_map),
+                    "preventive_backup": preventive_backup.name if preventive_backup else "",
+                    "duration_ms": duration_ms,
+                }
+            except Exception:
+                db.execute("ROLLBACK")
+                raise
+
+    def _read_bundle(self, raw: bytes, filename: str) -> tuple[dict, dict, list[str]]:
+        if not raw or len(raw) > self.MAX_BACKUP_BYTES:
+            raise ValueError("Tamano de backup invalido")
+        if not str(filename or "").lower().endswith(".zip"):
+            raise ValueError("Solo se aceptan archivos ZIP")
+        warnings: list[str] = []
+        try:
+            with zipfile.ZipFile(BytesIO(raw)) as archive:
+                names = archive.namelist()
+                if len(names) > 8:
+                    raise ValueError("El ZIP contiene demasiados archivos")
+                for name in names:
+                    normalized = name.replace("\\", "/")
+                    if normalized.startswith("/") or ".." in normalized.split("/") or normalized.endswith((".exe", ".bat", ".cmd", ".ps1", ".sh")):
+                        raise ValueError("El ZIP contiene rutas o archivos no permitidos")
+                if "manifest.json" not in names:
+                    raise ValueError("Falta manifest.json")
+                manifest = json.loads(archive.read("manifest.json"))
+                payload_meta = manifest.get("payload") or {}
+                payload_name = payload_meta.get("name") or f"event-{manifest.get('event_id')}.json"
+                if payload_name not in names:
+                    raise ValueError("Falta payload de evento")
+                content = archive.read(payload_name)
+                checksum = hashlib.sha256(content).hexdigest()
+                if checksum != payload_meta.get("sha256"):
+                    raise ValueError("Checksum invalido")
+                payload = json.loads(content.decode("utf-8"))
+        except zipfile.BadZipFile as exc:
+            raise ValueError("ZIP invalido o corrupto") from exc
+        backup_type = manifest.get("backup_type") or manifest.get("scope")
+        if backup_type != "event":
+            raise ValueError("El backup no es de evento")
+        schema_version = int(manifest.get("schema_version", payload.get("schema_version", 1)) or 0)
+        if schema_version not in self.SUPPORTED_SCHEMA_VERSIONS:
+            raise ValueError("Version de esquema no compatible")
+        if payload.get("format") != "bitora.event.backup":
+            raise ValueError("Formato de backup no compatible")
+        if int(payload.get("event_id") or 0) != int(manifest.get("event_id") or 0):
+            raise ValueError("event_id inconsistente")
+        if not (payload.get("tables") or {}).get("events"):
+            raise ValueError("El backup no contiene evento")
+        if not manifest.get("schema_version"):
+            warnings.append("Backup anterior sin schema_version explicito; se asume version 1")
+        return manifest, payload, warnings
+
+    def _create_event_row(self, db, payload: dict, actor: str, new_event_name: str) -> int:
+        source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        source.pop("id", None)
+        source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
+        source["status"] = "draft"
+        source["created_at"] = self.now()
+        return self._insert_row(db, "events", source)
+
+    def _restore_event_row(self, db, payload: dict, event_id: int, actor: str, new_event_name: str, overwrite: bool) -> None:
+        source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        source.pop("id", None)
+        source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
+        source["status"] = "draft"
+        source["created_at"] = self.now()
+        columns = [name for name in source if name in self._columns(db, "events")]
+        assignments = ", ".join(f"{name} = ?" for name in columns)
+        db.execute(f"UPDATE events SET {assignments} WHERE id = ?", [source[name] for name in columns] + [event_id])
+
+    def _restore_people(self, db, payload: dict, maps: dict, conflicts: list[dict]) -> None:
+        for row in (payload.get("tables") or {}).get("people", []):
+            old_id = int(row.get("id") or 0)
+            email = str(row.get("email") or "").strip().lower() or f"restored-{old_id}@bitora.local"
+            existing = db.execute("SELECT id FROM people WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+            if existing:
+                maps["people"][old_id] = int(existing["id"])
+                conflicts.append({"type": "person_reused", "old_id": old_id, "person_id": int(existing["id"]), "email": _mask_email(email)})
+                continue
+            values = dict(row)
+            values.pop("id", None)
+            values["email"] = email
+            values["created_at"] = values.get("created_at") or self.now()
+            maps["people"][old_id] = self._insert_row(db, "people", values)
+
+    def _restore_event_users(self, db, payload: dict, maps: dict, conflicts: list[dict]) -> None:
+        new_event_id = next(iter(maps["events"].values()))
+        for row in (payload.get("tables") or {}).get("event_users", []):
+            user = db.execute("SELECT id FROM users WHERE name = ? AND active = 1", (row.get("name") or "",)).fetchone()
+            if not user:
+                conflicts.append({"type": "missing_user_assignment", "name": row.get("name") or "", "role": row.get("event_role") or row.get("role") or ""})
+                continue
+            db.execute(
+                """
+                INSERT INTO user_event_roles (user_id, event_id, role, active, created_at)
+                VALUES (?, ?, ?, 1, ?)
+                ON CONFLICT(user_id, event_id) DO UPDATE SET role = excluded.role, active = 1
+                """,
+                (int(user["id"]), new_event_id, row.get("event_role") or row.get("role") or "Visualizador", self.now()),
+            )
+
+    def _restore_generic(self, db, table: str, payload: dict, maps: dict, token_map: dict, actor: str, audit: bool = False) -> None:
+        rows = (payload.get("tables") or {}).get(table) or []
+        for source_row in rows:
+            row = dict(source_row)
+            old_id = int(row.get("id") or 0)
+            row.pop("id", None)
+            if "event_id" in row:
+                row["event_id"] = maps["events"].get(int(row.get("event_id") or 0), next(iter(maps["events"].values())))
+            if "space_id" in row and row.get("space_id") is not None:
+                row["space_id"] = maps["spaces"].get(int(row["space_id"]), row["space_id"])
+            if "activity_id" in row and row.get("activity_id") is not None:
+                row["activity_id"] = maps["activities"].get(int(row["activity_id"]), row["activity_id"])
+            if "bag_id" in row and row.get("bag_id") is not None:
+                row["bag_id"] = maps["capacity_bags"].get(int(row["bag_id"]), row["bag_id"])
+            if "person_id" in row and row.get("person_id") is not None:
+                row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
+            if "accreditation_id" in row and row.get("accreditation_id") is not None:
+                row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
+            if "reservation_id" in row and row.get("reservation_id") is not None:
+                row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
+            if "queue_id" in row and row.get("queue_id") is not None:
+                row["queue_id"] = maps["communication_queue"].get(int(row["queue_id"]), row["queue_id"])
+            if table == "accreditations":
+                original = str(source_row.get("token") or "")
+                row["token"] = self._unique_token(db)
+                if original:
+                    token_map[original] = row["token"]
+                row["checked_in_at"] = None
+                row["checked_in_by"] = ""
+                row["access_count"] = 0
+                row["status"] = "active" if row.get("status") != "cancelled" else "cancelled"
+            elif "token" in row and str(row.get("token") or "") in token_map:
+                row["token"] = token_map[str(row["token"])]
+            if table == "communication_queue":
+                row["status"] = "restored_inactive"
+                row["scheduled_at"] = None
+                row["processed_at"] = None
+                row["last_error"] = "Restaurado inactivo: requiere revision manual"
+            if table == "jobs":
+                row["status"] = "cancelled"
+                row["retry_at"] = None
+                row["error"] = "Restaurado inactivo: requiere revision manual"
+                row["worker_id"] = ""
+            if table == "waiting_room_visitors":
+                row["status"] = "expired"
+                row["access_token"] = ""
+            if table == "audit_logs":
+                row["actor"] = actor
+                row["action"] = "backup.restored_original_audit"
+                row["created_at"] = self.now()
+            new_id = self._insert_row(db, table, row)
+            if table in maps and old_id:
+                maps[table][old_id] = new_id
+
+    def _delete_event_scope(self, db, event_id: int) -> None:
+        db.execute("DELETE FROM user_event_roles WHERE event_id = ?", (event_id,))
+        for table in reversed([item for item in self.INSERT_ORDER if item not in {"people", "event_users", "audit_logs"}]):
+            if table == "participant_communication_preferences":
+                continue
+            if self._has_column(db, table, "event_id"):
+                db.execute(f"DELETE FROM {table} WHERE event_id = ?", (event_id,))
+
+    def _validate_restored(self, db, payload: dict, event_id: int) -> None:
+        event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not event:
+            raise ValueError("No se creo el evento restaurado")
+        source_tables = payload.get("tables") or {}
+        for table in ["activities", "accreditations", "reservations"]:
+            if not self._has_column(db, table, "event_id"):
+                continue
+            expected = len(source_tables.get(table) or [])
+            restored = db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (event_id,)).fetchone()["c"]
+            if int(restored or 0) != expected:
+                raise ValueError(f"Conteo inconsistente en {table}: {restored}/{expected}")
+
+    def _insert_row(self, db, table: str, values: dict) -> int:
+        columns = [name for name in values if name in self._columns(db, table)]
+        if not columns:
+            return 0
+        placeholders = ", ".join(["?"] * len(columns))
+        sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+        cur = db.execute(sql, [values[name] for name in columns])
+        return int(getattr(cur, "lastrowid", 0) or 0)
+
+    def _columns(self, db, table: str) -> list[str]:
+        try:
+            return [row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()]
+        except Exception:
+            rows = db.execute(
+                """
+                SELECT column_name AS name
+                FROM information_schema.columns
+                WHERE table_name = ?
+                ORDER BY ordinal_position
+                """,
+                (table,),
+            ).fetchall()
+            return [row["name"] for row in rows]
+
+    def _has_column(self, db, table: str, column: str) -> bool:
+        return column in self._columns(db, table)
+
+    def _unique_token(self, db) -> str:
+        token = self.token_factory()
+        while db.execute("SELECT 1 FROM accreditations WHERE token = ?", (token,)).fetchone():
+            token = self.token_factory()
+        return token
+
+    def _event_name(self, db, event_id: int) -> str:
+        row = db.execute("SELECT name FROM events WHERE id = ?", (event_id,)).fetchone()
+        return row["name"] if row else ""
+
+    def _audit(self, db, actor: str, action: str, entity_type: str, entity_id: int | None, payload: dict) -> None:
+        if not self._has_column(db, "audit_logs", "payload"):
+            return
+        db.execute(
+            "INSERT INTO audit_logs (actor, action, entity_type, entity_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (actor, action, entity_type, entity_id, json.dumps(payload, ensure_ascii=False), self.now()),
+        )
+
+
+def _mask_email(value: str) -> str:
+    text = str(value or "")
+    if "@" not in text:
+        return ""
+    local, domain = text.split("@", 1)
+    return f"{local[:3]}***@{domain}"
 
 
 def _sha256(path: Path) -> str:

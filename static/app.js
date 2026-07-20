@@ -25,6 +25,7 @@ const state = {
   visualization: null,
   visualizationLayouts: [],
   demoReal: null,
+  eventRestore: null,
   currentUser: "Admin",
   eventId: null,
   cameraStream: null,
@@ -87,6 +88,7 @@ const ACTION_LABELS = {
   "backups.download": "Backups: descargar",
   "backups.verify": "Backups: verificar integridad",
   "backups.restore_event": "Backups: restaurar evento",
+  "backups.restore_event_overwrite": "Backups: sobrescribir evento",
   "backups.restore_full": "Backups: restaurar sistema",
   "backups.manage_schedule": "Backups: programacion automatica",
   "backups.manage_retention": "Backups: retencion",
@@ -956,6 +958,133 @@ function readLandingImageFile(file) {
     reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
     reader.readAsDataURL(file);
   });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("Selecciona un archivo"));
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function inspectEventBackup(event) {
+  event.preventDefault();
+  const file = $("#eventRestoreFile")?.files?.[0];
+  const target = $("#eventRestorePreview");
+  if (!target) return;
+  try {
+    if (!canDo("backups.restore_event")) throw new Error("Tu rol no tiene permiso para restaurar eventos.");
+    if (!file) throw new Error("Selecciona un backup ZIP de evento.");
+    if (!file.name.toLowerCase().endsWith(".zip")) throw new Error("Selecciona un archivo ZIP.");
+    $("#eventRestoreFileName").textContent = file.name;
+    target.innerHTML = `<div class="panel">Verificando manifiesto y checksum...</div>`;
+    const content = await readFileAsDataUrl(file);
+    const result = await api("/api/backups/event/inspect", {
+      method: "POST",
+      body: JSON.stringify({ filename: file.name, content_base64: content }),
+    });
+    state.eventRestore = result;
+    renderEventRestorePreview();
+  } catch (err) {
+    target.innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderEventRestorePreview() {
+  const target = $("#eventRestorePreview");
+  const data = state.eventRestore;
+  if (!target || !data) return;
+  const counts = data.counts || {};
+  const event = data.event || {};
+  const manifest = data.manifest || {};
+  const warnings = data.warnings || [];
+  const conflicts = data.conflicts || [];
+  target.innerHTML = `
+    <div class="restore-summary">
+      <div>
+        <span>Evento origen</span>
+        <strong>${escapeHtml(event.name || "Evento")}</strong>
+        <small>ID origen ${escapeHtml(event.source_event_id || "")} - ${escapeHtml(manifest.created_at || "")}</small>
+      </div>
+      <div><span>Participantes</span><strong>${Number(counts.participants || 0)}</strong></div>
+      <div><span>Acreditaciones</span><strong>${Number(counts.accreditations || 0)}</strong></div>
+      <div><span>Actividades</span><strong>${Number(counts.activities || 0)}</strong></div>
+      <div><span>Reservas</span><strong>${Number(counts.reservations || 0)}</strong></div>
+      <div><span>Accesos</span><strong>${Number(counts.accesses || 0)}</strong></div>
+      <div><span>Comunicaciones</span><strong>${Number(counts.communications || 0)}</strong></div>
+      <div><span>Checksum</span><strong>${manifest.sha256 ? "OK" : "Sin dato"}</strong></div>
+    </div>
+    ${warnings.length ? `<div class="panel warn">${warnings.map(escapeHtml).join("<br>")}</div>` : ""}
+    ${conflicts.length ? `<div class="panel warn">${conflicts.length} advertencias/conflictos detectados. Se reutilizan personas existentes por email cuando corresponde.</div>` : ""}
+    <form id="eventRestoreRunForm" class="stack restore-run-form">
+      <input name="new_event_name" value="${escapeHtml(`${event.name || "Evento"} - restaurado`)}" placeholder="Nombre del evento restaurado">
+      <button type="submit">Restaurar como nuevo evento</button>
+    </form>
+    <details class="danger-zone">
+      <summary>Sobrescribir evento existente (avanzado)</summary>
+      <form id="eventRestoreOverwriteForm" class="stack">
+        <select name="target_event_id">
+          ${state.events.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")}
+        </select>
+        <input name="new_event_name" value="${escapeHtml(event.name || "Evento restaurado")}" placeholder="Nombre a aplicar">
+        <input name="confirm_text" placeholder="Escribir RESTAURAR EVENTO">
+        <button class="danger-button" type="submit" ${canDo("backups.restore_event_overwrite") ? "" : "disabled"}>Sobrescribir evento</button>
+        ${canDo("backups.restore_event_overwrite") ? "" : "<small>Requiere permiso especial de sobrescritura.</small>"}
+      </form>
+    </details>
+    <div id="eventRestoreResult"></div>
+  `;
+  $("#eventRestoreRunForm")?.addEventListener("submit", restoreEventBackupAsNew);
+  $("#eventRestoreOverwriteForm")?.addEventListener("submit", restoreEventBackupOverwrite);
+}
+
+async function restoreEventBackupAsNew(event) {
+  event.preventDefault();
+  await restoreEventBackup({
+    mode: "new_event",
+    new_event_name: event.currentTarget.elements.new_event_name.value,
+  });
+}
+
+async function restoreEventBackupOverwrite(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  await restoreEventBackup({
+    mode: "overwrite",
+    target_event_id: Number(form.elements.target_event_id.value || 0),
+    new_event_name: form.elements.new_event_name.value,
+    confirm_text: form.elements.confirm_text.value,
+  });
+}
+
+async function restoreEventBackup(payload) {
+  const box = $("#eventRestoreResult");
+  try {
+    if (!state.eventRestore?.restore_id) throw new Error("Primero inspecciona el backup.");
+    box.innerHTML = `<div class="panel">Restaurando dentro de una transaccion...</div>`;
+    const result = await api("/api/backups/event/restore", {
+      method: "POST",
+      body: JSON.stringify({ restore_id: state.eventRestore.restore_id, ...payload }),
+    });
+    box.innerHTML = `
+      <div class="panel success">
+        Evento restaurado: <strong>${escapeHtml(result.name || "")}</strong>.
+        Nuevo ID: ${Number(result.event_id || 0)}.
+        Tokens regenerados: ${Number(result.token_regenerated || 0)}.
+      </div>
+    `;
+    state.eventRestore = null;
+    await loadEvents();
+    if (result.event_id) {
+      await selectActiveEvent(result.event_id);
+      setView("dashboard");
+    }
+  } catch (err) {
+    box.innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+  }
 }
 
 async function saveLandingImage(event) {
@@ -2532,6 +2661,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#cloneEventForm")?.addEventListener("submit", cloneEventFromTemplate);
   $("#importStructureForm").addEventListener("submit", importEventStructure);
   $("#importAgendaForm").addEventListener("submit", importAgenda);
+  $("#eventRestoreInspectForm")?.addEventListener("submit", inspectEventBackup);
+  $("#eventRestoreFile")?.addEventListener("change", (event) => {
+    const file = event.currentTarget.files?.[0];
+    $("#eventRestoreFileName").textContent = file ? file.name : "Ningun archivo seleccionado";
+  });
   $("#structureImportFile")?.addEventListener("change", loadStructureImportFile);
   $("#agendaImportFile")?.addEventListener("change", loadAgendaImportFile);
   $("#controlRoomRefresh").addEventListener("change", updateControlRoomLink);

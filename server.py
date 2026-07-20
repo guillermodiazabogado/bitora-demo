@@ -42,7 +42,7 @@ from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
 from backend.services.attendance import AttendanceService
 from backend.services.audit import AuditService
-from backend.services.backup import BackupService, EventBackupService, PostgresBackupService, ProductionBackupManager
+from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
@@ -124,6 +124,7 @@ BACKUP_PERMISSION_CODES = [
     "backups.download",
     "backups.verify",
     "backups.restore_event",
+    "backups.restore_event_overwrite",
     "backups.restore_full",
     "backups.manage_schedule",
     "backups.manage_retention",
@@ -172,6 +173,7 @@ RUNTIME_METRICS = RuntimeMetrics()
 DATA_VISUALIZATION = DataVisualizationService(cache_seconds=20)
 RESPONSE_CACHE = TTLCache(max_entries=160)
 STORAGE = StorageService(STORAGE_ROOT, STORAGE_BACKEND)
+EVENT_RESTORE_STAGING: dict[str, dict] = {}
 
 
 def audit_service() -> AuditService:
@@ -210,6 +212,17 @@ def production_backup_manager() -> ProductionBackupManager:
 
 def event_backup_service() -> EventBackupService:
     return EventBackupService(BACKUP_DIR, connect, DB_LOCK, app_version=APP_VERSION)
+
+
+def event_restore_service() -> EventRestoreService:
+    return EventRestoreService(
+        connect,
+        DB_LOCK,
+        make_token,
+        now_iso,
+        app_version=APP_VERSION,
+        backup_service=event_backup_service(),
+    )
 
 
 def diagnostics_service() -> DiagnosticsService:
@@ -4451,6 +4464,16 @@ def read_json(handler: SimpleHTTPRequestHandler) -> dict:
     return json.loads(raw.decode("utf-8"))
 
 
+def decode_upload_base64(value: str) -> bytes:
+    text = str(value or "").strip()
+    if "," in text and text.startswith("data:"):
+        text = text.split(",", 1)[1]
+    try:
+        return base64.b64decode(text, validate=True)
+    except Exception as exc:
+        raise ValueError("No se pudo leer el archivo subido") from exc
+
+
 LANDING_ALLOWED_IMAGE_TYPES = {
     "image/jpeg": "JPEG",
     "image/jpg": "JPEG",
@@ -7042,6 +7065,101 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 ok = job_queue_service().cancel(int(data.get("job_id") or 0), actor)
                 self.send_json({"ok": ok}, 200 if ok else 409)
+                return
+
+            if path == "/api/backups/event/inspect":
+                session = self.effective_user()
+                if not session:
+                    self.send_json({"error": "Sesion requerida"}, 401)
+                    return
+                filename = str(data.get("filename") or "backup.zip").strip()
+                raw = decode_upload_base64(str(data.get("content_base64") or ""))
+                preview = event_restore_service().inspect_bytes(raw, filename)
+                source_event_id = int(preview["event"]["source_event_id"] or 0)
+                with connect() as db:
+                    source_exists = bool(db.execute("SELECT id FROM events WHERE id = ?", (source_event_id,)).fetchone())
+                    if source_exists:
+                        ok, session = self.require_event_permission(db, source_event_id, "backups.restore_event", "backup.event.inspect")
+                        if not ok:
+                            return
+                    elif session.get("role") != "Super Admin":
+                        audit(db, session.get("name", "anonimo"), "backup.restore_inspect_denied", "event", source_event_id or None, {"reason": "source_event_missing"})
+                        self.send_json({"error": "Solo Super Admin puede inspeccionar backups de eventos que no existen en esta base."}, 403)
+                        return
+                    restore_id = secrets.token_urlsafe(18)
+                    EVENT_RESTORE_STAGING[restore_id] = {
+                        "raw": raw,
+                        "preview": preview,
+                        "source_event_id": source_event_id,
+                        "actor": session.get("name", "system"),
+                        "created_at": time.time(),
+                    }
+                    audit(
+                        db,
+                        session.get("name", "system"),
+                        "backup.event_inspected",
+                        "event",
+                        source_event_id or None,
+                        {"restore_id": restore_id, "source_event_id": source_event_id, "counts": preview.get("counts", {})},
+                    )
+                preview["restore_id"] = restore_id
+                self.send_json(preview)
+                return
+
+            if path == "/api/backups/event/restore":
+                session = self.effective_user()
+                if not session:
+                    self.send_json({"error": "Sesion requerida"}, 401)
+                    return
+                restore_id = str(data.get("restore_id") or "").strip()
+                staged = EVENT_RESTORE_STAGING.get(restore_id)
+                if not staged or time.time() - float(staged.get("created_at") or 0) > 30 * 60:
+                    self.send_json({"error": "La restauracion temporal vencio. Volve a inspeccionar el backup."}, 410)
+                    return
+                mode = str(data.get("mode") or "new_event").strip()
+                source_event_id = int(staged.get("source_event_id") or 0)
+                target_event_id = int(data.get("target_event_id") or 0)
+                with connect() as db:
+                    source_exists = bool(db.execute("SELECT id FROM events WHERE id = ?", (source_event_id,)).fetchone())
+                    if source_exists:
+                        ok, session = self.require_event_permission(db, source_event_id, "backups.restore_event", "backup.event.restore")
+                        if not ok:
+                            return
+                    elif session.get("role") != "Super Admin":
+                        audit(db, session.get("name", "anonimo"), "backup.restore_denied", "event", source_event_id or None, {"reason": "source_event_missing"})
+                        self.send_json({"error": "Solo Super Admin puede restaurar backups de eventos que no existen en esta base."}, 403)
+                        return
+                    if mode == "overwrite":
+                        if not target_event_id:
+                            self.send_json({"error": "Falta evento destino"}, 400)
+                            return
+                        ok, session = self.require_event_permission(db, target_event_id, "backups.restore_event_overwrite", "backup.event.overwrite")
+                        if not ok:
+                            return
+                try:
+                    result = event_restore_service().restore_bytes(
+                        staged["raw"],
+                        mode=mode,
+                        actor=session.get("name", "system"),
+                        new_event_name=str(data.get("new_event_name") or ""),
+                        target_event_id=target_event_id,
+                        confirm_text=str(data.get("confirm_text") or ""),
+                    )
+                except Exception as exc:
+                    with connect() as db:
+                        audit(
+                            db,
+                            session.get("name", "system"),
+                            "backup.event_restore_failed",
+                            "event",
+                            target_event_id or source_event_id or None,
+                            {"restore_id": restore_id, "mode": mode, "error": safe_public_error(exc)},
+                        )
+                    raise
+                EVENT_RESTORE_STAGING.pop(restore_id, None)
+                RESPONSE_CACHE.invalidate()
+                DATA_VISUALIZATION.invalidate()
+                self.send_json(result)
                 return
 
             if path == "/api/data-visualization/layouts":
