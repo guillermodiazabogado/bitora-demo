@@ -13,6 +13,7 @@ El backup debe ser un ZIP generado por BITORA con:
 
 - `manifest.json`
 - `event-{event_id}.json`
+- `storage/events/{event_id}/...` si el evento tiene archivos asociados
 
 `manifest.json` debe incluir:
 
@@ -28,6 +29,7 @@ El backup debe ser un ZIP generado por BITORA con:
 - `payload.name`
 - `payload.sha256`
 - `payload.size`
+- `storage[]` con `key`, `size` y `sha256` de cada archivo fisico del evento
 - conteos por tabla
 
 `event-{event_id}.json` debe incluir:
@@ -49,16 +51,18 @@ El backup debe ser un ZIP generado por BITORA con:
 4. Se revisan rutas peligrosas y archivos no permitidos.
 5. Se lee `manifest.json`.
 6. Se verifica el checksum SHA-256 del payload.
-7. Se valida que el backup sea de tipo `event`.
-8. Se genera una vista previa.
-9. Se crea una referencia temporal `restore_id`.
-10. El operador confirma la restauracion.
-11. BITORA restaura dentro de una transaccion.
-12. Se remapean IDs internos.
-13. Se regeneran tokens QR.
-14. Se desactivan comunicaciones y jobs restaurados.
-15. Se valida el resultado.
-16. Se audita la operacion.
+7. Se verifican checksums de archivos del evento.
+8. Se valida que el backup sea de tipo `event`.
+9. Se genera una vista previa.
+10. Se crea una referencia temporal `restore_id`.
+11. El operador confirma la restauracion.
+12. BITORA restaura dentro de una transaccion.
+13. Se remapean IDs internos.
+14. Se regeneran tokens QR.
+15. Se desactivan comunicaciones y jobs restaurados.
+16. Se restauran archivos bajo el nuevo `event_id`.
+17. Se valida el resultado.
+18. Se audita la operacion.
 
 ## Endpoints
 
@@ -136,6 +140,25 @@ Se remapean:
 
 No se reutilizan claves primarias del backup.
 
+## Archivos Del Evento
+
+Los archivos fisicos se restauran desde:
+
+`storage/events/{source_event_id}/...`
+
+hacia:
+
+`storage/events/{new_event_id}/...`
+
+Reglas:
+
+- no se aceptan rutas fuera del evento origen;
+- no se aceptan rutas peligrosas;
+- cada archivo se valida con SHA-256;
+- si falla una restauracion como evento nuevo, se revierte la base y se eliminan archivos ya copiados;
+- no se copian archivos de otros eventos;
+- no se ejecutan efectos externos vinculados a archivos restaurados.
+
 ## Personas Globales
 
 `people` se conserva como entidad global por email.
@@ -200,6 +223,7 @@ Se registra:
 - checksum;
 - conteos;
 - conflictos;
+- archivos restaurados;
 - duracion;
 - backup preventivo si corresponde.
 

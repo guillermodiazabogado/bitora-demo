@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
+    event_id BIGINT REFERENCES events(id) ON DELETE SET NULL,
     actor TEXT NOT NULL DEFAULT '',
     action TEXT NOT NULL,
     entity_type TEXT NOT NULL,

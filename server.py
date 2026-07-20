@@ -211,7 +211,7 @@ def production_backup_manager() -> ProductionBackupManager:
 
 
 def event_backup_service() -> EventBackupService:
-    return EventBackupService(BACKUP_DIR, connect, DB_LOCK, app_version=APP_VERSION)
+    return EventBackupService(BACKUP_DIR, connect, DB_LOCK, app_version=APP_VERSION, storage=STORAGE)
 
 
 def event_restore_service() -> EventRestoreService:
@@ -222,6 +222,7 @@ def event_restore_service() -> EventRestoreService:
         now_iso,
         app_version=APP_VERSION,
         backup_service=event_backup_service(),
+        storage=STORAGE,
     )
 
 
@@ -577,6 +578,7 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
                 actor TEXT NOT NULL DEFAULT '',
                 action TEXT NOT NULL,
                 entity_type TEXT NOT NULL,
@@ -875,6 +877,7 @@ def init_db() -> None:
         ensure_v6_1_email_schema(db)
         ensure_waiting_room_schema(db)
         ensure_multivertical_schema(db)
+        ensure_audit_event_id_column(db)
         ensure_landing_config_columns(db)
         ensure_activity_access_window_columns(db)
         ensure_user_pin_column(db)
@@ -906,6 +909,7 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_access_logs_activity_context ON access_logs(activity_id, accreditation_id, access_context, result);
         CREATE INDEX IF NOT EXISTS idx_activities_event_start ON activities(event_id, starts_at);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_event_created ON audit_logs(event_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_communication_logs_event ON communication_logs(event_id, fecha);
         CREATE INDEX IF NOT EXISTS idx_communication_queue_event_status ON communication_queue(event_id, status);
         CREATE INDEX IF NOT EXISTS idx_communication_queue_provider_message ON communication_queue(provider_message_id);
@@ -935,6 +939,12 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
         """
     )
+
+
+def ensure_audit_event_id_column(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(audit_logs)").fetchall()}
+    if "event_id" not in columns:
+        db.execute("ALTER TABLE audit_logs ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL")
 
 
 def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
@@ -6898,10 +6908,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 """
                                 SELECT *
                                 FROM audit_logs
-                                WHERE (entity_type = 'event' AND entity_id = ?) OR payload LIKE ?
+                                WHERE event_id = ?
+                                   OR (entity_type = 'event' AND entity_id = ?)
+                                   OR payload LIKE ?
                                 ORDER BY id
                                 """,
-                                (event_id, f'%"event_id": {event_id}%'),
+                                (event_id, event_id, f'%"event_id": {event_id}%'),
                             ).fetchall()
                         ],
                     }

@@ -126,7 +126,18 @@ class SQLiteRepository:
         entity_id: int | None,
         payload_json: str,
         created_at: str,
+        event_id: int | None = None,
     ) -> None:
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(audit_logs)").fetchall()}
+        if "event_id" in columns:
+            db.execute(
+                """
+                INSERT INTO audit_logs (event_id, actor, action, entity_type, entity_id, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, actor, action, entity_type, entity_id, payload_json, created_at),
+            )
+            return
         db.execute(
             """
             INSERT INTO audit_logs (actor, action, entity_type, entity_id, payload, created_at)

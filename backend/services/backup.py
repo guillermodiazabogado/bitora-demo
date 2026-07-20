@@ -271,19 +271,21 @@ class EventBackupService:
             """
             SELECT *
             FROM audit_logs
-            WHERE (entity_type = 'event' AND entity_id = ?)
+            WHERE event_id = ?
+               OR (entity_type = 'event' AND entity_id = ?)
                OR payload LIKE ?
             ORDER BY id
             """,
-            lambda event_id: (event_id, f'%"event_id": {event_id}%'),
+            lambda event_id: (event_id, event_id, f'%"event_id": {event_id}%'),
         ),
     ]
 
-    def __init__(self, backup_dir: Path, connect: Callable, lock, app_version: str = "") -> None:
+    def __init__(self, backup_dir: Path, connect: Callable, lock, app_version: str = "", storage=None) -> None:
         self.backup_dir = Path(backup_dir)
         self.connect = connect
         self.lock = lock
         self.app_version = app_version
+        self.storage = storage
 
     def create_event_bundle(self, event_id: int, actor: str = "system") -> Path:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -291,6 +293,7 @@ class EventBackupService:
         bundle = self.backup_dir / f"bitora-event-{event_id}-{stamp}.zip"
         payload = self._event_payload(event_id, actor)
         data = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+        storage_files = self._event_storage_files(event_id)
         manifest = {
             "version": 1,
             "schema_version": 1,
@@ -307,14 +310,24 @@ class EventBackupService:
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "size": len(data),
             },
+            "storage": storage_files,
             "notes": [
                 "Backup acotado al evento solicitado.",
+                "Incluye solo archivos fisicos bajo storage/events/{event_id}.",
                 "No incluye otros eventos ni usuarios globales fuera de asignaciones del evento.",
                 "El backup global productivo sigue siendo necesario para recuperacion completa de plataforma.",
             ],
         }
         with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(f"event-{event_id}.json", data)
+            if self.storage:
+                for item in storage_files:
+                    key = item.get("key") or ""
+                    path = (self.storage.root / key).resolve()
+                    root = self.storage.root.resolve()
+                    if root not in path.parents:
+                        raise ValueError("Archivo de storage fuera de raiz")
+                    archive.write(path, f"storage/{key}")
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
         return bundle
 
@@ -331,9 +344,23 @@ class EventBackupService:
                     return {"ok": False, "detail": "event_id inconsistente"}
                 if len(payload.get("tables", {}).get("events", [])) != 1:
                     return {"ok": False, "detail": "evento inexistente en payload"}
+                for item in manifest.get("storage", []):
+                    name = f"storage/{item['key']}"
+                    if name not in archive.namelist():
+                        return {"ok": False, "detail": f"falta storage: {item['key']}"}
+                    if hashlib.sha256(archive.read(name)).hexdigest() != item["sha256"]:
+                        return {"ok": False, "detail": f"checksum storage invalido: {item['key']}"}
             return {"ok": True, "detail": f"evento {manifest['event_id']} + {len(manifest.get('tables', {}))} tablas", "manifest": manifest}
         except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
             return {"ok": False, "detail": str(exc)}
+
+    def _event_storage_files(self, event_id: int) -> list[dict]:
+        if not self.storage:
+            return []
+        try:
+            return self.storage.event_inventory(event_id)
+        except Exception:
+            return []
 
     def _event_payload(self, event_id: int, actor: str) -> dict:
         with self.lock, self.connect() as db:
@@ -414,6 +441,7 @@ class EventRestoreService:
         *,
         app_version: str = "",
         backup_service: EventBackupService | None = None,
+        storage=None,
     ) -> None:
         self.connect = connect
         self.lock = lock
@@ -421,6 +449,7 @@ class EventRestoreService:
         self.now = now
         self.app_version = app_version
         self.backup_service = backup_service
+        self.storage = storage
 
     def inspect_bytes(self, raw: bytes, filename: str = "backup.zip") -> dict:
         manifest, payload, warnings = self._read_bundle(raw, filename)
@@ -470,6 +499,8 @@ class EventRestoreService:
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
                 "templates": counts.get("communication_templates", 0),
                 "users_assigned": counts.get("event_users", 0),
+                "files": len(manifest.get("storage") or []),
+                "files_size": sum(int(item.get("size") or 0) for item in (manifest.get("storage") or [])),
                 "tables": counts,
             },
             "warnings": warnings,
@@ -506,6 +537,7 @@ class EventRestoreService:
                 db.execute("BEGIN IMMEDIATE")
             except Exception:
                 db.execute("BEGIN")
+            new_event_id = 0
             try:
                 if mode == "overwrite":
                     new_event_id = target_event_id
@@ -537,6 +569,7 @@ class EventRestoreService:
                         self._restore_generic(db, table, payload, maps, token_map, actor)
 
                 self._validate_restored(db, payload, new_event_id)
+                files_restored = self._restore_storage_files(raw, manifest, int(payload.get("event_id") or 0), new_event_id)
                 duration_ms = int((datetime.now() - started).total_seconds() * 1000)
                 self._audit(
                     db,
@@ -553,6 +586,7 @@ class EventRestoreService:
                         "preventive_backup": preventive_backup.name if preventive_backup else "",
                         "warnings": warnings,
                         "conflicts": conflicts,
+                        "files_restored": files_restored,
                         "duration_ms": duration_ms,
                     },
                 )
@@ -566,11 +600,17 @@ class EventRestoreService:
                     "warnings": warnings,
                     "conflicts": conflicts,
                     "token_regenerated": len(token_map),
+                    "files_restored": files_restored,
                     "preventive_backup": preventive_backup.name if preventive_backup else "",
                     "duration_ms": duration_ms,
                 }
             except Exception:
                 db.execute("ROLLBACK")
+                if mode == "new_event":
+                    try:
+                        self._delete_event_files(new_event_id)
+                    except Exception:
+                        pass
                 raise
 
     def _read_bundle(self, raw: bytes, filename: str) -> tuple[dict, dict, list[str]]:
@@ -582,7 +622,7 @@ class EventRestoreService:
         try:
             with zipfile.ZipFile(BytesIO(raw)) as archive:
                 names = archive.namelist()
-                if len(names) > 8:
+                if len(names) > 5000:
                     raise ValueError("El ZIP contiene demasiados archivos")
                 for name in names:
                     normalized = name.replace("\\", "/")
@@ -600,6 +640,15 @@ class EventRestoreService:
                 if checksum != payload_meta.get("sha256"):
                     raise ValueError("Checksum invalido")
                 payload = json.loads(content.decode("utf-8"))
+                for item in manifest.get("storage") or []:
+                    key = str(item.get("key") or "").replace("\\", "/")
+                    archive_name = f"storage/{key}"
+                    if not key.startswith(f"events/{manifest.get('event_id')}/"):
+                        raise ValueError("El storage del backup no pertenece al evento")
+                    if archive_name not in names:
+                        raise ValueError(f"Falta archivo de storage: {key}")
+                    if hashlib.sha256(archive.read(archive_name)).hexdigest() != item.get("sha256"):
+                        raise ValueError(f"Checksum storage invalido: {key}")
         except zipfile.BadZipFile as exc:
             raise ValueError("ZIP invalido o corrupto") from exc
         backup_type = manifest.get("backup_type") or manifest.get("scope")
@@ -617,6 +666,31 @@ class EventRestoreService:
         if not manifest.get("schema_version"):
             warnings.append("Backup anterior sin schema_version explicito; se asume version 1")
         return manifest, payload, warnings
+
+    def _restore_storage_files(self, raw: bytes, manifest: dict, source_event_id: int, target_event_id: int) -> int:
+        items = manifest.get("storage") or []
+        if not items:
+            return 0
+        if self.storage is None:
+            raise ValueError("Storage de eventos no disponible")
+        restored = 0
+        prefix = f"events/{source_event_id}/"
+        with zipfile.ZipFile(BytesIO(raw)) as archive:
+            for item in items:
+                key = str(item.get("key") or "").replace("\\", "/")
+                if not key.startswith(prefix):
+                    raise ValueError("Archivo de storage fuera del evento origen")
+                relative = key[len(prefix):]
+                content = archive.read(f"storage/{key}")
+                record = self.storage.restore_event_file(target_event_id, relative, content)
+                if record["sha256"] != item.get("sha256"):
+                    raise ValueError(f"Storage restaurado con checksum invalido: {relative}")
+                restored += 1
+        return restored
+
+    def _delete_event_files(self, event_id: int) -> None:
+        if self.storage is not None and event_id:
+            self.storage.delete_event_files(event_id)
 
     def _create_event_row(self, db, payload: dict, actor: str, new_event_name: str) -> int:
         source = dict((payload.get("tables") or {}).get("events", [{}])[0])
@@ -781,6 +855,13 @@ class EventRestoreService:
 
     def _audit(self, db, actor: str, action: str, entity_type: str, entity_id: int | None, payload: dict) -> None:
         if not self._has_column(db, "audit_logs", "payload"):
+            return
+        event_id = payload.get("event_id") or payload.get("new_event_id") or (entity_id if entity_type == "event" else None)
+        if self._has_column(db, "audit_logs", "event_id"):
+            db.execute(
+                "INSERT INTO audit_logs (event_id, actor, action, entity_type, entity_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (event_id, actor, action, entity_type, entity_id, json.dumps(payload, ensure_ascii=False), self.now()),
+            )
             return
         db.execute(
             "INSERT INTO audit_logs (actor, action, entity_type, entity_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
