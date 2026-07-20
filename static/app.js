@@ -81,6 +81,17 @@ const ACTION_LABELS = {
   "communications.export": "Comunicaciones: exportar",
   "communications.view_personal_data": "Comunicaciones: ver datos personales",
   "communications.manage_consent": "Comunicaciones: gestionar consentimiento",
+  "backups.view": "Backups: ver estado",
+  "backups.create_event": "Backups: crear backup del evento",
+  "backups.create_full": "Backups: crear backup completo",
+  "backups.download": "Backups: descargar",
+  "backups.verify": "Backups: verificar integridad",
+  "backups.restore_event": "Backups: restaurar evento",
+  "backups.restore_full": "Backups: restaurar sistema",
+  "backups.manage_schedule": "Backups: programacion automatica",
+  "backups.manage_retention": "Backups: retencion",
+  "backups.view_logs": "Backups: ver logs",
+  "backups.view_manifest": "Backups: ver manifiesto",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -231,6 +242,7 @@ function renderPermissionsMatrix() {
   if (!target || !state.permissions?.matrix) return;
   const modules = Object.keys(MODULE_LABELS);
   const communicationActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("communications."));
+  const backupActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("backups."));
   const rows = Object.entries(state.permissions.matrix);
   const locked = state.permissions.locked || {};
   const editable = state.authUser?.role === "Super Admin";
@@ -279,6 +291,22 @@ function renderPermissionsMatrix() {
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
             ${communicationActions.map((action) => renderCell({ role, code: action, allowed: allowed.has(action), kind: "action" })).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <h3 class="permissions-subtitle">Permisos finos de Backups y Persistencia</h3>
+    <div class="permissions-table permissions-actions-table">
+      <div class="permissions-head permissions-actions-head">
+        <strong>Rol</strong>
+        ${backupActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
+      </div>
+      ${rows.map(([role, config]) => {
+        const allowed = new Set(config.actions || []);
+        return `
+          <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
+            <strong>${escapeHtml(role)}</strong>
+            ${backupActions.map((action) => renderCell({ role, code: action, allowed: allowed.has(action), kind: "action" })).join("")}
           </div>
         `;
       }).join("")}
@@ -717,6 +745,7 @@ function renderFeatureVisibility() {
   $("#publicDisplayLink")?.classList.toggle("hidden", !activitiesOn);
   $$(".capacity-feature").forEach((node) => node.classList.toggle("hidden", !capacityOn));
   $$(".waitlist-feature").forEach((node) => node.classList.toggle("hidden", !waitlistOn));
+  $$(".action-backup").forEach((node) => node.classList.toggle("hidden", !canDo("backups.create_event") || !canDo("backups.download")));
   $("#ticketingModeNotice")?.classList.toggle("hidden", !modules.ticketing);
   $("#dashboard .layout")?.classList.toggle("ticketing-layout", modules.ticketing);
   const activeView = $(".view.active")?.id;

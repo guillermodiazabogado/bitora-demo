@@ -42,7 +42,7 @@ from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
 from backend.services.attendance import AttendanceService
 from backend.services.audit import AuditService
-from backend.services.backup import BackupService, PostgresBackupService, ProductionBackupManager
+from backend.services.backup import BackupService, EventBackupService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
@@ -117,14 +117,27 @@ COMMUNICATION_PERMISSION_CODES = [
     "communications.view_personal_data",
     "communications.manage_consent",
 ]
+BACKUP_PERMISSION_CODES = [
+    "backups.view",
+    "backups.create_event",
+    "backups.create_full",
+    "backups.download",
+    "backups.verify",
+    "backups.restore_event",
+    "backups.restore_full",
+    "backups.manage_schedule",
+    "backups.manage_retention",
+    "backups.view_logs",
+    "backups.view_manifest",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest"],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
@@ -193,6 +206,10 @@ def backup_service():
 
 def production_backup_manager() -> ProductionBackupManager:
     return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT)
+
+
+def event_backup_service() -> EventBackupService:
+    return EventBackupService(BACKUP_DIR, connect, DB_LOCK, app_version=APP_VERSION)
 
 
 def diagnostics_service() -> DiagnosticsService:
@@ -4503,10 +4520,18 @@ def create_operational_backup() -> Path:
     return create_db_backup()
 
 
+def create_event_backup(event_id: int, actor: str = "system") -> Path:
+    return event_backup_service().create_event_bundle(event_id, actor)
+
+
 def verify_operational_backup(path: Path) -> dict:
     if path.suffix.lower() == ".zip":
         return production_backup_manager().verify_bundle(path)
     return verify_backup_file(path)
+
+
+def verify_event_backup(path: Path) -> dict:
+    return event_backup_service().verify_event_bundle(path)
 
 
 def prune_backups() -> None:
@@ -6863,20 +6888,43 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/backup":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
-                backup_path = create_operational_backup()
-                backup_check = verify_operational_backup(backup_path)
                 session = self.effective_user()
                 with connect() as db:
+                    if event_id:
+                        ok, session = self.require_event_permission(db, event_id, "backups.create_event", "backup.event.create")
+                        if not ok:
+                            return
+                        if not user_has_permission(db, session, event_id, "backups.download"):
+                            audit(db, (session or {}).get("name", "anonimo"), "permission.denied", "event", event_id, {"permission": "backups.download", "action": "backup.event.download", "reason": "missing_permission"})
+                            self.send_json({"error": "No tenes permiso para descargar backups de este evento."}, 403)
+                            return
+                        backup_path = create_event_backup(event_id, (session or {}).get("name", "system"))
+                        backup_check = verify_event_backup(backup_path)
+                        content_type = "application/zip"
+                        audit_action = "backup.event_created"
+                    else:
+                        if not user_has_permission(db, session, 0, "backups.create_full"):
+                            audit(db, (session or {}).get("name", "anonimo"), "permission.denied", "backup", None, {"permission": "backups.create_full", "action": "backup.full.create", "reason": "missing_permission"})
+                            self.send_json({"error": "Solo Super Admin o un usuario autorizado puede descargar el backup completo."}, 403)
+                            return
+                        if not user_has_permission(db, session, 0, "backups.download"):
+                            audit(db, (session or {}).get("name", "anonimo"), "permission.denied", "backup", None, {"permission": "backups.download", "action": "backup.full.download", "reason": "missing_permission"})
+                            self.send_json({"error": "No tenes permiso para descargar backups."}, 403)
+                            return
+                        backup_path = create_operational_backup()
+                        backup_check = verify_operational_backup(backup_path)
+                        content_type = "application/octet-stream"
+                        audit_action = "backup.full_created"
                     audit(
                         db,
                         session["name"] if session else "system",
-                        "backup.created",
+                        audit_action,
                         "backup",
                         None,
                         {"event_id": event_id, "file": backup_path.name, "integrity_ok": backup_check["ok"], "integrity_detail": backup_check["detail"]},
                     )
                 body = backup_path.read_bytes()
-                send_download(self, backup_path.name, "application/octet-stream", body)
+                send_download(self, backup_path.name, content_type, body)
                 return
 
             self.send_json({"error": "Ruta no encontrada"}, 404)

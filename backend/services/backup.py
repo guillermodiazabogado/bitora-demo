@@ -214,6 +214,157 @@ class ProductionBackupManager:
         return {"ok": True, "detail": "restauracion SQLite y storage verificada"}
 
 
+class EventBackupService:
+    """Creates event-scoped export bundles without leaking other events."""
+
+    EVENT_TABLES = [
+        ("events", "SELECT * FROM events WHERE id = ?", lambda event_id: (event_id,)),
+        ("accreditation_types", "SELECT * FROM accreditation_types WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("spaces", "SELECT * FROM spaces WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("activities", "SELECT * FROM activities WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("capacity_bags", "SELECT * FROM capacity_bags WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("public_display_config", "SELECT * FROM public_display_config WHERE event_id = ?", lambda event_id: (event_id,)),
+        ("public_display_items", "SELECT * FROM public_display_items WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("accreditations", "SELECT * FROM accreditations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "people",
+            """
+            SELECT DISTINCT p.*
+            FROM people p
+            JOIN accreditations a ON a.person_id = p.id
+            WHERE a.event_id = ?
+            ORDER BY p.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "participant_communication_preferences",
+            """
+            SELECT DISTINCT cp.*
+            FROM participant_communication_preferences cp
+            JOIN accreditations a ON a.person_id = cp.person_id
+            WHERE a.event_id = ?
+            ORDER BY cp.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("reservations", "SELECT * FROM reservations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("access_logs", "SELECT * FROM access_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_logs", "SELECT * FROM communication_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_queue", "SELECT * FROM communication_queue WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("email_delivery_events", "SELECT * FROM email_delivery_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_assistant_history", "SELECT * FROM communication_assistant_history WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_tickets", "SELECT * FROM communication_tickets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_templates", "SELECT * FROM communication_templates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("participant_announcements", "SELECT * FROM participant_announcements WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("captation_events", "SELECT * FROM captation_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("conversation_sources", "SELECT * FROM conversation_sources WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("activity_attendance", "SELECT * FROM activity_attendance WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_eligibility", "SELECT * FROM certificate_eligibility WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("simulator_state", "SELECT * FROM simulator_state WHERE event_id = ?", lambda event_id: (event_id,)),
+        ("visualization_layouts", "SELECT * FROM visualization_layouts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "audit_logs",
+            """
+            SELECT *
+            FROM audit_logs
+            WHERE (entity_type = 'event' AND entity_id = ?)
+               OR payload LIKE ?
+            ORDER BY id
+            """,
+            lambda event_id: (event_id, f'%"event_id": {event_id}%'),
+        ),
+    ]
+
+    def __init__(self, backup_dir: Path, connect: Callable, lock, app_version: str = "") -> None:
+        self.backup_dir = Path(backup_dir)
+        self.connect = connect
+        self.lock = lock
+        self.app_version = app_version
+
+    def create_event_bundle(self, event_id: int, actor: str = "system") -> Path:
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        bundle = self.backup_dir / f"bitora-event-{event_id}-{stamp}.zip"
+        payload = self._event_payload(event_id, actor)
+        data = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+        manifest = {
+            "version": 1,
+            "scope": "event",
+            "event_id": event_id,
+            "created_at": payload["created_at"],
+            "created_by": actor,
+            "app_version": self.app_version,
+            "database_engine": payload["database_engine"],
+            "tables": {table: len(rows) for table, rows in payload["tables"].items()},
+            "payload": {
+                "name": f"event-{event_id}.json",
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size": len(data),
+            },
+            "notes": [
+                "Backup acotado al evento solicitado.",
+                "No incluye otros eventos ni usuarios globales fuera de asignaciones del evento.",
+                "El backup global productivo sigue siendo necesario para recuperacion completa de plataforma.",
+            ],
+        }
+        with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(f"event-{event_id}.json", data)
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        return bundle
+
+    def verify_event_bundle(self, bundle: Path) -> dict:
+        try:
+            with zipfile.ZipFile(bundle) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+                payload_name = manifest["payload"]["name"]
+                content = archive.read(payload_name)
+                if hashlib.sha256(content).hexdigest() != manifest["payload"]["sha256"]:
+                    return {"ok": False, "detail": "checksum de evento invalido"}
+                payload = json.loads(content.decode("utf-8"))
+                if int(payload.get("event_id") or 0) != int(manifest.get("event_id") or 0):
+                    return {"ok": False, "detail": "event_id inconsistente"}
+                if len(payload.get("tables", {}).get("events", [])) != 1:
+                    return {"ok": False, "detail": "evento inexistente en payload"}
+            return {"ok": True, "detail": f"evento {manifest['event_id']} + {len(manifest.get('tables', {}))} tablas", "manifest": manifest}
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            return {"ok": False, "detail": str(exc)}
+
+    def _event_payload(self, event_id: int, actor: str) -> dict:
+        with self.lock, self.connect() as db:
+            tables = {}
+            for table, query, params_factory in self.EVENT_TABLES:
+                try:
+                    rows = db.execute(query, params_factory(event_id)).fetchall()
+                except Exception:
+                    rows = []
+                tables[table] = [dict(row) for row in rows]
+            if len(tables.get("events", [])) != 1:
+                raise ValueError("Evento inexistente")
+            user_rows = db.execute(
+                """
+                SELECT u.id, u.name, u.role, u.active, u.created_at, uer.event_id, uer.role AS event_role, uer.active AS assigned
+                FROM user_event_roles uer
+                JOIN users u ON u.id = uer.user_id
+                WHERE uer.event_id = ?
+                ORDER BY u.id
+                """,
+                (event_id,),
+            ).fetchall()
+            tables["event_users"] = [dict(row) for row in user_rows]
+            return {
+                "format": "bitora.event.backup",
+                "version": 1,
+                "event_id": event_id,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "created_by": actor,
+                "database_engine": getattr(db, "engine", "sqlite"),
+                "tables": tables,
+            }
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
