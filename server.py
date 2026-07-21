@@ -48,7 +48,7 @@ from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
-from backend.services.email import DemoEmailProvider, create_email_provider
+from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -263,6 +263,10 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     https_required = str(env.get("HTTPS_REQUIRED", "")).lower() in {"1", "true", "yes", "si"}
     require_login = str(env.get("QR_REQUIRE_LOGIN", "")).lower() in {"1", "true", "yes", "si"}
     storage_backend = str(env.get("STORAGE_BACKEND", STORAGE_BACKEND)).strip().lower()
+    email_enabled = str(env.get("EMAIL_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
+    email_provider = str(env.get("EMAIL_PROVIDER", "demo")).strip().lower()
+    email_from = str(env.get("EMAIL_FROM") or env.get("EMAIL_FROM_ADDRESS") or "").strip()
+    email_safe_mode = str(env.get("EMAIL_SAFE_MODE", "")).lower() in {"1", "true", "yes", "si"}
     errors = []
     warnings = []
     if app_env not in {"development", "demo", "production"}:
@@ -280,6 +284,17 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
             errors.append("QR_REQUIRE_LOGIN debe estar activo")
         if storage_backend == "local":
             warnings.append("Storage local requiere disco persistente y backup externo")
+        if email_enabled and email_provider != "demo":
+            if not env.get("EMAIL_API_KEY", "").strip():
+                errors.append("EMAIL_API_KEY es obligatorio para email real")
+            if not email_from:
+                errors.append("EMAIL_FROM o EMAIL_FROM_ADDRESS es obligatorio para email real")
+            if not env.get("EMAIL_VERIFIED_DOMAIN", "").strip():
+                errors.append("EMAIL_VERIFIED_DOMAIN debe estar configurado")
+            if not env.get("EMAIL_WEBHOOK_SECRET", "").strip():
+                errors.append("EMAIL_WEBHOOK_SECRET es obligatorio para webhooks productivos")
+            if email_safe_mode:
+                errors.append("EMAIL_SAFE_MODE debe estar desactivado para produccion real")
     return {
         "ok": not errors,
         "env": app_env,
@@ -288,6 +303,8 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
         "https_required": https_required,
         "login_required": require_login,
         "storage_backend": storage_backend,
+        "email_provider": email_provider,
+        "email_enabled": email_enabled,
         "errors": errors,
         "warnings": warnings,
     }
@@ -672,6 +689,10 @@ def init_db() -> None:
                 processed_at TEXT,
                 delivered_at TEXT,
                 bounced_at TEXT,
+                complained_at TEXT,
+                opened_at TEXT,
+                clicked_at TEXT,
+                idempotency_key TEXT NOT NULL DEFAULT '',
                 created_by TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             );
@@ -682,9 +703,24 @@ def init_db() -> None:
                 queue_id INTEGER REFERENCES communication_queue(id) ON DELETE SET NULL,
                 provider TEXT NOT NULL DEFAULT '',
                 message_id TEXT NOT NULL DEFAULT '',
+                external_event_id TEXT NOT NULL DEFAULT '',
                 event_type TEXT NOT NULL,
                 payload TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS email_suppressions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+                email TEXT NOT NULL,
+                normalized_email TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                scope TEXT NOT NULL DEFAULT 'global',
+                source TEXT NOT NULL DEFAULT '',
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(normalized_email, scope, event_id)
             );
 
             CREATE TABLE IF NOT EXISTS communication_assistant_history (
@@ -954,6 +990,10 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
         "provider_message_id": "TEXT NOT NULL DEFAULT ''",
         "delivered_at": "TEXT",
         "bounced_at": "TEXT",
+        "complained_at": "TEXT",
+        "opened_at": "TEXT",
+        "clicked_at": "TEXT",
+        "idempotency_key": "TEXT NOT NULL DEFAULT ''",
     }
     for name, definition in additions.items():
         if name not in columns:
@@ -966,12 +1006,37 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
             queue_id INTEGER REFERENCES communication_queue(id) ON DELETE SET NULL,
             provider TEXT NOT NULL DEFAULT '',
             message_id TEXT NOT NULL DEFAULT '',
+            external_event_id TEXT NOT NULL DEFAULT '',
             event_type TEXT NOT NULL,
             payload TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS email_suppressions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            email TEXT NOT NULL,
+            normalized_email TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT 'global',
+            source TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(normalized_email, scope, event_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_suppressions_lookup
+            ON email_suppressions(normalized_email, active, scope, event_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
+            ON email_delivery_events(provider, external_event_id)
+            WHERE external_event_id <> '';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_communication_queue_idempotency
+            ON communication_queue(idempotency_key)
+            WHERE idempotency_key <> '';
         """
     )
+    event_columns = {row["name"] for row in db.execute("PRAGMA table_info(email_delivery_events)").fetchall()}
+    if "external_event_id" not in event_columns:
+        db.execute("ALTER TABLE email_delivery_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -2233,6 +2298,56 @@ def communication_provider_ready(channel: str) -> bool:
     return False
 
 
+def normalize_email(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def email_safe_mode_enabled() -> bool:
+    return os.environ.get("EMAIL_SAFE_MODE", "false").strip().lower() in {"1", "true", "yes", "si"}
+
+
+def forced_email_recipient() -> str:
+    return os.environ.get("EMAIL_FORCE_RECIPIENT", "").strip()
+
+
+def email_is_suppressed(db: sqlite3.Connection, event_id: int, email: str) -> tuple[bool, str]:
+    normalized = normalize_email(email)
+    if not normalized:
+        return False, ""
+    row = db.execute(
+        """
+        SELECT reason
+        FROM email_suppressions
+        WHERE normalized_email = ? AND active = 1
+          AND (scope = 'global' OR event_id = ?)
+        ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, id DESC
+        LIMIT 1
+        """,
+        (normalized, event_id),
+    ).fetchone()
+    return (True, row["reason"]) if row else (False, "")
+
+
+def suppress_email(db: sqlite3.Connection, event_id: int | None, email: str, reason: str, source: str, scope: str = "global") -> None:
+    normalized = normalize_email(email)
+    if not valid_email_address(normalized):
+        return
+    db.execute(
+        """
+        INSERT INTO email_suppressions (event_id, email, normalized_email, reason, scope, source, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ON CONFLICT(normalized_email, scope, event_id)
+        DO UPDATE SET reason = excluded.reason, source = excluded.source, active = 1, updated_at = excluded.updated_at
+        """,
+        (event_id, email, normalized, reason, scope, source, now_iso(), now_iso()),
+    )
+
+
+def email_idempotency_key(event_id: int, person_id: int, accreditation_id: int | None, template_code: str, subject: str, recipient: str) -> str:
+    raw = "|".join([str(event_id), str(person_id), str(accreditation_id or 0), str(template_code or "manual"), str(subject or ""), normalize_email(recipient)])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def render_communication_template(text: str, row: sqlite3.Row | dict, activity: sqlite3.Row | dict | None = None) -> str:
     source = dict(row)
     act = dict(activity) if activity else {}
@@ -2333,9 +2448,28 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
                     "omitido",
                 )
                 continue
+            if item_channel == "email":
+                normalized = normalize_email(recipient)
+                if not valid_email_address(normalized):
+                    skipped += 1
+                    communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", subject, "Email invalido", "omitido")
+                    continue
+                suppressed, reason = email_is_suppressed(db, event_id, normalized)
+                if suppressed:
+                    skipped += 1
+                    communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", subject, f"Email suprimido: {reason}", "suprimido")
+                    continue
+                recipient = normalized
             rendered_subject = render_communication_template(subject, row)
             rendered_content = render_communication_template(content, row)
             provider = communication_provider(item_channel)
+            idempotency_key = email_idempotency_key(event_id, row["person_id"], row["accreditation_id"], template_code, rendered_subject, recipient) if item_channel == "email" else ""
+            if idempotency_key:
+                existing = db.execute("SELECT id, status FROM communication_queue WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
+                if existing:
+                    skipped += 1
+                    communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", rendered_subject, f"Envio duplicado evitado: {existing['status']}", "duplicado")
+                    continue
             status = "pendiente"
             processed_at = None
             last_error = ""
@@ -2353,16 +2487,16 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
                     event_id, person_id, accreditation_id, channel, audience, template_code,
                     subject, content, recipient, status, attempts, max_attempts, provider,
                     provider_message_id, last_error, scheduled_at, processed_at,
-                    delivered_at, bounced_at, created_by, created_at
+                    delivered_at, bounced_at, idempotency_key, created_by, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id, row["person_id"], row["accreditation_id"], item_channel, audience,
                     template_code, rendered_subject, rendered_content, recipient, status,
                     1 if process_now and not should_defer_real else 0,
                     max(1, int(os.environ.get("EMAIL_MAX_RETRIES", "3"))) if item_channel == "email" else max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))),
-                    provider, "", last_error, None, processed_at, None, None, actor, now_iso(),
+                    provider, "", last_error, None, processed_at, None, None, idempotency_key, actor, now_iso(),
                 ),
             )
             queue_id = int(cur.lastrowid)
@@ -2414,6 +2548,10 @@ def process_email_queue_item(queue_id: int) -> dict:
     provider = create_email_provider()
     attempt = int(item.get("attempts") or 0) + 1
     max_attempts = max(1, int(item.get("max_attempts") or 3))
+    recipient = str(item["recipient"] or "").strip()
+    original_recipient = recipient
+    if email_safe_mode_enabled() and forced_email_recipient():
+        recipient = forced_email_recipient()
     if isinstance(provider, DemoEmailProvider):
         result_status = "enviado"
         result_error = ""
@@ -2424,10 +2562,15 @@ def process_email_queue_item(queue_id: int) -> dict:
         result_error = "Proveedor de email no configurado"
         message_id = ""
         ok = False
+    elif not provider.validate_configuration().get("ok"):
+        result_status = "error" if attempt >= max_attempts else "pendiente"
+        result_error = "; ".join(provider.validate_configuration().get("errors") or ["Configuracion de email invalida"])
+        message_id = ""
+        ok = False
     else:
         result = provider.send_template(
-            to=item["recipient"],
-            subject=item["subject"],
+            to=recipient,
+            subject=("[SAFE] " if email_safe_mode_enabled() else "") + item["subject"],
             html=item["content"],
             text=item["content"],
             reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
@@ -2435,6 +2578,7 @@ def process_email_queue_item(queue_id: int) -> dict:
                 "event_id": str(item["event_id"]),
                 "queue_id": str(item["id"]),
                 "template": str(item["template_code"] or "manual"),
+                "safe_mode": "1" if email_safe_mode_enabled() else "0",
             },
         )
         ok = result.ok
@@ -2477,6 +2621,8 @@ def process_email_queue_item(queue_id: int) -> dict:
                 "status": result_status,
                 "attempt": attempt,
                 "max_attempts": max_attempts,
+                "safe_mode": email_safe_mode_enabled(),
+                "original_recipient_masked": mask_email(original_recipient) if email_safe_mode_enabled() else "",
                 "error": result_error,
             },
         )
@@ -2591,11 +2737,19 @@ def verify_email_webhook(handler: SimpleHTTPRequestHandler) -> bool:
 
 
 def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
-    event_type = str(payload.get("type") or payload.get("event") or "").strip().lower()
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    message_id = str(data.get("email_id") or data.get("id") or payload.get("email_id") or "").strip()
+    normalized = create_email_provider().normalize_webhook(payload)
+    event_type = normalized["event_type"]
+    message_id = normalized["message_id"]
+    external_event_id = normalized["external_event_id"]
     if not event_type or not message_id:
         raise ValueError("Webhook de email incompleto")
+    if external_event_id:
+        existing_event = db.execute(
+            "SELECT id, queue_id FROM email_delivery_events WHERE provider = 'resend' AND external_event_id = ?",
+            (external_event_id,),
+        ).fetchone()
+        if existing_event:
+            return {"ok": True, "duplicate": True, "queue_id": existing_event["queue_id"], "message_id": message_id, "status": "duplicate"}
     row = db.execute(
         "SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1",
         (message_id,),
@@ -2609,6 +2763,10 @@ def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
         "bounced": "rebotado",
         "email.complained": "rechazado",
         "complained": "rechazado",
+        "email.opened": "abierto",
+        "opened": "abierto",
+        "email.clicked": "click",
+        "clicked": "click",
         "email.failed": "error",
         "failed": "error",
         "email.delivery_delayed": "pendiente",
@@ -2619,21 +2777,30 @@ def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
     db.execute(
         """
         INSERT INTO email_delivery_events
-            (event_id, queue_id, provider, message_id, event_type, payload, created_at)
-        VALUES (?, ?, 'resend', ?, ?, ?, ?)
+            (event_id, queue_id, provider, message_id, external_event_id, event_type, payload, created_at)
+        VALUES (?, ?, 'resend', ?, ?, ?, ?, ?)
         """,
-        (event_id, queue_id, message_id, event_type, json.dumps(payload, ensure_ascii=False), now_iso()),
+        (event_id, queue_id, message_id, external_event_id, event_type, json.dumps(payload, ensure_ascii=False), now_iso()),
     )
     if row:
         delivered_at = now_iso() if status == "entregado" else row["delivered_at"]
         bounced_at = now_iso() if status in {"rebotado", "rechazado", "error"} else row["bounced_at"]
+        complained_at = now_iso() if status == "rechazado" else row["complained_at"] if "complained_at" in row.keys() else None
+        opened_at = now_iso() if status == "abierto" else row["opened_at"] if "opened_at" in row.keys() else None
+        clicked_at = now_iso() if status == "click" else row["clicked_at"] if "clicked_at" in row.keys() else None
+        if status in {"rebotado", "rechazado"}:
+            suppress_email(db, event_id, row["recipient"], "complaint" if status == "rechazado" else "hard_bounce", "webhook", "global")
         db.execute(
             """
             UPDATE communication_queue
-            SET status = ?, delivered_at = ?, bounced_at = ?, processed_at = ?
+            SET status = ?, delivered_at = ?, bounced_at = ?,
+                complained_at = COALESCE(?, complained_at),
+                opened_at = COALESCE(?, opened_at),
+                clicked_at = COALESCE(?, clicked_at),
+                processed_at = ?
             WHERE id = ?
             """,
-            (status, delivered_at, bounced_at, now_iso(), queue_id),
+            (status, delivered_at, bounced_at, complained_at, opened_at, clicked_at, now_iso(), queue_id),
         )
         communication_log(
             db,
@@ -6588,15 +6755,20 @@ class AppHandler(SimpleHTTPRequestHandler):
                     logs = mask_communication_personal_data(logs)
                     queue = mask_communication_personal_data(queue)
                     tickets = mask_communication_personal_data(tickets)
+                email_provider = create_email_provider()
+                email_config = email_provider.validate_configuration()
                 result = {
                     "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
                     "providers": {
                         "email": {
-                            "provider": communication_provider("email"),
-                            "ready": communication_provider_ready("email"),
+                            "provider": email_provider.name,
+                            "ready": bool(email_config.get("ok")),
+                            "configuration_errors": email_config.get("errors", []) if can_view_technical else [],
                             "enabled": os.environ.get("EMAIL_ENABLED", "true").lower() in {"1", "true", "yes", "si"},
-                            "from": os.environ.get("EMAIL_FROM", ""),
+                            "safe_mode": email_safe_mode_enabled(),
+                            "from": os.environ.get("EMAIL_FROM", "") or os.environ.get("EMAIL_FROM_ADDRESS", ""),
                             "reply_to": os.environ.get("EMAIL_REPLY_TO", ""),
+                            "verified_domain": os.environ.get("EMAIL_VERIFIED_DOMAIN", ""),
                             "last_success": email_last_success["processed_at"] if email_last_success else "",
                             "last_error": email_last_error["last_error"] if email_last_error else "",
                             "last_error_at": email_last_error["processed_at"] if email_last_error else "",

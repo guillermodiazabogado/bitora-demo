@@ -124,6 +124,7 @@ _ID_TABLES = {
     "communication_tickets",
     "conversation_sources",
     "email_delivery_events",
+    "email_suppressions",
     "events",
     "jobs",
     "participant_announcements",

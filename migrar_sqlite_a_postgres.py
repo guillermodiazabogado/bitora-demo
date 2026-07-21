@@ -39,6 +39,7 @@ TABLE_ORDER = [
     "communication_logs",
     "communication_queue",
     "email_delivery_events",
+    "email_suppressions",
     "communication_assistant_history",
     "communication_tickets",
     "participant_announcements",

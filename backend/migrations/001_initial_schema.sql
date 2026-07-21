@@ -247,6 +247,10 @@ CREATE TABLE IF NOT EXISTS communication_queue (
     processed_at TEXT,
     delivered_at TEXT,
     bounced_at TEXT,
+    complained_at TEXT,
+    opened_at TEXT,
+    clicked_at TEXT,
+    idempotency_key TEXT NOT NULL DEFAULT '',
     created_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
@@ -257,9 +261,24 @@ CREATE TABLE IF NOT EXISTS email_delivery_events (
     queue_id BIGINT REFERENCES communication_queue(id) ON DELETE SET NULL,
     provider TEXT NOT NULL DEFAULT '',
     message_id TEXT NOT NULL DEFAULT '',
+    external_event_id TEXT NOT NULL DEFAULT '',
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    id BIGSERIAL PRIMARY KEY,
+    event_id BIGINT REFERENCES events(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    normalized_email TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'global',
+    source TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(normalized_email, scope, event_id)
 );
 
 CREATE TABLE IF NOT EXISTS communication_assistant_history (

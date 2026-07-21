@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -62,6 +63,20 @@ class EmailProvider(ABC):
     def get_delivery_status(self, message_id: str) -> dict[str, Any]:
         raise NotImplementedError
 
+    def validate_configuration(self) -> dict[str, Any]:
+        return {"ok": self.ready, "provider": self.name, "errors": [] if self.ready else ["Proveedor no configurado"]}
+
+    def normalize_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
+        event_type = str(payload.get("type") or payload.get("event") or "").strip().lower()
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        return {
+            "event_type": event_type,
+            "message_id": str(data.get("email_id") or data.get("id") or payload.get("email_id") or "").strip(),
+            "external_event_id": str(payload.get("id") or payload.get("event_id") or data.get("event_id") or "").strip(),
+            "email": str(data.get("to") or data.get("email") or "").strip(),
+            "raw": payload,
+        }
+
 
 class DemoEmailProvider(EmailProvider):
     name = "demo"
@@ -108,6 +123,23 @@ class ResendEmailProvider(EmailProvider):
     @property
     def ready(self) -> bool:
         return bool(self.api_key and self.from_email)
+
+    def validate_configuration(self) -> dict[str, Any]:
+        errors = []
+        if not self.api_key:
+            errors.append("EMAIL_API_KEY faltante")
+        if not self.from_email:
+            errors.append("EMAIL_FROM faltante")
+        elif not valid_email_address(extract_email_address(self.from_email)):
+            errors.append("EMAIL_FROM no es una direccion valida")
+        verified_domain = os.environ.get("EMAIL_VERIFIED_DOMAIN", "").strip().lower()
+        if os.environ.get("APP_ENV", "development").strip().lower() == "production" and verified_domain:
+            sender_domain = extract_email_address(self.from_email).split("@")[-1].lower()
+            if sender_domain != verified_domain and not sender_domain.endswith("." + verified_domain):
+                errors.append("El remitente no pertenece al dominio verificado")
+        if os.environ.get("APP_ENV", "development").strip().lower() == "production" and not os.environ.get("EMAIL_WEBHOOK_SECRET", "").strip():
+            errors.append("EMAIL_WEBHOOK_SECRET faltante en produccion")
+        return {"ok": not errors, "provider": self.name, "errors": errors}
 
     def _request(self, method: str, path: str, payload: dict | None = None) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -188,9 +220,30 @@ def create_email_provider() -> EmailProvider:
     if provider == "resend":
         return ResendEmailProvider(
             api_key=os.environ.get("EMAIL_API_KEY", ""),
-            from_email=os.environ.get("EMAIL_FROM", ""),
+            from_email=os.environ.get("EMAIL_FROM", "") or build_from_email(),
             reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
             api_url=os.environ.get("EMAIL_RESEND_API_URL", "https://api.resend.com"),
             timeout=float(os.environ.get("EMAIL_TIMEOUT_SECONDS", "15")),
         )
     raise ValueError(f"Proveedor de email no soportado: {provider}")
+
+
+def build_from_email() -> str:
+    address = os.environ.get("EMAIL_FROM_ADDRESS", "").strip()
+    name = os.environ.get("EMAIL_FROM_NAME", "").strip()
+    if address and name:
+        return f"{name} <{address}>"
+    return address
+
+
+def extract_email_address(value: str) -> str:
+    text = str(value or "").strip()
+    match = re.search(r"<([^<>]+)>", text)
+    return (match.group(1) if match else text).strip()
+
+
+def valid_email_address(value: str) -> bool:
+    text = str(value or "").strip()
+    if len(text) > 254:
+        return False
+    return bool(re.match(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", text, re.I))
