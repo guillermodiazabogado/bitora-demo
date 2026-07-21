@@ -204,6 +204,8 @@ def fault(target: str) -> int:
 
 
 def compose(*args: str) -> int:
+    if not shutil.which("docker"):
+        raise BdfError("Docker no esta instalado o no esta disponible en PATH.")
     return run(["docker", "compose", "-f", str(COMPOSE_FILE), *args]).returncode
 
 
