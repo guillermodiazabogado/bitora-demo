@@ -84,6 +84,14 @@ whatsapp_organization_live
 webhook_tenant_resolution_live
 ```
 
+Detalle de Google OAuth:
+
+```text
+google_oauth_live: omitted
+motivo: faltan credenciales Google Cloud y no existe todavia flujo OAuth HTTP completo iniciado desde BITORA.
+reporte: GOOGLE_OAUTH_LIVE_CERTIFICATION_REPORT.md
+```
+
 Adicionalmente quedan pendientes para otra etapa:
 
 ```text

@@ -46,6 +46,13 @@ Endurance 24 horas
 Upgrade desde version anterior
 ```
 
+Detalle Google OAuth:
+
+```text
+GOOGLE OAUTH LIVE NO CERTIFICADO
+Bloqueo actual: faltan credenciales Google Cloud y falta endpoint real de inicio/callback OAuth dentro de BITORA.
+```
+
 ## Estado operativo
 
 ```text
