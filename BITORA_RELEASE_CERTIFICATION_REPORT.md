@@ -9,7 +9,7 @@ Registrar el estado de certificacion despues de levantar staging local mediante 
 ## Commit base
 
 ```text
-4f24920298647789d963dafe24fd35fa83635aa6
+3163057aea826e22ae6f50da2c4f5eca9f6e1974
 ```
 
 ## Estado BDF local
@@ -44,21 +44,42 @@ Incluye:
 - Demo Live 10;
 - compatibilidad PostgreSQL estatica.
 
+## Email live
+
+La etapa Email Live fue ejecutada y certificada despues de conectar Resend en staging.
+
+Resultado:
+
+```text
+email_multitenant_live: passed
+email_organization_live: passed
+```
+
+Evidencia:
+
+```text
+provider=resend
+message_id_masked=edcfdd***ed642d
+recepcion_gmail=confirmada
+safe_mode=active
+cross_emails=0
+secrets_exposed=0
+```
+
 ## Release completo
 
-No se declara Release certificada todavia.
+No se declara Release final completa todavia.
 
 Motivo:
 
 ```text
-Los proveedores externos live todavia no fueron configurados ni ejecutados.
+Todavia faltan proveedores externos live que no forman parte de la etapa Email.
 ```
 
 Gates que pueden seguir omitidos en esta etapa:
 
 ```text
 google_oauth_live
-email_organization_live
 whatsapp_organization_live
 webhook_tenant_resolution_live
 ```

@@ -30,6 +30,7 @@ Health checks
 Backup
 Restore
 Smoke test
+Email live por organizacion
 ```
 
 ## Restricciones
@@ -38,7 +39,6 @@ No se certifica aun como release final para piloto/evento real porque faltan val
 
 ```text
 Google OAuth live
-Email live por organizacion
 WhatsApp live por organizacion
 Webhooks tenant-aware live
 Disaster recovery live extendido
