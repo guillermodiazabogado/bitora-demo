@@ -1,0 +1,16 @@
+# BITORA Security Report
+
+- **MEDIUM** [security] SQL string formatting: rows = [dict(row) for row in source.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()] if exists else [] (migrar_sqlite_a_postgres.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE events ADD COLUMN {name} {definition}") (server.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE events ADD COLUMN {name} TEXT NOT NULL DEFAULT ''") (server.py)
+- **MEDIUM** [security] SQL string formatting: activities = db.execute(f"SELECT * FROM activities WHERE {where}", params).fetchall() (server.py)
+- **MEDIUM** [security] SQL string formatting: visible = db.execute(f"SELECT COUNT(*) AS c FROM events e WHERE {where}", params).fetchone()["c"] (verificar_v9_usuarios_eventos.py)
+- **MEDIUM** [security] SQL string formatting: "tables": {table: [dict(row) for row in db.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()] for table in tables}, (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"UPDATE events SET {assignments} WHERE id = ?", [source[name] for name in columns] + [event_id]) (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"DELETE FROM {table} WHERE event_id = ?", (event_id,)) (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: restored = db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (event_id,)).fetchone()["c"] (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: return [row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()] (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: activities = db.execute(f"SELECT * FROM activities WHERE {where}", params).fetchall() (backend/services/capacity_buckets.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"DELETE FROM {table}") (backend/services/demo_real.py)

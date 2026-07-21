@@ -5104,8 +5104,17 @@ class AppHandler(SimpleHTTPRequestHandler):
     def effective_user(self) -> dict | None:
         return self.session_user() or ({"id": 0, "name": "Admin", "role": "Super Admin", "local": True} if not self.login_required() else None)
 
-    def require_event_permission(self, db: sqlite3.Connection, event_id: int, permission_code: str, action: str) -> tuple[bool, dict | None]:
+    def require_event_permission(self, db: sqlite3.Connection, event_id: int, permission_code: str, action: str, actor_override: str | None = None) -> tuple[bool, dict | None]:
         session = self.effective_user()
+        if not self.login_required() and actor_override:
+            actor_user = user_by_name(db, actor_override)
+            if actor_user:
+                session = {
+                    "id": int(actor_user["id"]),
+                    "name": actor_user["name"],
+                    "role": actor_user["role"],
+                    "local": True,
+                }
         actor = (session or {}).get("name", "anonimo")
         event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
         if not session or not event:
@@ -8413,7 +8422,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     accreditation_id = int(data.get("accreditation_id") or 0)
                     confirm_send = truthy(data.get("confirm", True))
                     required_permission = "communications.resend_individual" if accreditation_id else ("communications.send" if confirm_send else "communications.create")
-                    ok, session = self.require_event_permission(db, event_id, required_permission, "communications.send")
+                    ok, session = self.require_event_permission(db, event_id, required_permission, "communications.send", data.get("actor"))
                     if not ok:
                         db.execute("ROLLBACK")
                         return
@@ -8461,7 +8470,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     db.execute("BEGIN IMMEDIATE")
                     confirm_send = truthy(data.get("confirm", True))
                     required_permission = "communications.send" if confirm_send else "communications.create"
-                    ok, session = self.require_event_permission(db, event_id, required_permission, f"communications.{channel}_send")
+                    ok, session = self.require_event_permission(db, event_id, required_permission, f"communications.{channel}_send", data.get("actor"))
                     if not ok:
                         db.execute("ROLLBACK")
                         return
