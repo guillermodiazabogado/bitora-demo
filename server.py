@@ -49,6 +49,7 @@ from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
+from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -139,14 +140,29 @@ BACKUP_PERMISSION_CODES = [
     "backups.view_logs",
     "backups.view_manifest",
 ]
+MULTITENANT_PERMISSION_CODES = [
+    "organizations.view",
+    "organizations.edit",
+    "organizations.manage_users",
+    "integrations.view",
+    "integrations.create",
+    "integrations.edit",
+    "integrations.test",
+    "integrations.rotate",
+    "integrations.disable",
+    "event_integrations.view",
+    "event_integrations.assign",
+    "communications.configure",
+    "communications.send_test",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest"],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test"],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
@@ -166,7 +182,7 @@ PERMISSION_MATRIX = {
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
-        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data"],
+        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "event_integrations.view", "communications.configure", "communications.send_test"],
     },
     "Soporte tecnico": {
         "modules": ["dashboard", "audit", "diagnostics"],
@@ -455,8 +471,55 @@ def init_db() -> None:
     with connect() as db:
         db.executescript(
             """
+            CREATE TABLE IF NOT EXISTS organizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_id TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                legal_name TEXT NOT NULL DEFAULT '',
+                trade_name TEXT NOT NULL DEFAULT '',
+                tax_id TEXT NOT NULL DEFAULT '',
+                contact_name TEXT NOT NULL DEFAULT '',
+                contact_email TEXT NOT NULL DEFAULT '',
+                contact_phone TEXT NOT NULL DEFAULT '',
+                country TEXT NOT NULL DEFAULT 'AR',
+                timezone TEXT NOT NULL DEFAULT 'America/Argentina/Buenos_Aires',
+                locale TEXT NOT NULL DEFAULT 'es_AR',
+                status TEXT NOT NULL DEFAULT 'active',
+                plan TEXT NOT NULL DEFAULT 'standard',
+                logo_data TEXT NOT NULL DEFAULT '',
+                primary_color TEXT NOT NULL DEFAULT '',
+                secondary_color TEXT NOT NULL DEFAULT '',
+                website TEXT NOT NULL DEFAULT '',
+                general_email TEXT NOT NULL DEFAULT '',
+                general_whatsapp TEXT NOT NULL DEFAULT '',
+                signature TEXT NOT NULL DEFAULT '',
+                terms_url TEXT NOT NULL DEFAULT '',
+                privacy_url TEXT NOT NULL DEFAULT '',
+                safe_mode_email INTEGER NOT NULL DEFAULT 1,
+                safe_mode_whatsapp INTEGER NOT NULL DEFAULT 1,
+                force_email_recipient TEXT NOT NULL DEFAULT '',
+                force_whatsapp_recipient TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS organization_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                role TEXT NOT NULL DEFAULT 'viewer',
+                status TEXT NOT NULL DEFAULT 'active',
+                invited_at TEXT,
+                accepted_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, user_id)
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER REFERENCES organizations(id) ON DELETE RESTRICT,
                 name TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 venue TEXT NOT NULL DEFAULT '',
@@ -486,6 +549,39 @@ def init_db() -> None:
                 show_estimated_time INTEGER NOT NULL DEFAULT 1,
                 waiting_message TEXT NOT NULL DEFAULT 'Estamos organizando el ingreso. Tu turno se habilitara pronto.',
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS organization_integrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                provider TEXT NOT NULL,
+                integration_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'platform_managed',
+                status TEXT NOT NULL DEFAULT 'draft',
+                configuration_encrypted TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                last_tested_at TEXT,
+                last_test_status TEXT NOT NULL DEFAULT '',
+                last_error_code TEXT NOT NULL DEFAULT '',
+                last_error_message_sanitized TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL DEFAULT '',
+                updated_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                disabled_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS event_integrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                channel TEXT NOT NULL,
+                organization_integration_id INTEGER NOT NULL REFERENCES organization_integrations(id) ON DELETE RESTRICT,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(event_id, channel)
             );
 
             CREATE TABLE IF NOT EXISTS people (
@@ -697,6 +793,8 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS communication_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+                integration_id INTEGER REFERENCES organization_integrations(id) ON DELETE SET NULL,
                 person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
                 accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
                 channel TEXT NOT NULL,
@@ -947,8 +1045,10 @@ def init_db() -> None:
         ensure_user_event_roles_schema(db)
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
+        ensure_multitenant_schema(db)
         ensure_indexes(db)
         ensure_default_users(db)
+        bootstrap_default_organization(db)
         bootstrap_event_user_access(db)
         ensure_default_types(db)
         ensure_default_spaces(db)
@@ -993,6 +1093,11 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
         CREATE INDEX IF NOT EXISTS idx_user_event_roles_user_event ON user_event_roles(user_id, event_id, active);
         CREATE INDEX IF NOT EXISTS idx_user_event_roles_event_role ON user_event_roles(event_id, role, active);
+        CREATE INDEX IF NOT EXISTS idx_organizations_status ON organizations(status);
+        CREATE INDEX IF NOT EXISTS idx_organization_users_user ON organization_users(user_id, organization_id, status);
+        CREATE INDEX IF NOT EXISTS idx_events_organization_status ON events(organization_id, status);
+        CREATE INDEX IF NOT EXISTS idx_org_integrations_org_type ON organization_integrations(organization_id, integration_type, status);
+        CREATE INDEX IF NOT EXISTS idx_event_integrations_event_channel ON event_integrations(event_id, channel, enabled);
         CREATE INDEX IF NOT EXISTS idx_events_project_type_status ON events(project_type, status);
         CREATE INDEX IF NOT EXISTS idx_access_logs_event_result_created ON access_logs(event_id, result, created_at);
         CREATE INDEX IF NOT EXISTS idx_accreditations_event_checked_status ON accreditations(event_id, checked_in_at, status);
@@ -1002,6 +1107,27 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
         """
     )
+
+
+def ensure_multitenant_schema(db: sqlite3.Connection) -> None:
+    event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+    if "organization_id" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN organization_id INTEGER REFERENCES organizations(id) ON DELETE RESTRICT")
+    job_columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)").fetchall()}
+    for name, definition in {
+        "organization_id": "INTEGER REFERENCES organizations(id) ON DELETE SET NULL",
+        "integration_id": "INTEGER REFERENCES organization_integrations(id) ON DELETE SET NULL",
+    }.items():
+        if name not in job_columns:
+            db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}")
+    queue_columns = {row["name"] for row in db.execute("PRAGMA table_info(communication_queue)").fetchall()}
+    for name, definition in {
+        "organization_id": "INTEGER REFERENCES organizations(id) ON DELETE SET NULL",
+        "integration_id": "INTEGER REFERENCES organization_integrations(id) ON DELETE SET NULL",
+    }.items():
+        if name not in queue_columns:
+            db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}")
+    bootstrap_default_organization(db)
 
 
 def ensure_audit_event_id_column(db: sqlite3.Connection) -> None:
@@ -1362,11 +1488,13 @@ def ensure_v3_tables(db: sqlite3.Connection) -> None:
             estado TEXT NOT NULL DEFAULT 'demo'
         );
 
-        CREATE TABLE IF NOT EXISTS communication_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            CREATE TABLE IF NOT EXISTS communication_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+                integration_id INTEGER REFERENCES organization_integrations(id) ON DELETE SET NULL,
+                person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
             channel TEXT NOT NULL,
             audience TEXT NOT NULL DEFAULT '',
             template_code TEXT NOT NULL DEFAULT '',
@@ -1732,6 +1860,138 @@ def ensure_super_admin_event_access(db: sqlite3.Connection, event_id: int) -> No
     users = db.execute("SELECT id, role FROM users WHERE active = 1 AND role = 'Super Admin'").fetchall()
     for user in users:
         assign_user_to_event(db, int(user["id"]), event_id, user["role"])
+
+
+def make_public_id(prefix: str = "org") -> str:
+    return f"{prefix}_{secrets.token_urlsafe(8).replace('-', '').replace('_', '').lower()}"
+
+
+def bootstrap_default_organization(db: sqlite3.Connection) -> int:
+    row = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()
+    if row:
+        org_id = int(row["id"])
+    else:
+        now = now_iso()
+        org_id = int(db.execute(
+            """
+            INSERT INTO organizations (public_id, name, legal_name, trade_name, contact_email, status, plan, created_at, updated_at)
+            VALUES (?, 'BITORA Principal', 'BITORA Principal', 'BITORA', '', 'active', 'standard', ?, ?)
+            """,
+            (make_public_id("org"), now, now),
+        ).lastrowid)
+    db.execute("UPDATE events SET organization_id = ? WHERE organization_id IS NULL", (org_id,))
+    users = db.execute("SELECT id, role FROM users WHERE active = 1").fetchall()
+    for user in users:
+        db.execute(
+            """
+            INSERT OR IGNORE INTO organization_users (organization_id, user_id, role, status, accepted_at, created_at, updated_at)
+            VALUES (?, ?, ?, 'active', ?, ?, ?)
+            """,
+            (org_id, int(user["id"]), organization_role_from_system_role(user["role"]), now_iso(), now_iso(), now_iso()),
+        )
+    return org_id
+
+
+def organization_role_from_system_role(role: str) -> str:
+    mapping = {
+        "Super Admin": "organization_owner",
+        "Productor": "organization_admin",
+        "Coordinador": "event_manager",
+        "Comunicaciones": "communications_manager",
+        "Operador de recepcion": "reception",
+        "Operador de acceso": "access",
+        "Visualizador": "viewer",
+        "Soporte tecnico": "viewer",
+    }
+    return mapping.get(str(role or ""), "viewer")
+
+
+def session_can_access_organization(db: sqlite3.Connection, session: dict | None, organization_id: int) -> bool:
+    if not session:
+        return False
+    if str(session.get("role") or "") == "Super Admin":
+        return True
+    row = db.execute(
+        "SELECT 1 FROM organization_users WHERE organization_id = ? AND user_id = ? AND status = 'active'",
+        (organization_id, int(session.get("id") or 0)),
+    ).fetchone()
+    return bool(row)
+
+
+def event_organization_id(db: sqlite3.Connection, event_id: int) -> int:
+    try:
+        row = db.execute("SELECT organization_id FROM events WHERE id = ?", (event_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    return int(row["organization_id"] or bootstrap_default_organization(db)) if row else 0
+
+
+def sanitize_integration(row: sqlite3.Row | dict) -> dict:
+    item = dict(row)
+    item.pop("configuration_encrypted", None)
+    metadata = json.loads(item.get("metadata_json") or "{}") if isinstance(item.get("metadata_json"), str) else (item.get("metadata_json") or {})
+    masked = {}
+    for key, value in metadata.items():
+        masked[key] = mask_secret(str(value)) if key.lower() in {"token", "api_key", "password", "secret", "access_token", "refresh_token", "app_secret"} else value
+    item["metadata"] = masked
+    item.pop("metadata_json", None)
+    return item
+
+
+def integration_secret_service() -> IntegrationSecretService:
+    return IntegrationSecretService()
+
+
+def effective_safe_mode(db: sqlite3.Connection, event_id: int, channel: str) -> dict:
+    org_id = event_organization_id(db, event_id)
+    try:
+        org = db.execute("SELECT * FROM organizations WHERE id = ?", (org_id,)).fetchone() if org_id else None
+    except sqlite3.OperationalError:
+        org = None
+    channel = str(channel or "").lower()
+    global_safe = email_safe_mode_enabled() if channel == "email" else whatsapp_safe_mode_enabled()
+    org_safe = bool(int(org["safe_mode_email"] if channel == "email" else org["safe_mode_whatsapp"])) if org else True
+    forced = ""
+    if channel == "email":
+        forced = (org["force_email_recipient"] if org else "") or forced_email_recipient() or os.environ.get("EMAIL_TEST_RECIPIENT", "")
+    if channel == "whatsapp":
+        forced = (org["force_whatsapp_recipient"] if org else "") or forced_whatsapp_recipient() or os.environ.get("WHATSAPP_TEST_RECIPIENT", "")
+    return {"enabled": bool(global_safe or org_safe), "forced_recipient": forced, "organization_id": org_id}
+
+
+def event_channel_integration_id(db: sqlite3.Connection, event_id: int, channel: str) -> int | None:
+    try:
+        row = db.execute(
+            """
+            SELECT organization_integration_id
+            FROM event_integrations
+            WHERE event_id = ? AND channel = ? AND enabled = 1
+            ORDER BY is_default DESC, id DESC
+            LIMIT 1
+            """,
+            (event_id, str(channel or "").lower()),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return int(row["organization_integration_id"]) if row else None
+
+
+def default_organization_for_actor(db: sqlite3.Connection, actor: str, requested_organization_id: int = 0) -> int:
+    requested_organization_id = int(requested_organization_id or 0)
+    user = user_by_name(db, actor)
+    if requested_organization_id:
+        session = {"id": int(user["id"]), "name": user["name"], "role": user["role"]} if user else {"id": 0, "name": "Admin", "role": "Super Admin"}
+        if session_can_access_organization(db, session, requested_organization_id):
+            return requested_organization_id
+        raise PermissionError("No tenes permiso para usar esta organizacion")
+    if user:
+        row = db.execute(
+            "SELECT organization_id FROM organization_users WHERE user_id = ? AND status = 'active' ORDER BY organization_id LIMIT 1",
+            (int(user["id"]),),
+        ).fetchone()
+        if row:
+            return int(row["organization_id"])
+    return bootstrap_default_organization(db)
 
 
 def bootstrap_event_user_access(db: sqlite3.Connection) -> None:
@@ -2541,6 +2801,11 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
     email_queue_ids: list[int] = []
     whatsapp_queue_ids: list[int] = []
     channels = ["email", "whatsapp"] if channel == "both" else [channel]
+    organization_id = event_organization_id(db, event_id)
+    integration_id_by_channel = {
+        "email": event_channel_integration_id(db, event_id, "email"),
+        "whatsapp": event_channel_integration_id(db, event_id, "whatsapp"),
+    }
     for row in rows:
         for item_channel in channels:
             recipient = row["preferred_email"] if item_channel == "email" else row["preferred_phone"]
@@ -2611,24 +2876,49 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
                 else:
                     status = "enviado" if provider == "demo" else "error"
                     last_error = "" if provider == "demo" else "Proveedor no configurado"
-            cur = db.execute(
-                """
-                INSERT INTO communication_queue (
-                    event_id, person_id, accreditation_id, channel, audience, template_code,
-                    subject, content, recipient, status, attempts, max_attempts, provider,
-                    provider_message_id, last_error, scheduled_at, processed_at,
-                    delivered_at, bounced_at, idempotency_key, created_by, created_at
+            if getattr(db, "engine", "") == "postgres":
+                queue_has_tenant_columns = True
+            else:
+                queue_columns = {col["name"] for col in db.execute("PRAGMA table_info(communication_queue)").fetchall()}
+                queue_has_tenant_columns = {"organization_id", "integration_id"}.issubset(queue_columns)
+            if queue_has_tenant_columns:
+                cur = db.execute(
+                    """
+                    INSERT INTO communication_queue (
+                        event_id, organization_id, integration_id, person_id, accreditation_id, channel, audience, template_code,
+                        subject, content, recipient, status, attempts, max_attempts, provider,
+                        provider_message_id, last_error, scheduled_at, processed_at,
+                        delivered_at, bounced_at, idempotency_key, created_by, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id, organization_id, integration_id_by_channel.get(item_channel), row["person_id"], row["accreditation_id"], item_channel, audience,
+                        template_code, rendered_subject, rendered_content, recipient, status,
+                        1 if process_now and not should_defer_real else 0,
+                        max(1, int(os.environ.get("EMAIL_MAX_RETRIES", "3"))) if item_channel == "email" else max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))),
+                        provider, "", last_error, None, processed_at, None, None, idempotency_key, actor, now_iso(),
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event_id, row["person_id"], row["accreditation_id"], item_channel, audience,
-                    template_code, rendered_subject, rendered_content, recipient, status,
-                    1 if process_now and not should_defer_real else 0,
-                    max(1, int(os.environ.get("EMAIL_MAX_RETRIES", "3"))) if item_channel == "email" else max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))),
-                    provider, "", last_error, None, processed_at, None, None, idempotency_key, actor, now_iso(),
-                ),
-            )
+            else:
+                cur = db.execute(
+                    """
+                    INSERT INTO communication_queue (
+                        event_id, person_id, accreditation_id, channel, audience, template_code,
+                        subject, content, recipient, status, attempts, max_attempts, provider,
+                        provider_message_id, last_error, scheduled_at, processed_at,
+                        delivered_at, bounced_at, idempotency_key, created_by, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id, row["person_id"], row["accreditation_id"], item_channel, audience,
+                        template_code, rendered_subject, rendered_content, recipient, status,
+                        1 if process_now and not should_defer_real else 0,
+                        max(1, int(os.environ.get("EMAIL_MAX_RETRIES", "3"))) if item_channel == "email" else max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))),
+                        provider, "", last_error, None, processed_at, None, None, idempotency_key, actor, now_iso(),
+                    ),
+                )
             queue_id = int(cur.lastrowid)
             queued += 1
             if process_now and should_defer_real:
@@ -2680,8 +2970,12 @@ def process_email_queue_item(queue_id: int) -> dict:
     max_attempts = max(1, int(item.get("max_attempts") or 3))
     recipient = str(item["recipient"] or "").strip()
     original_recipient = recipient
-    if email_safe_mode_enabled() and forced_email_recipient():
-        recipient = forced_email_recipient()
+    with connect() as db:
+        safe_mode = effective_safe_mode(db, int(item["event_id"]), "email")
+    safe_mode_enabled = bool(safe_mode["enabled"])
+    forced_recipient = str(safe_mode.get("forced_recipient") or "").strip()
+    if safe_mode_enabled and forced_recipient:
+        recipient = forced_recipient
     if isinstance(provider, DemoEmailProvider):
         result_status = "enviado"
         result_error = ""
@@ -2700,15 +2994,17 @@ def process_email_queue_item(queue_id: int) -> dict:
     else:
         result = provider.send_template(
             to=recipient,
-            subject=("[SAFE] " if email_safe_mode_enabled() else "") + item["subject"],
+            subject=("[SAFE] " if safe_mode_enabled else "") + item["subject"],
             html=item["content"],
             text=item["content"],
             reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
             metadata={
                 "event_id": str(item["event_id"]),
+                "organization_id": str(safe_mode.get("organization_id") or item.get("organization_id") or ""),
+                "integration_id": str(item.get("integration_id") or ""),
                 "queue_id": str(item["id"]),
                 "template": str(item["template_code"] or "manual"),
-                "safe_mode": "1" if email_safe_mode_enabled() else "0",
+                "safe_mode": "1" if safe_mode_enabled else "0",
             },
         )
         ok = result.ok
@@ -2751,8 +3047,10 @@ def process_email_queue_item(queue_id: int) -> dict:
                 "status": result_status,
                 "attempt": attempt,
                 "max_attempts": max_attempts,
-                "safe_mode": email_safe_mode_enabled(),
-                "original_recipient_masked": mask_email(original_recipient) if email_safe_mode_enabled() else "",
+                "safe_mode": safe_mode_enabled,
+                "organization_id": safe_mode.get("organization_id") or item.get("organization_id"),
+                "integration_id": item.get("integration_id"),
+                "original_recipient_masked": mask_email(original_recipient) if safe_mode_enabled else "",
                 "error": result_error,
             },
         )
@@ -2810,8 +3108,11 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
         return {"ok": False, "status": status, "error": error}
     recipient = str(item["recipient"] or "")
     content = str(item["content"] or "")
-    if not isinstance(provider, DemoWhatsAppProvider) and whatsapp_safe_mode_enabled():
-        forced = forced_whatsapp_recipient()
+    with connect() as db:
+        safe_mode = effective_safe_mode(db, int(item["event_id"]), "whatsapp")
+    safe_mode_enabled = bool(safe_mode["enabled"])
+    forced = str(safe_mode.get("forced_recipient") or "").strip()
+    if not isinstance(provider, DemoWhatsAppProvider) and safe_mode_enabled:
         if not valid_phone(forced):
             status = "error" if attempt >= max_attempts else "pendiente"
             error = "WHATSAPP_SAFE_MODE activo pero falta WHATSAPP_FORCE_RECIPIENT valido"
@@ -2868,7 +3169,7 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
             (status, attempt, provider.name, result.message_id, result.error, now_iso(), queue_id),
         )
         communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], item["content"] if result.ok else result.error, "demo" if isinstance(provider, DemoWhatsAppProvider) else status)
-        audit(db, item["created_by"] or "system", "communications.whatsapp_sent" if result.ok else "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "message_id": result.message_id, "status": status, "attempt": attempt, "error": result.error})
+        audit(db, item["created_by"] or "system", "communications.whatsapp_sent" if result.ok else "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "organization_id": safe_mode.get("organization_id") or item.get("organization_id"), "integration_id": item.get("integration_id"), "provider": provider.name, "message_id": result.message_id, "status": status, "attempt": attempt, "safe_mode": safe_mode_enabled, "error": result.error})
         db.execute("COMMIT")
     return {"ok": result.ok, "status": status, "message_id": result.message_id, "error": result.error}
 
@@ -3232,19 +3533,21 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
 
 
 def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, status: str = "draft") -> int:
+    organization_id = default_organization_for_actor(db, actor, int(data.get("organization_id") or 0))
     cur = db.execute(
         """
         INSERT INTO events (
-            name, description, venue, starts_at, ends_at, status, project_type, capacity,
+            organization_id, name, description, venue, starts_at, ends_at, status, project_type, capacity,
             activity_selection_mode, generar_certificados, controlar_asistencia,
             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
             capacity_control_enabled, waitlist_enabled, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            organization_id,
             str(data.get("name") or "Evento").strip(),
             str(data.get("description") or "").strip(),
             str(data.get("venue") or "").strip(),
@@ -3270,7 +3573,7 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
         ),
     )
     event_id = int(cur.lastrowid)
-    audit(db, actor, "event.created", "event", event_id, {"source": "config"})
+    audit(db, actor, "event.created", "event", event_id, {"source": "config", "organization_id": organization_id})
     return event_id
 
 
@@ -5147,6 +5450,28 @@ class AppHandler(SimpleHTTPRequestHandler):
             return False, session
         return True, session
 
+    def require_organization_permission(self, db: sqlite3.Connection, organization_id: int, permission_code: str, action: str, actor_override: str | None = None) -> tuple[bool, dict | None]:
+        session = self.effective_user()
+        if not self.login_required() and actor_override:
+            actor_user = user_by_name(db, actor_override)
+            if actor_user:
+                session = {"id": int(actor_user["id"]), "name": actor_user["name"], "role": actor_user["role"], "local": True}
+        actor = (session or {}).get("name", "anonimo")
+        organization = db.execute("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL", (organization_id,)).fetchone()
+        if not session or not organization:
+            audit(db, actor, "permission.denied", "organization", organization_id or None, {"permission": permission_code, "action": action, "reason": "no_session_or_organization"})
+            self.send_json({"error": "No tenes permiso para operar esta organizacion."}, 403)
+            return False, session
+        if not session_can_access_organization(db, session, organization_id):
+            audit(db, actor, "permission.denied", "organization", organization_id, {"permission": permission_code, "action": action, "reason": "organization_not_assigned"})
+            self.send_json({"error": "No tenes permiso para operar esta organizacion."}, 403)
+            return False, session
+        if not user_has_permission(db, session, 0, permission_code):
+            audit(db, actor, "permission.denied", "organization", organization_id, {"permission": permission_code, "action": action, "reason": "missing_permission"})
+            self.send_json({"error": "No tenes permiso para esta accion en esta organizacion."}, 403)
+            return False, session
+        return True, session
+
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -5253,6 +5578,82 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/app-config":
                 self.send_json(runtime_config(self))
+                return
+
+            if path == "/api/organizations":
+                session = self.effective_user()
+                if not session:
+                    self.send_json({"error": "No autenticado"}, 403)
+                    return
+                with connect() as db:
+                    bootstrap_default_organization(db)
+                    if session.get("role") == "Super Admin":
+                        rows = db.execute("SELECT * FROM organizations WHERE deleted_at IS NULL ORDER BY name").fetchall()
+                    else:
+                        rows = db.execute(
+                            """
+                            SELECT o.*
+                            FROM organizations o
+                            JOIN organization_users ou ON ou.organization_id = o.id
+                            WHERE ou.user_id = ? AND ou.status = 'active' AND o.deleted_at IS NULL
+                            ORDER BY o.name
+                            """,
+                            (int(session.get("id") or 0),),
+                        ).fetchall()
+                self.send_json({"items": [dict(row) for row in rows]})
+                return
+
+            if path == "/api/organization-users":
+                organization_id = int(query.get("organization_id", ["0"])[0] or 0)
+                with connect() as db:
+                    ok, _session = self.require_organization_permission(db, organization_id, "organizations.manage_users", "organizations.users")
+                    if not ok:
+                        return
+                    rows = db.execute(
+                        """
+                        SELECT ou.*, u.name AS user_name, u.role AS system_role
+                        FROM organization_users ou
+                        JOIN users u ON u.id = ou.user_id
+                        WHERE ou.organization_id = ?
+                        ORDER BY u.name
+                        """,
+                        (organization_id,),
+                    ).fetchall()
+                self.send_json({"items": [dict(row) for row in rows]})
+                return
+
+            if path == "/api/organization-integrations":
+                organization_id = int(query.get("organization_id", ["0"])[0] or 0)
+                with connect() as db:
+                    ok, _session = self.require_organization_permission(db, organization_id, "integrations.view", "integrations.view")
+                    if not ok:
+                        return
+                    rows = db.execute("SELECT * FROM organization_integrations WHERE organization_id = ? ORDER BY id DESC", (organization_id,)).fetchall()
+                self.send_json({"items": [sanitize_integration(row) for row in rows]})
+                return
+
+            if path == "/api/event-integrations":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    ok, session = self.require_event_permission(db, event_id, "event_integrations.view", "event_integrations.view")
+                    if not ok:
+                        return
+                    rows = db.execute(
+                        """
+                        SELECT ei.*, oi.provider, oi.integration_type, oi.name AS integration_name, oi.status AS integration_status
+                        FROM event_integrations ei
+                        JOIN organization_integrations oi ON oi.id = ei.organization_integration_id
+                        WHERE ei.event_id = ?
+                        ORDER BY ei.channel
+                        """,
+                        (event_id,),
+                    ).fetchall()
+                    org_id = event_organization_id(db, event_id)
+                    available = db.execute(
+                        "SELECT * FROM organization_integrations WHERE organization_id = ? AND status IN ('connected', 'draft', 'pending') ORDER BY integration_type, name",
+                        (org_id,),
+                    ).fetchall()
+                self.send_json({"items": [dict(row) for row in rows], "available": [sanitize_integration(row) for row in available], "organization_id": org_id})
                 return
 
             if path == "/api/project-configuration":
@@ -7982,19 +8383,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
+                    try:
+                        organization_id = default_organization_for_actor(db, actor, int(data.get("organization_id") or 0))
+                    except PermissionError as exc:
+                        self.send_json({"error": str(exc)}, 403)
+                        return
                     cur = db.execute(
                         """
                         INSERT INTO events (
-                            name, description, venue, starts_at, ends_at, status, project_type, capacity,
+                            organization_id, name, description, venue, starts_at, ends_at, status, project_type, capacity,
                             activity_selection_mode, generar_certificados, controlar_asistencia,
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
                             capacity_control_enabled, waitlist_enabled, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
+                            organization_id,
                             data.get("name", "").strip(),
                             data.get("description", "").strip(),
                             data.get("venue", "").strip(),
@@ -8026,8 +8433,183 @@ class AppHandler(SimpleHTTPRequestHandler):
                     ensure_super_admin_event_access(db, event_id)
                     ensure_default_types(db, event_id)
                     ensure_default_spaces(db, event_id)
-                    audit(db, actor, "event.created", "event", event_id, data)
+                    audit(db, actor, "event.created", "event", event_id, {**data, "organization_id": organization_id})
                 self.send_json({"ok": True, "id": event_id}, 201)
+                return
+
+            if path == "/api/organizations":
+                actor = data.get("actor", "Admin")
+                with connect() as db:
+                    session = self.effective_user()
+                    if not session and not self.login_required():
+                        actor_user = user_by_name(db, actor)
+                        session = {"id": int(actor_user["id"]), "name": actor_user["name"], "role": actor_user["role"]} if actor_user else {"id": 0, "name": "Admin", "role": "Super Admin"}
+                    if not user_has_permission(db, session, 0, "organizations.edit"):
+                        self.send_json({"error": "No tenes permiso para crear organizaciones"}, 403)
+                        return
+                    now = now_iso()
+                    org_id = int(db.execute(
+                        """
+                        INSERT INTO organizations (
+                            public_id, name, legal_name, trade_name, tax_id, contact_name, contact_email,
+                            contact_phone, country, timezone, locale, status, plan, website,
+                            general_email, general_whatsapp, signature, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            make_public_id("org"),
+                            str(data.get("name") or "Organizacion").strip(),
+                            str(data.get("legal_name") or "").strip(),
+                            str(data.get("trade_name") or "").strip(),
+                            str(data.get("tax_id") or "").strip(),
+                            str(data.get("contact_name") or "").strip(),
+                            str(data.get("contact_email") or "").strip(),
+                            str(data.get("contact_phone") or "").strip(),
+                            str(data.get("country") or "AR").strip(),
+                            str(data.get("timezone") or "America/Argentina/Buenos_Aires").strip(),
+                            str(data.get("locale") or "es_AR").strip(),
+                            str(data.get("status") or "active").strip(),
+                            str(data.get("plan") or "standard").strip(),
+                            str(data.get("website") or "").strip(),
+                            str(data.get("general_email") or "").strip(),
+                            str(data.get("general_whatsapp") or "").strip(),
+                            str(data.get("signature") or "").strip(),
+                            now,
+                            now,
+                        ),
+                    ).lastrowid)
+                    if session and int(session.get("id") or 0):
+                        db.execute(
+                            "INSERT OR IGNORE INTO organization_users (organization_id, user_id, role, status, accepted_at, created_at, updated_at) VALUES (?, ?, 'organization_owner', 'active', ?, ?, ?)",
+                            (org_id, int(session["id"]), now, now, now),
+                        )
+                    audit(db, actor, "organization.created", "organization", org_id, {"name": data.get("name")})
+                self.send_json({"ok": True, "id": org_id}, 201)
+                return
+
+            if path == "/api/organization-integrations":
+                actor = data.get("actor", "Admin")
+                organization_id = int(data.get("organization_id") or 0)
+                with connect() as db:
+                    ok, session = self.require_organization_permission(db, organization_id, "integrations.create", "integrations.create", actor)
+                    if not ok:
+                        return
+                    now = now_iso()
+                    secrets_payload = data.get("secrets") or {}
+                    configuration_encrypted = ""
+                    if secrets_payload:
+                        try:
+                            configuration_encrypted = integration_secret_service().encrypt(json.dumps(secrets_payload, ensure_ascii=True))
+                        except IntegrationSecretError as exc:
+                            self.send_json({"error": safe_public_error(exc)}, 400)
+                            return
+                    metadata = dict(data.get("metadata") or {})
+                    for key in list(metadata):
+                        if key.lower() in {"token", "api_key", "password", "secret", "access_token", "refresh_token", "app_secret"}:
+                            metadata[key] = mask_secret(str(metadata[key]))
+                    integration_id = int(db.execute(
+                        """
+                        INSERT INTO organization_integrations (
+                            organization_id, provider, integration_type, name, mode, status,
+                            configuration_encrypted, metadata_json, created_by, updated_by, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            organization_id,
+                            str(data.get("provider") or "bitora_managed").strip(),
+                            str(data.get("integration_type") or "email_provider").strip(),
+                            str(data.get("name") or "Integracion").strip(),
+                            str(data.get("mode") or "platform_managed").strip(),
+                            str(data.get("status") or "draft").strip(),
+                            configuration_encrypted,
+                            json.dumps(metadata, ensure_ascii=True),
+                            session["name"],
+                            session["name"],
+                            now,
+                            now,
+                        ),
+                    ).lastrowid)
+                    audit(db, session["name"], "integration.created", "organization_integration", integration_id, {"organization_id": organization_id, "provider": data.get("provider"), "type": data.get("integration_type")})
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                self.send_json({"ok": True, "integration": sanitize_integration(row)}, 201)
+                return
+
+            if path == "/api/organization-integrations/test":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.test", "integrations.test", actor)
+                    if not ok:
+                        return
+                    status = "CONNECTED" if row["status"] in {"connected", "draft", "pending"} else "ERROR"
+                    error = "" if status == "CONNECTED" else "Integracion deshabilitada o revocada"
+                    db.execute(
+                        """
+                        UPDATE organization_integrations
+                        SET last_tested_at = ?, last_test_status = ?, last_error_message_sanitized = ?, updated_by = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now_iso(), status, error, session["name"], now_iso(), integration_id),
+                    )
+                    audit(db, session["name"], "integration.tested", "organization_integration", integration_id, {"status": status, "organization_id": row["organization_id"]})
+                self.send_json({"ok": status == "CONNECTED", "status": status, "error": error})
+                return
+
+            if path == "/api/organization-integrations/disable":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.disable", "integrations.disable", actor)
+                    if not ok:
+                        return
+                    db.execute("UPDATE organization_integrations SET status = 'disabled', disabled_at = ?, updated_by = ?, updated_at = ? WHERE id = ?", (now_iso(), session["name"], now_iso(), integration_id))
+                    audit(db, session["name"], "integration.disabled", "organization_integration", integration_id, {"organization_id": row["organization_id"]})
+                self.send_json({"ok": True})
+                return
+
+            if path == "/api/event-integrations":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                integration_id = int(data.get("organization_integration_id") or 0)
+                channel = str(data.get("channel") or "").strip().lower()
+                if not channel or not integration_id:
+                    self.send_json({"error": "Falta canal o integracion"}, 400)
+                    return
+                with connect() as db:
+                    ok, session = self.require_event_permission(db, event_id, "event_integrations.assign", "event_integrations.assign", actor)
+                    if not ok:
+                        return
+                    event_org_id = event_organization_id(db, event_id)
+                    integration = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not integration or int(integration["organization_id"]) != event_org_id:
+                        audit(db, session["name"], "permission.denied", "event", event_id, {"reason": "cross_organization_integration", "integration_id": integration_id, "organization_id": event_org_id})
+                        self.send_json({"error": "La integracion no pertenece a la organizacion del evento."}, 403)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        INSERT INTO event_integrations (event_id, channel, organization_integration_id, is_default, enabled, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(event_id, channel)
+                        DO UPDATE SET organization_integration_id = excluded.organization_integration_id,
+                                      is_default = excluded.is_default,
+                                      enabled = excluded.enabled,
+                                      updated_at = excluded.updated_at
+                        """,
+                        (event_id, channel, integration_id, 1 if truthy(data.get("is_default", False)) else 0, 1 if truthy(data.get("enabled", True)) else 0, now, now),
+                    )
+                    audit(db, session["name"], "event_integration.assigned", "event", event_id, {"channel": channel, "integration_id": integration_id, "organization_id": event_org_id})
+                self.send_json({"ok": True})
                 return
 
             if path == "/api/prepare-event":
@@ -8584,12 +9166,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                         person_id = person["id"]
                     accreditation = db.execute("SELECT id FROM accreditations WHERE event_id = ? AND person_id = ? LIMIT 1", (event_id, person_id)).fetchone()
                     accreditation_id = accreditation["id"] if accreditation else None
+                    organization_id = event_organization_id(db, event_id)
+                    integration_id = event_channel_integration_id(db, event_id, "whatsapp")
                     queue_id = db.execute(
                         """
-                        INSERT INTO communication_queue (event_id, person_id, accreditation_id, channel, audience, template_code, subject, content, recipient, status, attempts, max_attempts, provider, created_by, created_at)
-                        VALUES (?, ?, ?, 'whatsapp', 'test', 'test', 'Prueba WhatsApp', ?, ?, 'pendiente', 0, ?, ?, ?, ?)
+                        INSERT INTO communication_queue (event_id, organization_id, integration_id, person_id, accreditation_id, channel, audience, template_code, subject, content, recipient, status, attempts, max_attempts, provider, created_by, created_at)
+                        VALUES (?, ?, ?, ?, ?, 'whatsapp', 'test', 'test', 'Prueba WhatsApp', ?, ?, 'pendiente', 0, ?, ?, ?, ?)
                         """,
-                        (event_id, person_id, accreditation_id, message, phone, max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))), communication_provider("whatsapp"), actor, now_iso()),
+                        (event_id, organization_id, integration_id, person_id, accreditation_id, message, phone, max(1, int(os.environ.get("WHATSAPP_MAX_RETRIES", "3"))), communication_provider("whatsapp"), actor, now_iso()),
                     ).lastrowid
                     audit(db, actor, "communications.whatsapp_test_queued", "communication_queue", queue_id, {"event_id": event_id})
                 job_queue_service().enqueue("whatsapp.send", {"queue_id": queue_id}, priority="high", actor=actor, event_id=event_id)

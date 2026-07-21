@@ -1,6 +1,8 @@
 # BITORA Security Report
 
 - **MEDIUM** [security] SQL string formatting: rows = [dict(row) for row in source.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()] if exists else [] (migrar_sqlite_a_postgres.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}") (server.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE events ADD COLUMN {name} {definition}") (server.py)

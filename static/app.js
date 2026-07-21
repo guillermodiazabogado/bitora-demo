@@ -34,6 +34,7 @@ const state = {
 
 const MODULE_LABELS = {
   owner: "Mis eventos",
+  organizations: "Organizaciones",
   dashboard: "Panel",
   register: "Inscribir",
   reception: "Recepcion",
@@ -94,6 +95,19 @@ const ACTION_LABELS = {
   "backups.manage_retention": "Backups: retencion",
   "backups.view_logs": "Backups: ver logs",
   "backups.view_manifest": "Backups: ver manifiesto",
+  "organizations.view": "Organizaciones: ver",
+  "organizations.edit": "Organizaciones: crear / editar",
+  "organizations.manage_users": "Organizaciones: usuarios",
+  "integrations.view": "Integraciones: ver",
+  "integrations.create": "Integraciones: crear",
+  "integrations.edit": "Integraciones: editar",
+  "integrations.test": "Integraciones: probar conexion",
+  "integrations.rotate": "Integraciones: rotar secretos",
+  "integrations.disable": "Integraciones: deshabilitar",
+  "event_integrations.view": "Evento: ver integraciones",
+  "event_integrations.assign": "Evento: asignar integraciones",
+  "communications.configure": "Comunicaciones: configurar canal",
+  "communications.send_test": "Comunicaciones: envio de prueba",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -245,6 +259,7 @@ function renderPermissionsMatrix() {
   const modules = Object.keys(MODULE_LABELS);
   const communicationActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("communications."));
   const backupActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("backups."));
+  const integrationActions = Object.keys(ACTION_LABELS).filter((action) => action.startsWith("organizations.") || action.startsWith("integrations.") || action.startsWith("event_integrations."));
   const rows = Object.entries(state.permissions.matrix);
   const locked = state.permissions.locked || {};
   const editable = state.authUser?.role === "Super Admin";
@@ -309,6 +324,22 @@ function renderPermissionsMatrix() {
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
             ${backupActions.map((action) => renderCell({ role, code: action, allowed: allowed.has(action), kind: "action" })).join("")}
+          </div>
+        `;
+      }).join("")}
+    </div>
+    <h3 class="permissions-subtitle">Permisos finos de Organizaciones e Integraciones</h3>
+    <div class="permissions-table permissions-actions-table">
+      <div class="permissions-head permissions-actions-head">
+        <strong>Rol</strong>
+        ${integrationActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
+      </div>
+      ${rows.map(([role, config]) => {
+        const allowed = new Set(config.actions || []);
+        return `
+          <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
+            <strong>${escapeHtml(role)}</strong>
+            ${integrationActions.map((action) => renderCell({ role, code: action, allowed: allowed.has(action), kind: "action" })).join("")}
           </div>
         `;
       }).join("")}

@@ -2,30 +2,56 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-20T22:27:48",
+    "started_at": "2026-07-20T23:05:22",
     "python": "3.12.13",
     "platform": "Windows-11-10.0.26200-SP0",
     "branch": "main",
-    "commit": "7419b67f1af5bfefe23d34c362ec35bc92f9e403",
+    "commit": "9bbba102b37ae19c160c54af038da5eb41d14937",
     "dirty_files": [
-      "M .gitignore",
+      "M .env.example",
+      " M BITORA_ARCHITECTURE_REPORT.md",
+      " M BITORA_BACKUP_REPORT.md",
+      " M BITORA_CODE_AUDIT.md",
+      " M BITORA_DATABASE_REPORT.md",
+      " M BITORA_DISASTER_RECOVERY_REPORT.md",
       " M BITORA_FINAL_RELEASE_CERTIFICATION.md",
+      " M BITORA_LOAD_TEST_REPORT.md",
+      " M BITORA_MULTIEVENT_ISOLATION_REPORT.md",
+      " M BITORA_RELEASE_CANDIDATE.md",
+      " M BITORA_RELEASE_CERTIFICATION.md",
+      " M BITORA_RESTORE_REPORT.md",
+      " M BITORA_SECURITY_REPORT.md",
+      " M BITORA_STORAGE_VALIDATION_REPORT.md",
+      " M BITORA_SUPERTEST_REPORT.html",
+      " M BITORA_SUPERTEST_RESULTS.json",
+      " M BITORA_SUPERTEST_SUMMARY.md",
+      " M backend/database.py",
+      " M deployment/staging/.env.staging.example",
+      " M frontend/app.js",
+      " M requirements.txt",
       " M server.py",
+      " M static/app.js",
       " M tools/supertest/runner.py",
-      "?? BITORA_BDF_FINAL_STATUS.md",
-      "?? BITORA_BDF_IMPLEMENTATION_REPORT.md",
-      "?? BITORA_DEPLOYMENT_CURRENT_STATE.md",
-      "?? BITORA_DEPLOYMENT_FRAMEWORK.md",
-      "?? BITORA_STAGING_BACKUP_RESTORE.md",
-      "?? BITORA_STAGING_DISASTER_RUNBOOK.md",
-      "?? BITORA_STAGING_ENVIRONMENT_VARIABLES.md",
-      "?? BITORA_STAGING_TROUBLESHOOTING.md",
-      "?? backend/worker.py",
-      "?? deployment/",
-      "?? verificar_multievent_isolation_20_events.py"
+      "?? BITORA_EMAIL_INTEGRATION_SETUP.md",
+      "?? BITORA_GOOGLE_INTEGRATION_SETUP.md",
+      "?? BITORA_INTEGRATIONS_ARCHITECTURE.md",
+      "?? BITORA_INTEGRATIONS_TEST_REPORT.md",
+      "?? BITORA_INTEGRATION_OPERATIONS.md",
+      "?? BITORA_INTEGRATION_SECURITY.md",
+      "?? BITORA_META_WHATSAPP_INTEGRATION_SETUP.md",
+      "?? BITORA_MULTITENANT_ARCHITECTURE.md",
+      "?? BITORA_MULTITENANT_CURRENT_STATE.md",
+      "?? BITORA_MULTITENANT_FINAL_STATUS.md",
+      "?? BITORA_MULTITENANT_IMPLEMENTATION_REPORT.md",
+      "?? BITORA_MULTITENANT_MIGRATION.md",
+      "?? BITORA_MULTITENANT_TEST_REPORT.md",
+      "?? BITORA_ORGANIZATIONS_MODEL.md",
+      "?? backend/migrations/014_multitenant_integrations.sql",
+      "?? backend/services/integration_secrets.py",
+      "?? verificar_multitenant_integrations.py"
     ],
-    "max_migration": "013_whatsapp_production.sql",
-    "code_checksum": "ae313d77e9979673e15f38f1c69cf144f01d6a44726c1ca02d1acae0a32747ba",
+    "max_migration": "014_multitenant_integrations.sql",
+    "code_checksum": "650658f203b9f3bd95a654e711b916eedcff420826ed68ec1f96fe120d233913",
     "critical_env": {
       "APP_ENV": "",
       "BASE_URL": "",
@@ -42,8 +68,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-20T22:27:48",
-  "finished_at": "2026-07-20T22:28:13",
+  "started_at": "2026-07-20T23:05:22",
+  "finished_at": "2026-07-20T23:05:49",
   "findings": [
     {
       "severity": "info",
@@ -57,6 +83,13 @@
       "category": "code",
       "title": "Funcion muy extensa",
       "detail": "init_db ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "queue_communication ocupa mas de 120 lineas",
       "file": "server.py"
     },
     {
@@ -107,6 +140,13 @@
       "title": "Funcion muy extensa",
       "detail": "main ocupa mas de 120 lineas",
       "file": "verificar_demo_live_10.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_multitenant_integrations.py"
     },
     {
       "severity": "medium",
@@ -189,21 +229,21 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "connect: server.py:438, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_persistencia_backups.py:61, verificar_storage_event_backup_restore.py:87, verificar_v6_1_email_productivo.py:18",
+      "detail": "connect: server.py:454, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_persistencia_backups.py:61, verificar_storage_event_backup_restore.py:87, verificar_v6_1_email_productivo.py:18",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "do_POST: server.py:5202, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21",
+      "detail": "do_POST: server.py:5527, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9392, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43",
+      "detail": "main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9976, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43",
       "file": ""
     },
     {
@@ -240,6 +280,20 @@
       "title": "SQL string formatting",
       "detail": "rows = [dict(row) for row in source.execute(f'SELECT * FROM \"{table}\" ORDER BY 1').fetchall()] if exists else []",
       "file": "migrar_sqlite_a_postgres.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"ALTER TABLE jobs ADD COLUMN {name} {definition}\")",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"ALTER TABLE communication_queue ADD COLUMN {name} {definition}\")",
+      "file": "server.py"
     },
     {
       "severity": "medium",
@@ -343,7 +397,7 @@
       "severity": "medium",
       "category": "architecture",
       "title": "Controlador principal muy grande",
-      "detail": "server.py tiene 9444 lineas",
+      "detail": "server.py tiene 10028 lineas",
       "file": ""
     }
   ],
@@ -357,7 +411,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.89,
+      "duration_seconds": 2.03,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -371,7 +425,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.86,
+      "duration_seconds": 2.14,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -385,7 +439,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.66,
+      "duration_seconds": 0.87,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -399,7 +453,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.21,
+      "duration_seconds": 1.14,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -413,7 +467,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.41,
+      "duration_seconds": 0.46,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -427,7 +481,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.39,
+      "duration_seconds": 0.4,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -455,7 +509,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.25,
+      "duration_seconds": 0.26,
       "stdout_tail": "OK postgres static; live=SKIP (QR_POSTGRES_DSN no configurado)\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -483,7 +537,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.82,
       "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -497,7 +551,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.8,
       "stdout_tail": "{\"ok\": true, \"event_id\": 1, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -511,7 +565,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.41,
+      "duration_seconds": 1.47,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -525,7 +579,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.41,
+      "duration_seconds": 1.5,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -539,7 +593,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.53,
+      "duration_seconds": 1.65,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -553,7 +607,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.16,
+      "duration_seconds": 5.59,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -567,8 +621,22 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.18,
+      "duration_seconds": 3.4,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "multitenant_integrations",
+      "category": "security",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_multitenant_integrations.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.81,
+      "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -628,6 +696,116 @@
       "exit_code": null
     },
     {
+      "name": "multitenant_organization_isolation",
+      "category": "security",
+      "command": [],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0,
+      "stdout_tail": "Cubierto por verificar_multitenant_integrations.py.",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "integration_secret_protection",
+      "category": "security",
+      "command": [],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0,
+      "stdout_tail": "Secretos cifrados y respuestas sanitizadas validadas localmente.",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "integration_assignment",
+      "category": "integrations",
+      "command": [],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0,
+      "stdout_tail": "Asignacion evento-integracion bloquea cruces entre organizaciones.",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_integration_flow",
+      "category": "integrations",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Preparado a nivel de modelo; pendiente OAuth real con credenciales de cliente.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "meta_integration_flow",
+      "category": "integrations",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Preparado a nivel de modelo; pendiente OAuth/Meta real y webhooks productivos.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "email_integration_flow",
+      "category": "integrations",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Preparado a nivel de modelo; pendiente prueba live con dominio y proveedor asignado por organizacion.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "webhook_tenant_resolution",
+      "category": "integrations",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente prueba live con webhooks reales y resolucion tenant.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "communications_tenant_isolation",
+      "category": "communications",
+      "command": [],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0,
+      "stdout_tail": "La cola guarda organization_id/integration_id y aplica safe mode por organizacion.",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "backup_multitenant",
+      "category": "backup_restore",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente extender backup completo con varias organizaciones.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "restore_multitenant",
+      "category": "backup_restore",
+      "command": [],
+      "required": false,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente prueba live de restauracion multiorganizacion.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
       "name": "disaster_recovery_live",
       "category": "disaster",
       "command": [],
@@ -668,7 +846,7 @@
       "code": 0,
       "database": 46,
       "communications": 50,
-      "backup_restore": 50,
+      "backup_restore": 20,
       "events": 100,
       "permissions": 100,
       "functional": 100,
@@ -680,7 +858,7 @@
       "upgrade": 50,
       "environment": 50
     },
-    "weighted_average": 61.5
+    "weighted_average": 59.6
   },
   "approved": false
 }

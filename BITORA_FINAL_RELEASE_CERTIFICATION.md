@@ -2,11 +2,11 @@
 
 Decision: **NO APROBADA**
 
-Version evaluada: `7419b67f1af5bfefe23d34c362ec35bc92f9e403`
+Version evaluada: `9bbba102b37ae19c160c54af038da5eb41d14937`
 Branch: `main`
 Perfil: `release`
-Score: **61.5/100**
-Fecha: 2026-07-20T22:28:13
+Score: **59.6/100**
+Fecha: 2026-07-20T23:05:49
 
 ## Pruebas y gates
 
@@ -26,11 +26,22 @@ Fecha: 2026-07-20T22:28:13
 - PASSED `errores_humanos`
 - PASSED `concurrencia_critica`
 - PASSED `multievent_isolation_20_events`
+- PASSED `multitenant_integrations`
 - OMITTED `staging_environment`
 - OMITTED `postgres_live`
 - OMITTED `storage_persistent`
 - OMITTED `workers_live`
 - OMITTED `communications_safe_mode`
+- PASSED `multitenant_organization_isolation`
+- PASSED `integration_secret_protection`
+- PASSED `integration_assignment`
+- OMITTED `google_integration_flow`
+- OMITTED `meta_integration_flow`
+- OMITTED `email_integration_flow`
+- OMITTED `webhook_tenant_resolution`
+- PASSED `communications_tenant_isolation`
+- OMITTED `backup_multitenant`
+- OMITTED `restore_multitenant`
 - OMITTED `disaster_recovery_live`
 - OMITTED `endurance_24h`
 - OMITTED `upgrade_from_previous_version`

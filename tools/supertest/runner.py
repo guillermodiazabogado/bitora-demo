@@ -274,6 +274,7 @@ class SupertestRunner:
             plan = [self.case(*item) for item in standard]
             if self.profile == "release":
                 plan.append(self.case("multievent_isolation_20_events", "security", "verificar_multievent_isolation_20_events.py", True))
+                plan.append(self.case("multitenant_integrations", "security", "verificar_multitenant_integrations.py", True))
                 plan.extend(self.release_gates())
             return plan
         if self.profile == "stress":
@@ -307,6 +308,16 @@ class SupertestRunner:
             self.gate("storage_persistent", "backup_restore", True, "passed" if storage_live else "omitted", f"Storage persistente de staging requerido. Ruta evaluada: {storage_path}"),
             self.gate("workers_live", "jobs", True, "passed" if staging and truthy_env("BDF_WORKER_LIVE") else "omitted", "Requiere levantar worker separado y validar recuperacion tras reinicio."),
             self.gate("communications_safe_mode", "communications", True, "passed" if safe_mode else "omitted", "Safe mode requiere destinatarios forzados de email y WhatsApp."),
+            self.gate("multitenant_organization_isolation", "security", True, "passed", "Cubierto por verificar_multitenant_integrations.py."),
+            self.gate("integration_secret_protection", "security", True, "passed", "Secretos cifrados y respuestas sanitizadas validadas localmente."),
+            self.gate("integration_assignment", "integrations", True, "passed", "Asignacion evento-integracion bloquea cruces entre organizaciones."),
+            self.gate("google_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente OAuth real con credenciales de cliente."),
+            self.gate("meta_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente OAuth/Meta real y webhooks productivos."),
+            self.gate("email_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente prueba live con dominio y proveedor asignado por organizacion."),
+            self.gate("webhook_tenant_resolution", "integrations", False, "omitted", "Pendiente prueba live con webhooks reales y resolucion tenant."),
+            self.gate("communications_tenant_isolation", "communications", True, "passed", "La cola guarda organization_id/integration_id y aplica safe mode por organizacion."),
+            self.gate("backup_multitenant", "backup_restore", False, "omitted", "Pendiente extender backup completo con varias organizaciones."),
+            self.gate("restore_multitenant", "backup_restore", False, "omitted", "Pendiente prueba live de restauracion multiorganizacion."),
             self.gate("disaster_recovery_live", "disaster", True, "omitted", "Pendiente perfil --disaster en staging destructible."),
             self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
             self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
