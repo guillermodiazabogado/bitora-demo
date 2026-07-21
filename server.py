@@ -53,7 +53,15 @@ from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
 from backend.services.reservations import ReservationService
-from backend.services.whatsapp import DemoWhatsAppProvider, create_whatsapp_provider
+from backend.services.whatsapp import (
+    DemoWhatsAppProvider,
+    create_whatsapp_provider,
+    forced_whatsapp_recipient,
+    normalize_phone,
+    valid_phone,
+    verify_meta_signature,
+    whatsapp_safe_mode_enabled,
+)
 from backend.storage import StorageService
 from backend.verticals import normalize_project_type, registered_verticals, vertical_config
 
@@ -267,6 +275,9 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     email_provider = str(env.get("EMAIL_PROVIDER", "demo")).strip().lower()
     email_from = str(env.get("EMAIL_FROM") or env.get("EMAIL_FROM_ADDRESS") or "").strip()
     email_safe_mode = str(env.get("EMAIL_SAFE_MODE", "")).lower() in {"1", "true", "yes", "si"}
+    whatsapp_enabled = str(env.get("WHATSAPP_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
+    whatsapp_provider = str(env.get("WHATSAPP_PROVIDER", "demo")).strip().lower()
+    whatsapp_safe_mode = str(env.get("WHATSAPP_SAFE_MODE", "true")).lower() in {"1", "true", "yes", "si"}
     errors = []
     warnings = []
     if app_env not in {"development", "demo", "production"}:
@@ -295,6 +306,19 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
                 errors.append("EMAIL_WEBHOOK_SECRET es obligatorio para webhooks productivos")
             if email_safe_mode:
                 errors.append("EMAIL_SAFE_MODE debe estar desactivado para produccion real")
+        if whatsapp_enabled and whatsapp_provider != "demo":
+            if not env.get("WHATSAPP_ACCESS_TOKEN", "").strip():
+                errors.append("WHATSAPP_ACCESS_TOKEN es obligatorio para WhatsApp real")
+            if not (env.get("WHATSAPP_PHONE_NUMBER_ID", "") or env.get("WHATSAPP_PHONE_ID", "")).strip():
+                errors.append("WHATSAPP_PHONE_NUMBER_ID es obligatorio para WhatsApp real")
+            if not env.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "").strip():
+                errors.append("WHATSAPP_BUSINESS_ACCOUNT_ID es obligatorio para WhatsApp real")
+            if not env.get("WHATSAPP_VERIFY_TOKEN", "").strip():
+                errors.append("WHATSAPP_VERIFY_TOKEN es obligatorio para verificacion de webhook")
+            if not env.get("WHATSAPP_APP_SECRET", "").strip():
+                errors.append("WHATSAPP_APP_SECRET es obligatorio para firma de webhook")
+            if whatsapp_safe_mode:
+                errors.append("WHATSAPP_SAFE_MODE debe estar desactivado para produccion real")
     return {
         "ok": not errors,
         "env": app_env,
@@ -305,6 +329,8 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
         "storage_backend": storage_backend,
         "email_provider": email_provider,
         "email_enabled": email_enabled,
+        "whatsapp_provider": whatsapp_provider,
+        "whatsapp_enabled": whatsapp_enabled,
         "errors": errors,
         "warnings": warnings,
     }
@@ -911,6 +937,7 @@ def init_db() -> None:
         ensure_v4_2_columns(db)
         ensure_v4_4_columns(db)
         ensure_v6_1_email_schema(db)
+        ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
         ensure_multivertical_schema(db)
         ensure_audit_event_id_column(db)
@@ -1037,6 +1064,53 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
     event_columns = {row["name"] for row in db.execute("PRAGMA table_info(email_delivery_events)").fetchall()}
     if "external_event_id" not in event_columns:
         db.execute("ALTER TABLE email_delivery_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(communication_queue)").fetchall()}
+    additions = {
+        "read_at": "TEXT",
+        "failed_at": "TEXT",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}")
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_delivery_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            queue_id INTEGER REFERENCES communication_queue(id) ON DELETE SET NULL,
+            provider TEXT NOT NULL DEFAULT 'meta',
+            message_id TEXT NOT NULL DEFAULT '',
+            external_event_id TEXT NOT NULL DEFAULT '',
+            event_type TEXT NOT NULL,
+            phone TEXT NOT NULL DEFAULT '',
+            payload TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS whatsapp_suppressions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            phone TEXT NOT NULL,
+            normalized_phone TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT 'global',
+            source TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(normalized_phone, scope, event_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_delivery_message
+            ON whatsapp_delivery_events(message_id, created_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_delivery_unique_event
+            ON whatsapp_delivery_events(provider, external_event_id)
+            WHERE external_event_id <> '';
+        CREATE INDEX IF NOT EXISTS idx_whatsapp_suppressions_lookup
+            ON whatsapp_suppressions(normalized_phone, active, scope, event_id);
+        """
+    )
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -2348,6 +2422,44 @@ def email_idempotency_key(event_id: int, person_id: int, accreditation_id: int |
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def whatsapp_is_suppressed(db: sqlite3.Connection, event_id: int, phone: str) -> tuple[bool, str]:
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return False, ""
+    row = db.execute(
+        """
+        SELECT reason
+        FROM whatsapp_suppressions
+        WHERE normalized_phone = ? AND active = 1
+          AND (scope = 'global' OR event_id = ?)
+        ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, id DESC
+        LIMIT 1
+        """,
+        (normalized, event_id),
+    ).fetchone()
+    return (True, row["reason"]) if row else (False, "")
+
+
+def suppress_whatsapp(db: sqlite3.Connection, event_id: int | None, phone: str, reason: str, source: str, scope: str = "global") -> None:
+    normalized = normalize_phone(phone)
+    if not valid_phone(normalized):
+        return
+    db.execute(
+        """
+        INSERT INTO whatsapp_suppressions (event_id, phone, normalized_phone, reason, scope, source, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ON CONFLICT(normalized_phone, scope, event_id)
+        DO UPDATE SET reason = excluded.reason, source = excluded.source, active = 1, updated_at = excluded.updated_at
+        """,
+        (event_id, phone, normalized, reason, scope, source, now_iso(), now_iso()),
+    )
+
+
+def whatsapp_idempotency_key(event_id: int, person_id: int, accreditation_id: int | None, template_code: str, subject: str, recipient: str) -> str:
+    raw = "|".join([str(event_id), str(person_id), str(accreditation_id or 0), str(template_code or "manual"), str(subject or ""), normalize_phone(recipient)])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def render_communication_template(text: str, row: sqlite3.Row | dict, activity: sqlite3.Row | dict | None = None) -> str:
     source = dict(row)
     act = dict(activity) if activity else {}
@@ -2460,10 +2572,28 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
                     communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", subject, f"Email suprimido: {reason}", "suprimido")
                     continue
                 recipient = normalized
+            elif item_channel == "whatsapp":
+                normalized_phone = normalize_phone(recipient)
+                if not valid_phone(normalized_phone):
+                    skipped += 1
+                    communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", subject, "Telefono WhatsApp invalido", "omitido")
+                    continue
+                suppressed, reason = whatsapp_is_suppressed(db, event_id, normalized_phone)
+                if suppressed:
+                    skipped += 1
+                    communication_log(db, event_id, row["person_id"], row["accreditation_id"], item_channel, template_code or "manual", subject, f"WhatsApp suprimido: {reason}", "suprimido")
+                    continue
+                recipient = normalized_phone
             rendered_subject = render_communication_template(subject, row)
             rendered_content = render_communication_template(content, row)
             provider = communication_provider(item_channel)
-            idempotency_key = email_idempotency_key(event_id, row["person_id"], row["accreditation_id"], template_code, rendered_subject, recipient) if item_channel == "email" else ""
+            idempotency_key = (
+                email_idempotency_key(event_id, row["person_id"], row["accreditation_id"], template_code, rendered_subject, recipient)
+                if item_channel == "email"
+                else whatsapp_idempotency_key(event_id, row["person_id"], row["accreditation_id"], template_code, rendered_subject, recipient)
+                if item_channel == "whatsapp"
+                else ""
+            )
             if idempotency_key:
                 existing = db.execute("SELECT id, status FROM communication_queue WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
                 if existing:
@@ -2664,6 +2794,39 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
     provider = create_whatsapp_provider()
     attempt = int(item.get("attempts") or 0) + 1
     max_attempts = max(1, int(item.get("max_attempts") or 3))
+    config = provider.validate_configuration()
+    if not isinstance(provider, DemoWhatsAppProvider) and not config.get("ok"):
+        status = "error" if attempt >= max_attempts else "pendiente"
+        error = "; ".join(config.get("errors") or ["Proveedor WhatsApp no configurado"])
+        with DB_LOCK, connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "UPDATE communication_queue SET status = ?, attempts = ?, provider = ?, last_error = ?, processed_at = ? WHERE id = ?",
+                (status, attempt, provider.name, error, now_iso(), queue_id),
+            )
+            communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], error, status)
+            audit(db, item["created_by"] or "system", "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
+            db.execute("COMMIT")
+        return {"ok": False, "status": status, "error": error}
+    recipient = str(item["recipient"] or "")
+    content = str(item["content"] or "")
+    if not isinstance(provider, DemoWhatsAppProvider) and whatsapp_safe_mode_enabled():
+        forced = forced_whatsapp_recipient()
+        if not valid_phone(forced):
+            status = "error" if attempt >= max_attempts else "pendiente"
+            error = "WHATSAPP_SAFE_MODE activo pero falta WHATSAPP_FORCE_RECIPIENT valido"
+            with DB_LOCK, connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.execute(
+                    "UPDATE communication_queue SET status = ?, attempts = ?, provider = ?, last_error = ?, processed_at = ? WHERE id = ?",
+                    (status, attempt, provider.name, error, now_iso(), queue_id),
+                )
+                communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], error, status)
+                audit(db, item["created_by"] or "system", "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
+                db.execute("COMMIT")
+            return {"ok": False, "status": status, "error": error}
+        recipient = forced
+        content = "[SAFE] " + content
     template_name = os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE", "").strip() if item.get("template_code") == "registration_confirmation" else ""
     if template_name and not isinstance(provider, DemoWhatsAppProvider):
         with connect() as db:
@@ -2690,13 +2853,13 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
             if value.strip()
         ]
         result = provider.send_template(
-            to=item["recipient"],
+            to=recipient,
             template=template_name,
             variables=[values.get(name, "") for name in variable_names],
             language=os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE_LANGUAGE", "es_AR").strip() or "es_AR",
         )
     else:
-        result = provider.send_message(to=item["recipient"], message=item["content"])
+        result = provider.send_message(to=recipient, message=content)
     status = result.status if result.ok else ("error" if attempt >= max_attempts else "pendiente")
     with DB_LOCK, connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -2734,6 +2897,14 @@ def verify_email_webhook(handler: SimpleHTTPRequestHandler) -> bool:
         )
     except (ValueError, TypeError):
         return False
+
+
+def verify_whatsapp_webhook(handler: SimpleHTTPRequestHandler) -> bool:
+    secret = os.environ.get("WHATSAPP_APP_SECRET", "").strip()
+    if not secret:
+        return APP_ENV != "production"
+    raw = getattr(handler, "_raw_json_body", b"")
+    return verify_meta_signature(raw, handler.headers.get("X-Hub-Signature-256", ""), secret)
 
 
 def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
@@ -2826,28 +2997,88 @@ def apply_email_webhook(db: sqlite3.Connection, payload: dict) -> dict:
 def apply_whatsapp_webhook(db, payload: dict) -> dict:
     changes = []
     incoming = []
-    for entry in payload.get("entry") or []:
-        for change in entry.get("changes") or []:
-            value = change.get("value") or {}
-            for status_item in value.get("statuses") or []:
-                message_id = str(status_item.get("id") or "")
-                status = {"sent": "enviado", "delivered": "entregado", "read": "leido", "failed": "error"}.get(str(status_item.get("status") or "").lower(), "pendiente")
-                row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone()
-                if row:
-                    db.execute("UPDATE communication_queue SET status = ?, last_error = ?, processed_at = ? WHERE id = ?", (status, json.dumps(status_item.get("errors") or [], ensure_ascii=False) if status == "error" else "", now_iso(), row["id"]))
-                    communication_log(db, row["event_id"], row["person_id"], row["accreditation_id"], "whatsapp", row["template_code"] or "webhook", row["subject"], row["content"], status)
-                    audit(db, "webhook", "communications.whatsapp_status", "communication_queue", row["id"], {"message_id": message_id, "status": status})
-                changes.append({"message_id": message_id, "status": status})
-            for message in value.get("messages") or []:
-                phone = str(message.get("from") or "")
-                text = str((message.get("text") or {}).get("body") or "")
-                event_id = int((payload.get("metadata") or {}).get("event_id") or 0)
+    provider = create_whatsapp_provider()
+    for event in provider.normalize_webhook(payload):
+        external_event_id = str(event.get("external_event_id") or "")
+        if external_event_id:
+            existing_event = db.execute(
+                "SELECT id, queue_id FROM whatsapp_delivery_events WHERE provider = ? AND external_event_id = ?",
+                (provider.name, external_event_id),
+            ).fetchone()
+            if existing_event:
+                if event["kind"] == "status":
+                    changes.append({"message_id": event["message_id"], "status": "duplicate", "queue_id": existing_event["queue_id"]})
+                else:
+                    incoming.append({"phone": event.get("phone", ""), "message_id": event["message_id"], "duplicate": True})
+                continue
+        if event["kind"] == "status":
+            message_id = str(event.get("message_id") or "")
+            status = str(event.get("status") or "pendiente")
+            row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone()
+            event_id = int(row["event_id"]) if row else 0
+            queue_id = int(row["id"]) if row else None
+            db.execute(
+                """
+                INSERT INTO whatsapp_delivery_events
+                    (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, queue_id, provider.name, message_id, external_event_id, str(event.get("raw_status") or status), str(event.get("phone") or ""), json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
+            )
+            if row:
+                delivered_at = now_iso() if status == "entregado" else row["delivered_at"]
+                read_at = now_iso() if status == "leido" else row["read_at"] if "read_at" in row.keys() else None
+                failed_at = now_iso() if status == "error" else row["failed_at"] if "failed_at" in row.keys() else None
+                error = json.dumps(event.get("errors") or [], ensure_ascii=False) if status == "error" else ""
+                if status == "error" and event.get("phone"):
+                    suppress_whatsapp(db, event_id, str(event.get("phone")), "provider_failed", "webhook", "event")
                 db.execute(
-                    "INSERT INTO communication_assistant_history (event_id, phone, inbound, outbound, intent, status, created_at) VALUES (?, ?, ?, '', 'incoming', 'received', ?)",
-                    (event_id, phone, text, now_iso()),
+                    """
+                    UPDATE communication_queue
+                    SET status = ?, delivered_at = ?, read_at = COALESCE(?, read_at),
+                        failed_at = COALESCE(?, failed_at), last_error = ?, processed_at = ?
+                    WHERE id = ?
+                    """,
+                    (status, delivered_at, read_at, failed_at, error, now_iso(), queue_id),
                 )
-                audit(db, "webhook", "communications.whatsapp_received", "event", event_id or None, {"phone": phone, "message_id": message.get("id", "")})
-                incoming.append({"phone": phone, "message_id": message.get("id", "")})
+                communication_log(db, event_id, int(row["person_id"]), int(row["accreditation_id"]) if row["accreditation_id"] else None, "whatsapp", row["template_code"] or "webhook", row["subject"], f"Estado proveedor: {status}", status)
+                audit(db, "webhook", "communications.whatsapp_status", "communication_queue", queue_id, {"message_id": message_id, "status": status, "provider": provider.name})
+            changes.append({"message_id": message_id, "status": status, "queue_id": queue_id})
+        elif event["kind"] == "message":
+            phone = str(event.get("phone") or "")
+            text = str(event.get("text") or "")
+            participant = None
+            event_id = 0
+            if phone:
+                participant = db.execute(
+                    """
+                    SELECT a.event_id, a.id AS accreditation_id, p.id AS person_id
+                    FROM accreditations a
+                    JOIN people p ON p.id = a.person_id
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(p.phone, '+', ''), ' ', ''), '-', ''), '(', '') LIKE ?
+                    ORDER BY a.id DESC LIMIT 1
+                    """,
+                    (f"%{phone[-8:]}",),
+                ).fetchone()
+                event_id = int(participant["event_id"]) if participant else 0
+            db.execute(
+                """
+                INSERT INTO whatsapp_delivery_events
+                    (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
+                VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, provider.name, str(event.get("message_id") or ""), external_event_id, "incoming", phone, json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
+            )
+            if event_id:
+                db.execute(
+                    """
+                    INSERT INTO communication_assistant_history (event_id, person_id, accreditation_id, phone, inbound, outbound, intent, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, '', 'incoming', 'received', ?)
+                    """,
+                    (event_id, participant["person_id"] if participant else None, participant["accreditation_id"] if participant else None, phone, text, now_iso()),
+                )
+            audit(db, "webhook", "communications.whatsapp_received", "event", event_id or None, {"phone": phone, "message_id": event.get("message_id", "")})
+            incoming.append({"phone": phone, "message_id": event.get("message_id", ""), "event_id": event_id})
     return {"ok": True, "statuses": changes, "messages": incoming}
 
 
@@ -3679,6 +3910,7 @@ def technical_log(level: str, module: str, message: str, detail: str = "", reque
         "EMAIL_WEBHOOK_SECRET",
         "WHATSAPP_ACCESS_TOKEN",
         "WHATSAPP_VERIFY_TOKEN",
+        "WHATSAPP_APP_SECRET",
         "S3_SECRET_ACCESS_KEY",
     ):
         secret = os.environ.get(secret_name, "")
@@ -3709,7 +3941,7 @@ def safe_public_error(exc: Exception) -> str:
         return "Error interno controlado"
     text = str(exc)
     text = re.sub(r"(?i)postgres(?:ql)?://[^\s,;]+", "postgresql://[REDACTED]", text)
-    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN"):
+    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET"):
         secret = os.environ.get(secret_name, "")
         if secret:
             text = text.replace(secret, "[REDACTED]")
@@ -6757,6 +6989,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     tickets = mask_communication_personal_data(tickets)
                 email_provider = create_email_provider()
                 email_config = email_provider.validate_configuration()
+                whatsapp_provider = create_whatsapp_provider()
+                whatsapp_config = whatsapp_provider.validate_configuration()
                 result = {
                     "mode": "demo" if communication_provider("email") == "demo" and communication_provider("whatsapp") == "demo" else "provider",
                     "providers": {
@@ -6774,10 +7008,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "last_error_at": email_last_error["processed_at"] if email_last_error else "",
                         },
                         "whatsapp": {
-                            "provider": communication_provider("whatsapp"),
-                            "ready": communication_provider_ready("whatsapp"),
+                            "provider": whatsapp_provider.name,
+                            "ready": bool(whatsapp_config.get("ok")),
+                            "configuration_errors": whatsapp_config.get("errors", []) if can_view_technical else [],
                             "phone_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID", os.environ.get("WHATSAPP_PHONE_ID", "")),
                             "enabled": os.environ.get("WHATSAPP_ENABLED", "false").lower() in {"1", "true", "yes", "si"},
+                            "safe_mode": whatsapp_safe_mode_enabled(),
+                            "business_account_id": os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", ""),
                         },
                     },
                     "stats": stats,
@@ -8305,8 +8542,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/communications/whatsapp/test":
                 event_id = int(data.get("event_id") or 0)
-                phone = str(data.get("phone") or "").strip()
+                phone = normalize_phone(str(data.get("phone") or "").strip())
                 message = str(data.get("message") or "Prueba operativa BITORA").strip()
+                if not event_id or not valid_phone(phone):
+                    self.send_json({"error": "Indica un telefono WhatsApp valido con codigo de pais"}, 400)
+                    return
                 with connect() as db:
                     ok, session = self.require_event_permission(db, event_id, "communications.manage_providers", "communications.whatsapp_test")
                     if not ok:
@@ -8360,6 +8600,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/communications/whatsapp/webhook":
+                if not verify_whatsapp_webhook(self):
+                    self.send_json({"error": "Firma de webhook WhatsApp invalida"}, 401)
+                    return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     reply = apply_whatsapp_webhook(db, data)

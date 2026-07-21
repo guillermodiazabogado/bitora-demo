@@ -136,6 +136,8 @@ _ID_TABLES = {
     "technical_logs",
     "users",
     "visualization_layouts",
+    "whatsapp_delivery_events",
+    "whatsapp_suppressions",
 }
 
 

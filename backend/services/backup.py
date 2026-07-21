@@ -779,6 +779,17 @@ class EventRestoreService:
                 row["scheduled_at"] = None
                 row["processed_at"] = None
                 row["last_error"] = "Restaurado inactivo: requiere revision manual"
+                if "idempotency_key" in row:
+                    row["idempotency_key"] = ""
+            if table == "participant_communication_preferences" and row.get("person_id") is not None:
+                existing_preference = db.execute(
+                    "SELECT id FROM participant_communication_preferences WHERE person_id = ?",
+                    (row["person_id"],),
+                ).fetchone()
+                if existing_preference:
+                    if table in maps and old_id:
+                        maps[table][old_id] = int(existing_preference["id"])
+                    continue
             if table == "jobs":
                 row["status"] = "cancelled"
                 row["retry_at"] = None
