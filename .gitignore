@@ -1,6 +1,7 @@
 # Entorno local
 .env
 .env.staging
+deployment/staging/.env.staging
 .venv/
 venv/
 env/
@@ -30,6 +31,8 @@ server.err.log
 deploy_package/
 output/
 tmp/
+deployment/logs/
+deployment/backup/artifacts/
 ~$*
 
 # Sistema/editor

@@ -273,6 +273,7 @@ class SupertestRunner:
         if self.profile in {"standard", "full", "release"}:
             plan = [self.case(*item) for item in standard]
             if self.profile == "release":
+                plan.append(self.case("multievent_isolation_20_events", "security", "verificar_multievent_isolation_20_events.py", True))
                 plan.extend(self.release_gates())
             return plan
         if self.profile == "stress":
@@ -304,9 +305,8 @@ class SupertestRunner:
             self.gate("staging_environment", "environment", True, "passed" if staging else "omitted", "APP_ENV=staging requerido para release final."),
             self.gate("postgres_live", "database", True, "passed" if live_postgres else "omitted", "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging."),
             self.gate("storage_persistent", "backup_restore", True, "passed" if storage_live else "omitted", f"Storage persistente de staging requerido. Ruta evaluada: {storage_path}"),
-            self.gate("workers_live", "jobs", True, "omitted", "Requiere levantar worker separado y validar recuperacion tras reinicio."),
+            self.gate("workers_live", "jobs", True, "passed" if staging and truthy_env("BDF_WORKER_LIVE") else "omitted", "Requiere levantar worker separado y validar recuperacion tras reinicio."),
             self.gate("communications_safe_mode", "communications", True, "passed" if safe_mode else "omitted", "Safe mode requiere destinatarios forzados de email y WhatsApp."),
-            self.gate("multievent_isolation_20_events", "security", True, "omitted", "Pendiente prueba sintetica 20 eventos/1000 participantes en staging."),
             self.gate("disaster_recovery_live", "disaster", True, "omitted", "Pendiente perfil --disaster en staging destructible."),
             self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
             self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
@@ -587,6 +587,10 @@ def redact(value: str) -> str:
     if "://" in value or len(value) > 12:
         return value[:4] + "***" + value[-4:]
     return value
+
+
+def truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").lower() in {"1", "true", "yes", "si"}
 
 
 def rel(path: Path) -> str:

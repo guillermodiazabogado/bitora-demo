@@ -4004,6 +4004,22 @@ def start_job_worker() -> JobWorker:
     return WORKER
 
 
+def run_worker_forever() -> None:
+    configuration = validate_production_configuration()
+    if APP_ENV == "production" and not configuration["ok"]:
+        raise RuntimeError("Configuracion productiva invalida: " + "; ".join(configuration["errors"]))
+    STORAGE.ensure()
+    init_db()
+    seed_if_empty()
+    worker = start_job_worker()
+    print(f"BITORA worker iniciado en entorno {APP_ENV}")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        worker.stop()
+
+
 def waiting_room_payload(db, event_id: int, visitor_id: str, *, admit: bool = True) -> dict:
     event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
     if not event:
@@ -9395,7 +9411,8 @@ def main() -> None:
             ensure_ascii=True,
         ),
     )
-    start_job_worker()
+    if not truthy(os.environ.get("BITORA_DISABLE_EMBEDDED_WORKER", "0")):
+        start_job_worker()
     start_simulator_loop()
     if APP_ENV in {"demo", "production"} and HTTPS_REQUIRED and not BASE_URL:
         print("ADVERTENCIA: HTTPS_REQUIRED esta activo pero BASE_URL no fue definido")

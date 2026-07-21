@@ -2,4 +2,4 @@
 
 - PASSED `seguridad_basica`: OK: seguridad basica y permisos
 
-- OMITTED `multievent_isolation_20_events`: Pendiente prueba sintetica 20 eventos/1000 participantes en staging.
+- PASSED `multievent_isolation_20_events`: OK: aislamiento multievento 20 eventos / 1000 participantes

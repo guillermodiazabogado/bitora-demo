@@ -2,14 +2,30 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-20T22:13:49",
+    "started_at": "2026-07-20T22:27:48",
     "python": "3.12.13",
     "platform": "Windows-11-10.0.26200-SP0",
     "branch": "main",
-    "commit": "bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa",
-    "dirty_files": [],
+    "commit": "7419b67f1af5bfefe23d34c362ec35bc92f9e403",
+    "dirty_files": [
+      "M .gitignore",
+      " M BITORA_FINAL_RELEASE_CERTIFICATION.md",
+      " M server.py",
+      " M tools/supertest/runner.py",
+      "?? BITORA_BDF_FINAL_STATUS.md",
+      "?? BITORA_BDF_IMPLEMENTATION_REPORT.md",
+      "?? BITORA_DEPLOYMENT_CURRENT_STATE.md",
+      "?? BITORA_DEPLOYMENT_FRAMEWORK.md",
+      "?? BITORA_STAGING_BACKUP_RESTORE.md",
+      "?? BITORA_STAGING_DISASTER_RUNBOOK.md",
+      "?? BITORA_STAGING_ENVIRONMENT_VARIABLES.md",
+      "?? BITORA_STAGING_TROUBLESHOOTING.md",
+      "?? backend/worker.py",
+      "?? deployment/",
+      "?? verificar_multievent_isolation_20_events.py"
+    ],
     "max_migration": "013_whatsapp_production.sql",
-    "code_checksum": "ff9ee8f542a7996a10cb05d612a9f15c81553ddf81734a4142a1d90724d3f61a",
+    "code_checksum": "ae313d77e9979673e15f38f1c69cf144f01d6a44726c1ca02d1acae0a32747ba",
     "critical_env": {
       "APP_ENV": "",
       "BASE_URL": "",
@@ -26,9 +42,16 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-20T22:13:49",
-  "finished_at": "2026-07-20T22:14:09",
+  "started_at": "2026-07-20T22:27:48",
+  "finished_at": "2026-07-20T22:28:13",
   "findings": [
+    {
+      "severity": "info",
+      "category": "environment",
+      "title": "Worktree con cambios",
+      "detail": "Se registra como advertencia, no bloqueante.",
+      "file": ""
+    },
     {
       "severity": "medium",
       "category": "code",
@@ -173,14 +196,14 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "do_POST: server.py:5186, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21",
+      "detail": "do_POST: server.py:5202, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9376, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43",
+      "detail": "main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9392, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43",
       "file": ""
     },
     {
@@ -320,7 +343,7 @@
       "severity": "medium",
       "category": "architecture",
       "title": "Controlador principal muy grande",
-      "detail": "server.py tiene 9427 lineas",
+      "detail": "server.py tiene 9444 lineas",
       "file": ""
     }
   ],
@@ -334,7 +357,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.72,
+      "duration_seconds": 1.89,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -348,7 +371,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.71,
+      "duration_seconds": 1.86,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -362,7 +385,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.49,
+      "duration_seconds": 0.66,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -376,7 +399,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.81,
+      "duration_seconds": 1.21,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -390,7 +413,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.31,
+      "duration_seconds": 0.41,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -404,7 +427,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.26,
+      "duration_seconds": 0.39,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -418,7 +441,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.85,
+      "duration_seconds": 0.97,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -432,7 +455,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.24,
+      "duration_seconds": 0.25,
       "stdout_tail": "OK postgres static; live=SKIP (QR_POSTGRES_DSN no configurado)\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -460,7 +483,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.75,
+      "duration_seconds": 0.77,
       "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -488,7 +511,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.43,
+      "duration_seconds": 1.41,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -502,7 +525,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.45,
+      "duration_seconds": 1.41,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -516,7 +539,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.52,
+      "duration_seconds": 1.53,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -530,8 +553,22 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.06,
+      "duration_seconds": 5.16,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "multievent_isolation_20_events",
+      "category": "security",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_multievent_isolation_20_events.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 3.18,
+      "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -587,17 +624,6 @@
       "status": "omitted",
       "duration_seconds": 0,
       "stdout_tail": "Safe mode requiere destinatarios forzados de email y WhatsApp.",
-      "stderr_tail": "",
-      "exit_code": null
-    },
-    {
-      "name": "multievent_isolation_20_events",
-      "category": "security",
-      "command": [],
-      "required": true,
-      "status": "omitted",
-      "duration_seconds": 0,
-      "stdout_tail": "Pendiente prueba sintetica 20 eventos/1000 participantes en staging.",
       "stderr_tail": "",
       "exit_code": null
     },

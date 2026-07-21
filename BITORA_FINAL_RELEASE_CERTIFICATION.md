@@ -2,11 +2,11 @@
 
 Decision: **NO APROBADA**
 
-Version evaluada: `bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa`
+Version evaluada: `7419b67f1af5bfefe23d34c362ec35bc92f9e403`
 Branch: `main`
 Perfil: `release`
 Score: **61.5/100**
-Fecha: 2026-07-20T22:14:09
+Fecha: 2026-07-20T22:28:13
 
 ## Pruebas y gates
 
@@ -25,12 +25,12 @@ Fecha: 2026-07-20T22:14:09
 - PASSED `datos_basura`
 - PASSED `errores_humanos`
 - PASSED `concurrencia_critica`
+- PASSED `multievent_isolation_20_events`
 - OMITTED `staging_environment`
 - OMITTED `postgres_live`
 - OMITTED `storage_persistent`
 - OMITTED `workers_live`
 - OMITTED `communications_safe_mode`
-- OMITTED `multievent_isolation_20_events`
 - OMITTED `disaster_recovery_live`
 - OMITTED `endurance_24h`
 - OMITTED `upgrade_from_previous_version`
@@ -42,7 +42,6 @@ Fecha: 2026-07-20T22:14:09
 - `storage_persistent`: Storage persistente de staging requerido. Ruta evaluada: C:\Users\Noxie-PC\Documents\qr white label\storage
 - `workers_live`: Requiere levantar worker separado y validar recuperacion tras reinicio.
 - `communications_safe_mode`: Safe mode requiere destinatarios forzados de email y WhatsApp.
-- `multievent_isolation_20_events`: Pendiente prueba sintetica 20 eventos/1000 participantes en staging.
 - `disaster_recovery_live`: Pendiente perfil --disaster en staging destructible.
 - `endurance_24h`: Pendiente ejecucion real de 24 horas.
 - `upgrade_from_previous_version`: Pendiente prueba de actualizacion desde version anterior con datos.
