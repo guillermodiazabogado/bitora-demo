@@ -16,6 +16,8 @@ class DatabaseConfig:
     postgres_dsn: str
     postgres_pool_min: int = 1
     postgres_pool_max: int = 10
+    connection_timeout: int = 10
+    statement_timeout_ms: int = 30000
 
     @property
     def production_ready(self) -> bool:
@@ -23,15 +25,21 @@ class DatabaseConfig:
 
 
 def load_database_config() -> DatabaseConfig:
-    engine = os.environ.get("QR_DB_ENGINE", "sqlite").strip().lower()
+    engine = os.environ.get("QR_DB_ENGINE") or os.environ.get("DATABASE_ENGINE") or "sqlite"
+    engine = engine.strip().lower()
+    if engine in {"postgresql", "pg"}:
+        engine = "postgres"
     if engine not in {"sqlite", "postgres"}:
-        raise ValueError("QR_DB_ENGINE debe ser sqlite o postgres")
+        raise ValueError("QR_DB_ENGINE/DATABASE_ENGINE debe ser sqlite o postgres")
+    postgres_dsn = os.environ.get("QR_POSTGRES_DSN") or os.environ.get("DATABASE_URL") or ""
     return DatabaseConfig(
         engine=engine,
         sqlite_path=os.environ.get("QR_SQLITE_PATH", "acreditaciones.sqlite3"),
-        postgres_dsn=os.environ.get("QR_POSTGRES_DSN", "").strip(),
-        postgres_pool_min=max(1, int(os.environ.get("QR_POSTGRES_POOL_MIN", "1"))),
-        postgres_pool_max=max(1, int(os.environ.get("QR_POSTGRES_POOL_MAX", "10"))),
+        postgres_dsn=postgres_dsn.strip(),
+        postgres_pool_min=max(1, int(os.environ.get("QR_POSTGRES_POOL_MIN") or os.environ.get("DB_POOL_MIN") or "1")),
+        postgres_pool_max=max(1, int(os.environ.get("QR_POSTGRES_POOL_MAX") or os.environ.get("DB_POOL_MAX") or "10")),
+        connection_timeout=max(1, int(os.environ.get("DB_CONNECTION_TIMEOUT", "10"))),
+        statement_timeout_ms=max(1000, int(os.environ.get("DB_STATEMENT_TIMEOUT_MS", "30000"))),
     )
 
 
@@ -162,8 +170,9 @@ def _postgres_connection(config: DatabaseConfig):
                     open=True,
                     check=ConnectionPool.check_connection,
                 )
-            raw = _POSTGRES_POOL.getconn(timeout=10)
+            raw = _POSTGRES_POOL.getconn(timeout=config.connection_timeout)
             raw.execute("SELECT 1")
+            raw.execute("SET statement_timeout = %s", (config.statement_timeout_ms,))
             return PostgresConnection(raw, _POSTGRES_POOL)
         except Exception as exc:
             last_error = exc

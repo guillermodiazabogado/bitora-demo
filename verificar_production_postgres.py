@@ -13,10 +13,24 @@ def main() -> None:
     assert "ConnectionPool" in database_source
     assert "check_connection" in database_source
     assert "range(2)" in database_source
+    assert "DATABASE_URL" in database_source
+    assert "DATABASE_ENGINE" in database_source
+    assert "DB_CONNECTION_TIMEOUT" in database_source
+    assert "statement_timeout" in database_source
     assert "idx_accreditations_token" in migration_text
     assert "idx_access_logs_event_created" in migration_text
     assert "idx_reservations_activity_status" in migration_text
+    assert "idx_audit_logs_event_created" in migration_text
     assert "008_multivertical.sql" in {path.name for path in migrations}
+    assert "011_event_storage_audit.sql" in {path.name for path in migrations}
+    migrator = Path("migrar_sqlite_a_postgres.py").read_text(encoding="utf-8")
+    assert "waiting_room_visitors" in migrator
+    assert "visualization_layouts" in migrator
+    assert "run_integrity_checks" in migrator
+    assert "--dry-run" in migrator
+    assert Path("BITORA_POSTGRESQL_PRODUCTION.md").exists()
+    assert Path("BITORA_POSTGRESQL_RUNBOOK.md").exists()
+    assert Path("BITORA_POSTGRESQL_COMPATIBILITY_REPORT.md").exists()
 
     dsn = os.environ.get("QR_POSTGRES_DSN", "").strip()
     if dsn:

@@ -18,30 +18,84 @@ REPORTS = ROOT / "output" / "migration"
 
 TABLE_ORDER = [
     "events",
-    "people",
     "users",
-    "accreditations",
+    "role_permissions",
+    "role_action_permissions",
+    "user_event_roles",
+    "people",
+    "participant_communication_preferences",
     "accreditation_types",
     "spaces",
     "activities",
     "capacity_bags",
-    "reservations",
     "public_display_config",
     "public_display_items",
+    "accreditations",
+    "reservations",
     "access_logs",
-    "audit_logs",
-    "participant_communication_preferences",
+    "activity_attendance",
+    "certificate_eligibility",
+    "communication_templates",
     "communication_logs",
     "communication_queue",
     "email_delivery_events",
     "communication_assistant_history",
     "communication_tickets",
-    "communication_templates",
     "participant_announcements",
     "captation_events",
     "conversation_sources",
+    "jobs",
+    "waiting_room_visitors",
+    "simulator_state",
+    "visualization_layouts",
+    "technical_logs",
+    "audit_logs",
+]
+
+SEQUENCE_TABLES = {
+    "access_logs",
+    "accreditation_types",
+    "accreditations",
+    "activities",
     "activity_attendance",
+    "audit_logs",
+    "capacity_bags",
+    "captation_events",
     "certificate_eligibility",
+    "communication_assistant_history",
+    "communication_logs",
+    "communication_queue",
+    "communication_templates",
+    "communication_tickets",
+    "conversation_sources",
+    "email_delivery_events",
+    "events",
+    "jobs",
+    "participant_announcements",
+    "participant_communication_preferences",
+    "people",
+    "public_display_items",
+    "reservations",
+    "spaces",
+    "technical_logs",
+    "users",
+    "user_event_roles",
+    "visualization_layouts",
+}
+
+INTEGRITY_CHECKS = [
+    ("accreditations_event", "accreditations", "event_id", "events", "id"),
+    ("accreditations_person", "accreditations", "person_id", "people", "id"),
+    ("activities_event", "activities", "event_id", "events", "id"),
+    ("activities_space", "activities", "space_id", "spaces", "id"),
+    ("reservations_event", "reservations", "event_id", "events", "id"),
+    ("reservations_activity", "reservations", "activity_id", "activities", "id"),
+    ("reservations_accreditation", "reservations", "accreditation_id", "accreditations", "id"),
+    ("access_logs_event", "access_logs", "event_id", "events", "id"),
+    ("activity_attendance_event", "activity_attendance", "event_id", "events", "id"),
+    ("communication_queue_event", "communication_queue", "event_id", "events", "id"),
+    ("jobs_event", "jobs", "event_id", "events", "id"),
+    ("audit_logs_event", "audit_logs", "event_id", "events", "id"),
 ]
 
 
@@ -50,6 +104,7 @@ def parse_args():
     parser.add_argument("--sqlite", default=os.environ.get("QR_SQLITE_PATH", "acreditaciones.sqlite3"))
     parser.add_argument("--dsn", default=os.environ.get("QR_POSTGRES_DSN", ""))
     parser.add_argument("--replace", action="store_true", help="Vaciar tablas PostgreSQL antes de copiar")
+    parser.add_argument("--dry-run", action="store_true", help="Validar origen, destino y orden sin insertar datos")
     return parser.parse_args()
 
 
@@ -81,6 +136,18 @@ def main():
     counts: dict[str, dict[str, int | bool]] = {}
 
     with psycopg.connect(args.dsn, row_factory=dict_row) as target:
+        if args.dry_run:
+            report = {
+                "ok": True,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "sqlite": str(sqlite_path),
+                "backup": str(backup_path),
+                "migrations_applied": migrations,
+                "dry_run": True,
+                "tables": existing_source_tables(source),
+            }
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return
         with target.transaction():
             if args.replace:
                 target.execute(
@@ -98,6 +165,7 @@ def main():
                     raise RuntimeError(f"PostgreSQL no esta vacio: {non_empty}. Usar --replace si corresponde.")
 
             target.execute("SET CONSTRAINTS ALL DEFERRED")
+            source_tables = existing_source_tables(source)
             for table in TABLE_ORDER:
                 exists = source.execute(
                     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -105,17 +173,20 @@ def main():
                 ).fetchone()
                 rows = [dict(row) for row in source.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()] if exists else []
                 if rows:
-                    columns = list(rows[0])
+                    target_columns = target_table_columns(target, table, sql)
+                    columns = [column for column in rows[0] if column in target_columns]
+                    if not columns:
+                        raise RuntimeError(f"La tabla destino no existe o no tiene columnas compatibles: {table}")
                     statement = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
                         sql.Identifier(table),
                         sql.SQL(", ").join(sql.Identifier(column) for column in columns),
                         sql.SQL(", ").join(sql.Placeholder() for _ in columns),
                     )
                     target.executemany(statement, [[row[column] for column in columns] for row in rows])
-                counts[table] = {"sqlite": len(rows), "postgres": 0, "ok": False}
+                counts[table] = {"sqlite": len(rows), "postgres": 0, "ok": False, "source_exists": table in source_tables}
 
             for table in TABLE_ORDER:
-                if table == "public_display_config":
+                if table not in SEQUENCE_TABLES:
                     continue
                 target.execute(
                     sql.SQL(
@@ -129,9 +200,10 @@ def main():
             target_count = int(target.execute(sql.SQL("SELECT COUNT(*) AS c FROM {}").format(sql.Identifier(table))).fetchone()["c"])
             counts[table]["postgres"] = target_count
             counts[table]["ok"] = counts[table]["sqlite"] == target_count
+        integrity = run_integrity_checks(target, sql)
 
     source.close()
-    ok = all(bool(item["ok"]) for item in counts.values())
+    ok = all(bool(item["ok"]) for item in counts.values()) and all(item["ok"] for item in integrity)
     report = {
         "ok": ok,
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -139,12 +211,59 @@ def main():
         "backup": str(backup_path),
         "migrations_applied": migrations,
         "counts": counts,
+        "integrity": integrity,
     }
     report_path = REPORTS / f"sqlite-a-postgres-{stamp}.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if not ok:
         raise SystemExit(2)
+
+
+def existing_source_tables(source: sqlite3.Connection) -> set[str]:
+    return {
+        row["name"]
+        for row in source.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+
+
+def target_table_columns(target, table: str, sql_module) -> set[str]:
+    rows = target.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table,),
+    ).fetchall()
+    return {row["column_name"] for row in rows}
+
+
+def run_integrity_checks(target, sql_module) -> list[dict]:
+    results = []
+    for name, source_table, source_column, target_table, target_column in INTEGRITY_CHECKS:
+        source_columns = target_table_columns(target, source_table, sql_module)
+        if source_column not in source_columns:
+            results.append({"name": name, "ok": True, "skipped": True, "orphans": 0})
+            continue
+        row = target.execute(
+            sql_module.SQL(
+                """
+                SELECT COUNT(*) AS c
+                FROM {source_table} s
+                LEFT JOIN {target_table} t ON t.{target_column} = s.{source_column}
+                WHERE s.{source_column} IS NOT NULL AND t.{target_column} IS NULL
+                """
+            ).format(
+                source_table=sql_module.Identifier(source_table),
+                target_table=sql_module.Identifier(target_table),
+                source_column=sql_module.Identifier(source_column),
+                target_column=sql_module.Identifier(target_column),
+            )
+        ).fetchone()
+        orphans = int(row["c"] or 0)
+        results.append({"name": name, "ok": orphans == 0, "skipped": False, "orphans": orphans})
+    return results
 
 
 if __name__ == "__main__":
