@@ -20,6 +20,7 @@ const state = {
   permissions: null,
   audit: [],
   communications: null,
+  googleOAuth: null,
   diagnostics: null,
   simulator: null,
   visualization: null,
@@ -104,6 +105,9 @@ const ACTION_LABELS = {
   "integrations.test": "Integraciones: probar conexion",
   "integrations.rotate": "Integraciones: rotar secretos",
   "integrations.disable": "Integraciones: deshabilitar",
+  "integrations.google_connect": "Google: conectar",
+  "integrations.google_disconnect": "Google: desconectar",
+  "integrations.google_refresh": "Google: renovar token",
   "event_integrations.view": "Evento: ver integraciones",
   "event_integrations.assign": "Evento: asignar integraciones",
   "communications.configure": "Comunicaciones: configurar canal",
@@ -1514,6 +1518,7 @@ async function loadCommunications() {
   if (emailTestForm) {
     emailTestForm.classList.toggle("hidden", !canDo("communications.manage_providers"));
   }
+  await loadGoogleOAuthPanel();
   $("#whatsappTestForm")?.classList.toggle("hidden", !canDo("communications.manage_providers"));
   $("#communicationForm")?.classList.toggle("hidden", !canDo("communications.create") && !canDo("communications.send"));
   $("#communicationForm")?.querySelector('[name="audience"]')?.toggleAttribute("disabled", !canDo("communications.select_audience"));
@@ -1571,6 +1576,127 @@ async function loadCommunications() {
     form.elements.content.value = button.dataset.content;
     form.dataset.templateCode = button.dataset.code;
   }));
+}
+
+function googleOAuthNotice(message, kind = "") {
+  const target = $("#googleOAuthNotice");
+  if (!target) return;
+  target.textContent = message || "";
+  target.className = `result ${kind}`.trim();
+}
+
+async function loadGoogleOAuthPanel() {
+  const summary = $("#googleOAuthSummary");
+  if (!summary || !state.eventId || !canDo("integrations.view")) return;
+  try {
+    const eventIntegrations = await api(`/api/event-integrations?event_id=${state.eventId}`);
+    const assigned = (eventIntegrations.items || []).find((row) => row.provider === "google" && row.channel === "google");
+    const available = (eventIntegrations.available || []).find((row) => row.provider === "google" && ["oauth_provider", "google_oauth"].includes(row.integration_type));
+    const integration = assigned || available || null;
+    state.googleOAuth = {
+      organization_id: eventIntegrations.organization_id,
+      integration_id: integration ? Number(integration.organization_integration_id || integration.id) : 0,
+      assigned: Boolean(assigned),
+    };
+    let status = { google: { enabled: false, ready: false, scopes: [], errors: [] }, integration: integration || null };
+    if (state.googleOAuth.integration_id) {
+      status = await api(`/api/integrations/google/status?integration_id=${state.googleOAuth.integration_id}`);
+      state.googleOAuth.status = status;
+    }
+    const google = status.google || {};
+    const item = status.integration || integration || {};
+    summary.innerHTML = `
+      <div><strong>${item.status || "Sin integracion"}</strong><span>Estado</span></div>
+      <div><strong>${google.ready ? "Lista" : "No configurada"}</strong><span>Google OAuth</span></div>
+      <div><strong>${google.account_email || "Sin cuenta"}</strong><span>Cuenta</span></div>
+      <div><strong>${(google.granted_scopes || google.scopes || []).join(", ") || "Sin scopes"}</strong><span>Scopes</span></div>
+      <div><strong>${google.expires_at || "Sin vencimiento"}</strong><span>Expira</span></div>
+      <div><strong>${google.last_refresh_at || "Sin refresh"}</strong><span>Ultimo refresh</span></div>
+    `;
+    $("#googleCreateIntegrationBtn")?.toggleAttribute("disabled", !canDo("integrations.create") || Boolean(state.googleOAuth.integration_id));
+    $("#googleConnectBtn")?.toggleAttribute("disabled", !canDo("integrations.google_connect") || !state.googleOAuth.integration_id);
+    $("#googleTestBtn")?.toggleAttribute("disabled", !canDo("integrations.test") || !state.googleOAuth.integration_id);
+    $("#googleRefreshBtn")?.toggleAttribute("disabled", !canDo("integrations.google_refresh") || !state.googleOAuth.integration_id);
+    $("#googleDisconnectBtn")?.toggleAttribute("disabled", !canDo("integrations.google_disconnect") || !state.googleOAuth.integration_id);
+    if ((google.errors || []).length) {
+      googleOAuthNotice(`Google OAuth pendiente: ${google.errors.join("; ")}`, "warning");
+    } else {
+      googleOAuthNotice("");
+    }
+  } catch (error) {
+    googleOAuthNotice(error.message, "error");
+  }
+}
+
+async function createGoogleIntegration() {
+  if (!state.eventId) return;
+  try {
+    const eventIntegrations = await api(`/api/event-integrations?event_id=${state.eventId}`);
+    const created = await api("/api/organization-integrations", {
+      method: "POST",
+      body: JSON.stringify({
+        actor: state.currentUser,
+        organization_id: eventIntegrations.organization_id,
+        provider: "google",
+        integration_type: "oauth_provider",
+        name: "Google OAuth",
+        mode: "client_owned",
+        status: "disconnected",
+        metadata: { requested_scopes: ["openid", "email", "profile"] },
+      }),
+    });
+    await api("/api/event-integrations", {
+      method: "POST",
+      body: JSON.stringify({
+        actor: state.currentUser,
+        event_id: state.eventId,
+        channel: "google",
+        organization_integration_id: created.integration.id,
+        enabled: true,
+        is_default: true,
+      }),
+    });
+    googleOAuthNotice("Integracion Google creada para este evento.", "success");
+    await loadGoogleOAuthPanel();
+  } catch (error) {
+    googleOAuthNotice(error.message, "error");
+  }
+}
+
+async function connectGoogleIntegration() {
+  if (!state.googleOAuth?.integration_id) return googleOAuthNotice("Primero crea una integracion Google.", "warning");
+  try {
+    const result = await api("/api/integrations/google/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        actor: state.currentUser,
+        integration_id: state.googleOAuth.integration_id,
+        redirect_after: `/?event_id=${state.eventId}&view=configure`,
+      }),
+    });
+    location.href = result.authorization_url;
+  } catch (error) {
+    googleOAuthNotice(error.message, "error");
+  }
+}
+
+async function googleIntegrationAction(action) {
+  if (!state.googleOAuth?.integration_id) return googleOAuthNotice("Primero crea una integracion Google.", "warning");
+  const paths = {
+    test: "/api/integrations/google/test",
+    refresh: "/api/integrations/google/refresh",
+    disconnect: "/api/integrations/google/disconnect",
+  };
+  try {
+    const result = await api(paths[action], {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, integration_id: state.googleOAuth.integration_id, revoke: action === "disconnect" }),
+    });
+    googleOAuthNotice(result.status ? `Google: ${result.status}` : "Operacion Google completada.", result.ok === false ? "error" : "success");
+    await loadGoogleOAuthPanel();
+  } catch (error) {
+    googleOAuthNotice(error.message, "error");
+  }
 }
 
 async function loadDemoReal() {
@@ -2717,6 +2843,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
   $("#whatsappTestForm")?.addEventListener("submit", sendTestWhatsApp);
+  $("#googleCreateIntegrationBtn")?.addEventListener("click", createGoogleIntegration);
+  $("#googleConnectBtn")?.addEventListener("click", connectGoogleIntegration);
+  $("#googleTestBtn")?.addEventListener("click", () => googleIntegrationAction("test"));
+  $("#googleRefreshBtn")?.addEventListener("click", () => googleIntegrationAction("refresh"));
+  $("#googleDisconnectBtn")?.addEventListener("click", () => googleIntegrationAction("disconnect"));
   $("#assistantTestForm").addEventListener("submit", testAssistant);
   $("#spaceForm").addEventListener("submit", saveSpace);
   $("#activityForm").addEventListener("submit", saveActivity);

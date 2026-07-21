@@ -275,6 +275,11 @@ class SupertestRunner:
             if self.profile == "release":
                 plan.append(self.case("multievent_isolation_20_events", "security", "verificar_multievent_isolation_20_events.py", True))
                 plan.append(self.case("multitenant_integrations", "security", "verificar_multitenant_integrations.py", True))
+                plan.append(self.case("google_oauth_http_flow", "integrations", "verificar_google_oauth_contract.py", True))
+                plan.append(self.case("google_oauth_state_security", "security", "verificar_google_oauth_security.py", True))
+                plan.append(self.case("google_oauth_multitenant_isolation", "security", "verificar_google_oauth_multitenant.py", True))
+                plan.append(self.case("google_oauth_refresh_contract", "integrations", "verificar_google_oauth_refresh.py", True))
+                plan.append(self.case("google_oauth_backup_restore", "backup_restore", "verificar_google_oauth_backup_restore.py", True))
                 plan.append(self.case("google_oauth_multitenant_live", "integrations", "verificar_google_oauth_multitenant_live.py", False))
                 plan.append(self.case("email_multitenant_live", "integrations", "verificar_email_multitenant_live.py", False))
                 plan.append(self.case("whatsapp_multitenant_live", "integrations", "verificar_whatsapp_multitenant_live.py", False))

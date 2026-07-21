@@ -50,6 +50,14 @@ from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
 from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
+from backend.services.google_oauth import (
+    GoogleOAuthClient,
+    GoogleOAuthError,
+    granted_scopes,
+    load_google_oauth_config,
+    sanitize_google_error,
+    token_expires_at,
+)
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -150,6 +158,9 @@ MULTITENANT_PERMISSION_CODES = [
     "integrations.test",
     "integrations.rotate",
     "integrations.disable",
+    "integrations.google_connect",
+    "integrations.google_disconnect",
+    "integrations.google_refresh",
     "event_integrations.view",
     "event_integrations.assign",
     "communications.configure",
@@ -162,7 +173,7 @@ PERMISSION_MATRIX = {
     },
     "Productor": {
         "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test"],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
@@ -182,7 +193,7 @@ PERMISSION_MATRIX = {
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
-        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "event_integrations.view", "communications.configure", "communications.send_test"],
+        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "integrations.google_connect", "integrations.google_disconnect", "integrations.test", "event_integrations.view", "communications.configure", "communications.send_test"],
     },
     "Soporte tecnico": {
         "modules": ["dashboard", "audit", "diagnostics"],
@@ -582,6 +593,22 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE(event_id, channel)
+            );
+
+            CREATE TABLE IF NOT EXISTS google_oauth_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_token TEXT NOT NULL UNIQUE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                integration_id INTEGER NOT NULL REFERENCES organization_integrations(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                actor TEXT NOT NULL DEFAULT '',
+                redirect_after TEXT NOT NULL DEFAULT '',
+                nonce_hash TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at TEXT,
+                error_message_sanitized TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS people (
@@ -1098,6 +1125,8 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_events_organization_status ON events(organization_id, status);
         CREATE INDEX IF NOT EXISTS idx_org_integrations_org_type ON organization_integrations(organization_id, integration_type, status);
         CREATE INDEX IF NOT EXISTS idx_event_integrations_event_channel ON event_integrations(event_id, channel, enabled);
+        CREATE INDEX IF NOT EXISTS idx_google_oauth_states_token ON google_oauth_states(state_token, status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_google_oauth_states_integration ON google_oauth_states(integration_id, status, created_at);
         CREATE INDEX IF NOT EXISTS idx_events_project_type_status ON events(project_type, status);
         CREATE INDEX IF NOT EXISTS idx_access_logs_event_result_created ON access_logs(event_id, result, created_at);
         CREATE INDEX IF NOT EXISTS idx_accreditations_event_checked_status ON accreditations(event_id, checked_in_at, status);
@@ -1127,6 +1156,9 @@ def ensure_multitenant_schema(db: sqlite3.Connection) -> None:
     }.items():
         if name not in queue_columns:
             db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}")
+    integration_columns = {row["name"] for row in db.execute("PRAGMA table_info(organization_integrations)").fetchall()}
+    if "last_error_code" not in integration_columns:
+        db.execute("ALTER TABLE organization_integrations ADD COLUMN last_error_code TEXT NOT NULL DEFAULT ''")
     bootstrap_default_organization(db)
 
 
@@ -1940,6 +1972,126 @@ def sanitize_integration(row: sqlite3.Row | dict) -> dict:
 
 def integration_secret_service() -> IntegrationSecretService:
     return IntegrationSecretService()
+
+
+def google_oauth_client() -> GoogleOAuthClient:
+    return GoogleOAuthClient()
+
+
+def google_oauth_scopes() -> list[str]:
+    return load_google_oauth_config().scope_list
+
+
+def google_oauth_enabled() -> bool:
+    return load_google_oauth_config().enabled
+
+
+def google_public_config() -> dict:
+    config = load_google_oauth_config()
+    validation = GoogleOAuthClient(config).validate_configuration()
+    return {
+        "enabled": config.enabled,
+        "ready": config.ready,
+        "redirect_uri": config.redirect_uri,
+        "scopes": config.scope_list,
+        "errors": validation["errors"],
+    }
+
+
+def google_oauth_state_ttl_minutes() -> int:
+    return max(1, int(os.environ.get("GOOGLE_OAUTH_STATE_TTL_MINUTES", "10")))
+
+
+def google_metadata(row: sqlite3.Row | dict) -> dict:
+    raw = dict(row).get("metadata_json") or "{}"
+    try:
+        metadata = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    except (TypeError, json.JSONDecodeError):
+        metadata = {}
+    metadata.pop("access_token", None)
+    metadata.pop("refresh_token", None)
+    metadata.pop("id_token", None)
+    return metadata
+
+
+def google_secret_payload(row: sqlite3.Row | dict) -> dict:
+    encrypted = dict(row).get("configuration_encrypted") or ""
+    if not encrypted:
+        return {}
+    return json.loads(integration_secret_service().decrypt(encrypted))
+
+
+def google_store_secret_payload(db: sqlite3.Connection, integration_id: int, payload: dict, metadata: dict, actor: str, status: str = "connected") -> None:
+    now = now_iso()
+    encrypted = integration_secret_service().encrypt(json.dumps(payload, ensure_ascii=True))
+    sanitized_metadata = dict(metadata)
+    for key in ("access_token", "refresh_token", "id_token", "client_secret", "authorization_code"):
+        sanitized_metadata.pop(key, None)
+    db.execute(
+        """
+        UPDATE organization_integrations
+        SET configuration_encrypted = ?, metadata_json = ?, status = ?, last_error_message_sanitized = '',
+            updated_by = ?, updated_at = ?, disabled_at = NULL
+        WHERE id = ?
+        """,
+        (encrypted, json.dumps(sanitized_metadata, ensure_ascii=True), status, actor, now, integration_id),
+    )
+
+
+def create_google_oauth_state(db: sqlite3.Connection, *, organization_id: int, integration_id: int, user_id: int, actor: str, redirect_after: str = "") -> str:
+    token = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(24)
+    nonce_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
+    created_at = now_iso()
+    expires_at = (datetime.fromisoformat(created_at) + timedelta(minutes=google_oauth_state_ttl_minutes())).isoformat(timespec="seconds")
+    db.execute(
+        """
+        INSERT INTO google_oauth_states (
+            state_token, organization_id, integration_id, user_id, actor, redirect_after,
+            nonce_hash, status, created_at, expires_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        """,
+        (token, organization_id, integration_id, user_id or None, actor, redirect_after, nonce_hash, created_at, expires_at),
+    )
+    return token
+
+
+def consume_google_oauth_state(db: sqlite3.Connection, state_token: str) -> sqlite3.Row | dict:
+    row = db.execute("SELECT * FROM google_oauth_states WHERE state_token = ?", (state_token,)).fetchone()
+    if not row:
+        raise GoogleOAuthError("State OAuth inexistente", "state_missing")
+    if row["status"] != "pending" or row["used_at"]:
+        raise GoogleOAuthError("State OAuth ya utilizado", "state_reused")
+    if datetime.fromisoformat(row["expires_at"]) < datetime.fromisoformat(now_iso()):
+        db.execute(
+            "UPDATE google_oauth_states SET status = 'expired', error_message_sanitized = ?, used_at = ? WHERE id = ?",
+            ("State vencido", now_iso(), row["id"]),
+        )
+        raise GoogleOAuthError("State OAuth vencido", "state_expired")
+    db.execute("UPDATE google_oauth_states SET status = 'used', used_at = ? WHERE id = ?", (now_iso(), row["id"]))
+    return row
+
+
+def mark_google_integration_error(db: sqlite3.Connection, integration_id: int, actor: str, exc: Exception, status: str = "error") -> str:
+    message = sanitize_google_error(exc)
+    db.execute(
+        """
+        UPDATE organization_integrations
+        SET status = ?, last_error_code = ?, last_error_message_sanitized = ?, updated_by = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (status, getattr(exc, "code", "google_oauth_error"), message, actor, now_iso(), integration_id),
+    )
+    return message
+
+
+def google_connect_result_url(state_row: sqlite3.Row | dict, result: str) -> str:
+    redirect_after = str(dict(state_row).get("redirect_after") or "").strip()
+    if redirect_after.startswith("/") and not redirect_after.startswith("//"):
+        joiner = "&" if "?" in redirect_after else "?"
+        return f"{redirect_after}{joiner}google_oauth={result}"
+    return f"/?google_oauth={result}"
 
 
 def effective_safe_mode(db: sqlite3.Connection, event_id: int, channel: str) -> dict:
@@ -5656,6 +5808,102 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"items": [dict(row) for row in rows], "available": [sanitize_integration(row) for row in available], "organization_id": org_id})
                 return
 
+            if path == "/api/integrations/google/status":
+                integration_id = int(query.get("integration_id", ["0"])[0] or 0)
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, _session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.view", "integrations.view")
+                    if not ok:
+                        return
+                    metadata = google_metadata(row)
+                    self.send_json({
+                        "integration": sanitize_integration(row),
+                        "google": {
+                            **google_public_config(),
+                            "account_email": metadata.get("account_email", ""),
+                            "account_id": metadata.get("account_id", ""),
+                            "connected_at": metadata.get("connected_at", ""),
+                            "expires_at": metadata.get("expires_at", ""),
+                            "last_refresh_at": metadata.get("last_refresh_at", ""),
+                            "last_revoked_at": metadata.get("last_revoked_at", ""),
+                            "granted_scopes": metadata.get("granted_scopes", []),
+                        },
+                    })
+                return
+
+            if path == "/api/integrations/google/callback":
+                state_token = (query.get("state", [""])[0] or "").strip()
+                code = (query.get("code", [""])[0] or "").strip()
+                error = (query.get("error", [""])[0] or "").strip()
+                state_row = None
+                with connect() as db:
+                    try:
+                        state_row = consume_google_oauth_state(db, state_token)
+                        integration = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (int(state_row["integration_id"]),)).fetchone()
+                        if not integration or int(integration["organization_id"]) != int(state_row["organization_id"]):
+                            raise GoogleOAuthError("Integracion Google no coincide con la organizacion del state", "state_context_mismatch")
+                        actor = str(state_row["actor"] or "Google OAuth")
+                        if error:
+                            raise GoogleOAuthError(f"Google rechazo el consentimiento: {error}", "google_denied")
+                        if not code:
+                            raise GoogleOAuthError("Callback Google sin code", "missing_code")
+                        client = google_oauth_client()
+                        tokens = client.exchange_code(code)
+                        access_token = str(tokens.get("access_token") or "")
+                        if not access_token:
+                            raise GoogleOAuthError("Google no devolvio access_token", "missing_access_token")
+                        previous_payload = google_secret_payload(integration)
+                        refresh_token = str(tokens.get("refresh_token") or previous_payload.get("refresh_token") or "")
+                        if not refresh_token:
+                            raise GoogleOAuthError("Google no devolvio refresh_token", "missing_refresh_token")
+                        account = client.userinfo(access_token)
+                        fallback_scopes = google_oauth_scopes()
+                        scopes = granted_scopes(tokens, fallback_scopes)
+                        required = set(fallback_scopes)
+                        granted = set(scopes)
+                        if not required.issubset(granted):
+                            raise GoogleOAuthError("Google no concedio todos los scopes requeridos", "insufficient_scopes")
+                        expires_at = token_expires_at(now_iso, tokens.get("expires_in"))
+                        payload = {
+                            "access_token": access_token,
+                            "refresh_token": refresh_token,
+                            "token_type": tokens.get("token_type", "Bearer"),
+                            "expires_at": expires_at,
+                            "scopes": scopes,
+                            "account_id": str(account.get("sub") or ""),
+                            "account_email": str(account.get("email") or ""),
+                        }
+                        metadata = {
+                            **google_metadata(integration),
+                            "account_id": payload["account_id"],
+                            "account_email": payload["account_email"],
+                            "granted_scopes": scopes,
+                            "requested_scopes": fallback_scopes,
+                            "connected_at": now_iso(),
+                            "expires_at": expires_at,
+                            "oauth_status": "connected",
+                        }
+                        google_store_secret_payload(db, int(integration["id"]), payload, metadata, actor, "connected")
+                        audit(db, actor, "google_oauth.connected", "organization_integration", int(integration["id"]), {"organization_id": integration["organization_id"], "scopes": scopes, "account_email_masked": mask_email(payload["account_email"])})
+                        target = google_connect_result_url(state_row, "connected")
+                    except Exception as exc:
+                        actor = str(state_row["actor"] or "Google OAuth") if state_row else "Google OAuth"
+                        integration_id = int(state_row["integration_id"] or 0) if state_row else 0
+                        if integration_id:
+                            message = mark_google_integration_error(db, integration_id, actor, exc, "error")
+                            audit(db, actor, "google_oauth.error", "organization_integration", integration_id, {"error": message})
+                        else:
+                            message = safe_public_error(exc)
+                            audit(db, actor, "google_oauth.error", "organization_integration", None, {"error": message})
+                        target = google_connect_result_url(state_row or {"redirect_after": "/"}, "error")
+                self.send_response(302)
+                self.send_header("Location", target)
+                self.end_headers()
+                return
+
             if path == "/api/project-configuration":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -8610,6 +8858,154 @@ class AppHandler(SimpleHTTPRequestHandler):
                     )
                     audit(db, session["name"], "event_integration.assigned", "event", event_id, {"channel": channel, "integration_id": integration_id, "organization_id": event_org_id})
                 self.send_json({"ok": True})
+                return
+
+            if path == "/api/integrations/google/connect":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                redirect_after = str(data.get("redirect_after") or "/").strip()
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.google_connect", "integrations.google_connect", actor)
+                    if not ok:
+                        return
+                    if row["provider"] != "google" or row["integration_type"] not in {"oauth_provider", "google_oauth"}:
+                        self.send_json({"error": "La integracion no es Google OAuth"}, 400)
+                        return
+                    if row["status"] == "disabled":
+                        self.send_json({"error": "La integracion esta deshabilitada"}, 400)
+                        return
+                    client = google_oauth_client()
+                    validation = client.validate_configuration()
+                    if not validation["ok"]:
+                        message = "; ".join(validation["errors"])
+                        mark_google_integration_error(db, integration_id, session["name"], GoogleOAuthError(message, "configuration_incomplete"), "error")
+                        audit(db, session["name"], "google_oauth.connect_rejected", "organization_integration", integration_id, {"organization_id": row["organization_id"], "reason": "configuration_incomplete"})
+                        self.send_json({"error": "Google OAuth no esta configurado completamente.", "details": validation["errors"]}, 400)
+                        return
+                    state_token = create_google_oauth_state(
+                        db,
+                        organization_id=int(row["organization_id"]),
+                        integration_id=integration_id,
+                        user_id=int(session.get("id") or 0),
+                        actor=session["name"],
+                        redirect_after=redirect_after,
+                    )
+                    db.execute("UPDATE organization_integrations SET status = 'connecting', updated_by = ?, updated_at = ? WHERE id = ?", (session["name"], now_iso(), integration_id))
+                    auth_url = client.authorization_url(state=state_token, login_hint=str(data.get("login_hint") or ""))
+                    audit(db, session["name"], "google_oauth.connect_started", "organization_integration", integration_id, {"organization_id": row["organization_id"], "scopes": validation["scopes"]})
+                self.send_json({"ok": True, "authorization_url": auth_url, "expires_in_minutes": google_oauth_state_ttl_minutes()})
+                return
+
+            if path == "/api/integrations/google/test":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.test", "integrations.test", actor)
+                    if not ok:
+                        return
+                    try:
+                        payload = google_secret_payload(row)
+                        access_token = str(payload.get("access_token") or "")
+                        if not access_token:
+                            raise GoogleOAuthError("La integracion no tiene access_token activo", "missing_access_token")
+                        account = google_oauth_client().userinfo(access_token)
+                        metadata = {
+                            **google_metadata(row),
+                            "account_id": str(account.get("sub") or ""),
+                            "account_email": str(account.get("email") or ""),
+                            "last_tested_at": now_iso(),
+                            "oauth_status": "connected",
+                        }
+                        google_store_secret_payload(db, integration_id, payload, metadata, session["name"], "connected")
+                        db.execute("UPDATE organization_integrations SET last_tested_at = ?, last_test_status = 'CONNECTED', last_error_message_sanitized = '' WHERE id = ?", (now_iso(), integration_id))
+                        audit(db, session["name"], "google_oauth.tested", "organization_integration", integration_id, {"status": "CONNECTED", "account_email_masked": mask_email(metadata["account_email"])})
+                        self.send_json({"ok": True, "status": "CONNECTED", "account_email": mask_email(metadata["account_email"]), "account_id": mask_secret(metadata["account_id"])})
+                    except Exception as exc:
+                        message = mark_google_integration_error(db, integration_id, session["name"], exc, "error")
+                        db.execute("UPDATE organization_integrations SET last_tested_at = ?, last_test_status = 'ERROR' WHERE id = ?", (now_iso(), integration_id))
+                        audit(db, session["name"], "google_oauth.test_failed", "organization_integration", integration_id, {"error": message})
+                        self.send_json({"ok": False, "status": "ERROR", "error": message}, 400)
+                return
+
+            if path == "/api/integrations/google/refresh":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.google_refresh", "integrations.google_refresh", actor)
+                    if not ok:
+                        return
+                    try:
+                        payload = google_secret_payload(row)
+                        refresh_token = str(payload.get("refresh_token") or "")
+                        tokens = google_oauth_client().refresh_access_token(refresh_token)
+                        access_token = str(tokens.get("access_token") or "")
+                        if not access_token:
+                            raise GoogleOAuthError("Google no devolvio access_token renovado", "missing_access_token")
+                        payload["access_token"] = access_token
+                        payload["token_type"] = tokens.get("token_type", payload.get("token_type", "Bearer"))
+                        payload["expires_at"] = token_expires_at(now_iso, tokens.get("expires_in"))
+                        if tokens.get("refresh_token"):
+                            payload["refresh_token"] = str(tokens["refresh_token"])
+                        if tokens.get("scope"):
+                            payload["scopes"] = granted_scopes(tokens, google_oauth_scopes())
+                        metadata = {
+                            **google_metadata(row),
+                            "expires_at": payload["expires_at"],
+                            "last_refresh_at": now_iso(),
+                            "granted_scopes": payload.get("scopes", google_oauth_scopes()),
+                            "oauth_status": "connected",
+                        }
+                        google_store_secret_payload(db, integration_id, payload, metadata, session["name"], "connected")
+                        audit(db, session["name"], "google_oauth.refreshed", "organization_integration", integration_id, {"organization_id": row["organization_id"], "expires_at": payload["expires_at"]})
+                        self.send_json({"ok": True, "status": "connected", "expires_at": payload["expires_at"]})
+                    except Exception as exc:
+                        message = mark_google_integration_error(db, integration_id, session["name"], exc, "expired")
+                        audit(db, session["name"], "google_oauth.refresh_failed", "organization_integration", integration_id, {"error": message})
+                        self.send_json({"ok": False, "error": message}, 400)
+                return
+
+            if path == "/api/integrations/google/disconnect":
+                actor = data.get("actor", "Admin")
+                integration_id = int(data.get("integration_id") or 0)
+                revoke = truthy(data.get("revoke", True))
+                with connect() as db:
+                    row = db.execute("SELECT * FROM organization_integrations WHERE id = ?", (integration_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Integracion inexistente"}, 404)
+                        return
+                    ok, session = self.require_organization_permission(db, int(row["organization_id"]), "integrations.google_disconnect", "integrations.google_disconnect", actor)
+                    if not ok:
+                        return
+                    payload = {}
+                    try:
+                        payload = google_secret_payload(row)
+                        token = str(payload.get("refresh_token") or payload.get("access_token") or "")
+                        if revoke and token:
+                            google_oauth_client().revoke_token(token)
+                        status = "revoked" if revoke else "disconnected"
+                    except Exception as exc:
+                        status = "disconnected"
+                        audit(db, session["name"], "google_oauth.revoke_failed", "organization_integration", integration_id, {"error": sanitize_google_error(exc)})
+                    metadata = {
+                        **google_metadata(row),
+                        "oauth_status": status,
+                        "last_revoked_at": now_iso() if revoke else "",
+                    }
+                    google_store_secret_payload(db, integration_id, {}, metadata, session["name"], status)
+                    audit(db, session["name"], "google_oauth.disconnected", "organization_integration", integration_id, {"organization_id": row["organization_id"], "revoked": revoke})
+                self.send_json({"ok": True, "status": status})
                 return
 
             if path == "/api/prepare-event":

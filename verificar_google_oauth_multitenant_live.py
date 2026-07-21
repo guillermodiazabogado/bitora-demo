@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import server
-from live_integrations_utils import assert_true, classify, close_context, contract_result, synthetic_multitenant_db, write_report
+from live_integrations_utils import assert_true, classify, close_context, synthetic_multitenant_db, write_report
 
 
 NAME = "google_oauth_multitenant_live"
@@ -31,7 +31,18 @@ def main() -> None:
         }
     finally:
         close_context(context)
-    result = contract_result(NAME, mode, missing, checks)
+    status = "omitted"
+    reason = "Google OAuth live requiere credenciales reales y completar consentimiento/callback contra Google desde BITORA."
+    if missing:
+        reason = "Faltan variables Google OAuth reales."
+    result = {
+        "name": NAME,
+        "mode": mode,
+        "status": status,
+        "missing_env": missing,
+        "reason": reason,
+        "checks": checks,
+    }
     write_report(NAME, result)
     print(json.dumps(result, ensure_ascii=False))
 

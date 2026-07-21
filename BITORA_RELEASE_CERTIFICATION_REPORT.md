@@ -88,8 +88,19 @@ Detalle de Google OAuth:
 
 ```text
 google_oauth_live: omitted
-motivo: faltan credenciales Google Cloud y no existe todavia flujo OAuth HTTP completo iniciado desde BITORA.
+enablement: implementado
+motivo live pendiente: faltan credenciales Google Cloud y consentimiento real contra Google.
 reporte: GOOGLE_OAUTH_LIVE_CERTIFICATION_REPORT.md
+```
+
+Gates habilitantes Google agregados en BSTF release:
+
+```text
+google_oauth_http_flow
+google_oauth_state_security
+google_oauth_multitenant_isolation
+google_oauth_refresh_contract
+google_oauth_backup_restore
 ```
 
 Adicionalmente quedan pendientes para otra etapa:

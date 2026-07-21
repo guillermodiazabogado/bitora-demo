@@ -131,6 +131,7 @@ _ID_TABLES = {
     "email_suppressions",
     "events",
     "event_integrations",
+    "google_oauth_states",
     "jobs",
     "organization_integrations",
     "organization_users",

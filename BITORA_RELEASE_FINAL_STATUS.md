@@ -50,7 +50,8 @@ Detalle Google OAuth:
 
 ```text
 GOOGLE OAUTH LIVE NO CERTIFICADO
-Bloqueo actual: faltan credenciales Google Cloud y falta endpoint real de inicio/callback OAuth dentro de BITORA.
+GOOGLE OAUTH ENABLEMENT IMPLEMENTADO
+Bloqueo actual: faltan credenciales Google Cloud y consentimiento real contra Google.
 ```
 
 ## Estado operativo

@@ -203,6 +203,17 @@ Cruces de organizacion live: no ejecutado
 GOOGLE OAUTH LIVE NO CERTIFICADO
 ```
 
+## Actualizacion enablement
+
+El modulo habilitante de OAuth Google fue implementado, pero esta certificacion live sigue pendiente.
+
+Estado esperado despues de la habilitacion:
+
+```text
+GOOGLE OAUTH ENABLEMENT IMPLEMENTADO
+google_oauth_live: OMITTED
+```
+
 ## Proximo paso recomendado
 
 Para poder certificar esta etapa sin romper el criterio del prompt, hay que hacer primero una mini-etapa tecnica habilitante:
