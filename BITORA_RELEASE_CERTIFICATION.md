@@ -2,7 +2,7 @@
 
 Estado: **RECHAZADO**
 
-Commit certificado: `4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e`
+Commit certificado: `bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa`
 Perfil ejecutado: `release`
 Score final: **61.5/100**
 

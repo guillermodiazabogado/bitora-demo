@@ -2,41 +2,12 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-20T22:12:20",
+    "started_at": "2026-07-20T22:13:49",
     "python": "3.12.13",
     "platform": "Windows-11-10.0.26200-SP0",
     "branch": "main",
-    "commit": "4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e",
-    "dirty_files": [
-      "A  .env.staging.example",
-      "M  .gitignore",
-      "A  BITORA_BACKUP_REPORT.md",
-      "A  BITORA_CONCURRENCY_REPORT.md",
-      "M  BITORA_DISASTER_RECOVERY_REPORT.md",
-      "A  BITORA_DISASTER_TEST_REPORT.md",
-      "A  BITORA_ENDURANCE_24H_REPORT.md",
-      "A  BITORA_ENDURANCE_72H_REPORT.md",
-      "A  BITORA_FINAL_RELEASE_CERTIFICATION.md",
-      "M  BITORA_LOAD_TEST_REPORT.md",
-      "A  BITORA_MULTIEVENT_ISOLATION_REPORT.md",
-      "A  BITORA_POSTGRES_LIVE_REPORT.md",
-      "M  BITORA_RELEASE_CANDIDATE.md",
-      "M  BITORA_RELEASE_CERTIFICATION.md",
-      "A  BITORA_RELEASE_PROCESS.md",
-      "A  BITORA_RELEASE_TEST_REPORT.md",
-      "A  BITORA_RESTORE_REPORT.md",
-      "A  BITORA_STAGING_ARCHITECTURE.md",
-      "A  BITORA_STAGING_RUNBOOK.md",
-      "A  BITORA_STAGING_SETUP.md",
-      "A  BITORA_STORAGE_VALIDATION_REPORT.md",
-      "M  BITORA_SUPERTEST_REPORT.html",
-      "M  BITORA_SUPERTEST_RESULTS.json",
-      "M  BITORA_SUPERTEST_SUMMARY.md",
-      "A  BITORA_UPGRADE_REPORT.md",
-      "A  Dockerfile.staging",
-      "A  docker-compose.staging.yml",
-      "MM tools/supertest/runner.py"
-    ],
+    "commit": "bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa",
+    "dirty_files": [],
     "max_migration": "013_whatsapp_production.sql",
     "code_checksum": "ff9ee8f542a7996a10cb05d612a9f15c81553ddf81734a4142a1d90724d3f61a",
     "critical_env": {
@@ -55,16 +26,9 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-20T22:12:20",
-  "finished_at": "2026-07-20T22:12:39",
+  "started_at": "2026-07-20T22:13:49",
+  "finished_at": "2026-07-20T22:14:09",
   "findings": [
-    {
-      "severity": "info",
-      "category": "environment",
-      "title": "Worktree con cambios",
-      "detail": "Se registra como advertencia, no bloqueante.",
-      "file": ""
-    },
     {
       "severity": "medium",
       "category": "code",
@@ -370,7 +334,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.85,
+      "duration_seconds": 1.72,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -384,7 +348,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.69,
+      "duration_seconds": 1.71,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -398,7 +362,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.47,
+      "duration_seconds": 0.49,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -412,7 +376,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.81,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -426,7 +390,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.3,
+      "duration_seconds": 0.31,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -440,7 +404,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.27,
+      "duration_seconds": 0.26,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -454,7 +418,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.86,
+      "duration_seconds": 0.85,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -468,7 +432,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.23,
+      "duration_seconds": 0.24,
       "stdout_tail": "OK postgres static; live=SKIP (QR_POSTGRES_DSN no configurado)\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -496,7 +460,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.74,
+      "duration_seconds": 0.75,
       "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -510,7 +474,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.76,
+      "duration_seconds": 0.77,
       "stdout_tail": "{\"ok\": true, \"event_id\": 1, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -524,7 +488,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.48,
+      "duration_seconds": 1.43,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -538,7 +502,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.4,
+      "duration_seconds": 1.45,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -552,7 +516,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.48,
+      "duration_seconds": 1.52,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -566,7 +530,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.16,
+      "duration_seconds": 5.06,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0

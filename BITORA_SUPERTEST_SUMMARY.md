@@ -9,21 +9,21 @@ Hallazgos criticos/altos: 0
 
 ## Pruebas
 
-- PASSED `integridad` (1.85s)
-- PASSED `convivencia` (1.69s)
-- PASSED `email_productivo` (0.47s)
-- PASSED `whatsapp_productivo` (0.77s)
-- PASSED `event_restore` (0.3s)
-- PASSED `storage_event_backup_restore` (0.27s)
-- PASSED `demo_live_10` (0.86s)
-- PASSED `postgres_static` (0.23s)
+- PASSED `integridad` (1.72s)
+- PASSED `convivencia` (1.71s)
+- PASSED `email_productivo` (0.49s)
+- PASSED `whatsapp_productivo` (0.81s)
+- PASSED `event_restore` (0.31s)
+- PASSED `storage_event_backup_restore` (0.26s)
+- PASSED `demo_live_10` (0.85s)
+- PASSED `postgres_static` (0.24s)
 - PASSED `production_postgres` (0.07s)
-- PASSED `comunicaciones_permisos` (0.74s)
-- PASSED `usuarios_eventos` (0.76s)
-- PASSED `seguridad_basica` (1.48s)
-- PASSED `datos_basura` (1.4s)
-- PASSED `errores_humanos` (1.48s)
-- PASSED `concurrencia_critica` (5.16s)
+- PASSED `comunicaciones_permisos` (0.75s)
+- PASSED `usuarios_eventos` (0.77s)
+- PASSED `seguridad_basica` (1.43s)
+- PASSED `datos_basura` (1.45s)
+- PASSED `errores_humanos` (1.52s)
+- PASSED `concurrencia_critica` (5.06s)
 - OMITTED `staging_environment` (0s)
 - OMITTED `postgres_live` (0s)
 - OMITTED `storage_persistent` (0s)
@@ -36,7 +36,6 @@ Hallazgos criticos/altos: 0
 
 ## Hallazgos
 
-- **INFO** [environment] Worktree con cambios: Se registra como advertencia, no bloqueante.
 - **MEDIUM** [code] Funcion muy extensa: init_db ocupa mas de 120 lineas (server.py)
 - **MEDIUM** [code] Funcion muy extensa: portal_payload ocupa mas de 120 lineas (server.py)
 - **MEDIUM** [code] Funcion muy extensa: executive_report_data ocupa mas de 120 lineas (server.py)

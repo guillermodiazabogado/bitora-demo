@@ -1,9 +1,9 @@
 # BITORA Release Candidate
 
 Perfil BSTF: `release`
-Fecha: 2026-07-20T22:12:20
+Fecha: 2026-07-20T22:13:49
 Branch: `main`
-Commit: `4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e`
+Commit: `bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa`
 Python: `3.12.13`
 Plataforma: `Windows-11-10.0.26200-SP0`
 Migracion maxima: `013_whatsapp_production.sql`
@@ -30,31 +30,4 @@ Checksum codigo: `ff9ee8f542a7996a10cb05d612a9f15c81553ddf81734a4142a1d90724d3f6
 
 ## Worktree
 
-- `A  .env.staging.example`
-- `M  .gitignore`
-- `A  BITORA_BACKUP_REPORT.md`
-- `A  BITORA_CONCURRENCY_REPORT.md`
-- `M  BITORA_DISASTER_RECOVERY_REPORT.md`
-- `A  BITORA_DISASTER_TEST_REPORT.md`
-- `A  BITORA_ENDURANCE_24H_REPORT.md`
-- `A  BITORA_ENDURANCE_72H_REPORT.md`
-- `A  BITORA_FINAL_RELEASE_CERTIFICATION.md`
-- `M  BITORA_LOAD_TEST_REPORT.md`
-- `A  BITORA_MULTIEVENT_ISOLATION_REPORT.md`
-- `A  BITORA_POSTGRES_LIVE_REPORT.md`
-- `M  BITORA_RELEASE_CANDIDATE.md`
-- `M  BITORA_RELEASE_CERTIFICATION.md`
-- `A  BITORA_RELEASE_PROCESS.md`
-- `A  BITORA_RELEASE_TEST_REPORT.md`
-- `A  BITORA_RESTORE_REPORT.md`
-- `A  BITORA_STAGING_ARCHITECTURE.md`
-- `A  BITORA_STAGING_RUNBOOK.md`
-- `A  BITORA_STAGING_SETUP.md`
-- `A  BITORA_STORAGE_VALIDATION_REPORT.md`
-- `M  BITORA_SUPERTEST_REPORT.html`
-- `M  BITORA_SUPERTEST_RESULTS.json`
-- `M  BITORA_SUPERTEST_SUMMARY.md`
-- `A  BITORA_UPGRADE_REPORT.md`
-- `A  Dockerfile.staging`
-- `A  docker-compose.staging.yml`
-- `MM tools/supertest/runner.py`
+- Sin cambios pendientes

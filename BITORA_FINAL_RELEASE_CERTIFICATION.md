@@ -2,11 +2,11 @@
 
 Decision: **NO APROBADA**
 
-Version evaluada: `4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e`
+Version evaluada: `bb1dd205c4ec3eff9a8c61b7c003244ea96ef0fa`
 Branch: `main`
 Perfil: `release`
 Score: **61.5/100**
-Fecha: 2026-07-20T22:12:39
+Fecha: 2026-07-20T22:14:09
 
 ## Pruebas y gates
 
