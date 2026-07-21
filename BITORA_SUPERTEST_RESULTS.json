@@ -1,32 +1,44 @@
 {
   "release": {
     "name": "BITORA Supertest Framework",
-    "profile": "standard",
-    "started_at": "2026-07-20T21:58:01",
+    "profile": "release",
+    "started_at": "2026-07-20T22:12:20",
     "python": "3.12.13",
     "platform": "Windows-11-10.0.26200-SP0",
     "branch": "main",
-    "commit": "4f0d317fe13c95c75ec66992df524b7bd4e03d75",
+    "commit": "4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e",
     "dirty_files": [
-      "A  BITORA_ARCHITECTURE_REPORT.md",
-      "A  BITORA_CODE_AUDIT.md",
-      "A  BITORA_DATABASE_REPORT.md",
-      "A  BITORA_DISASTER_RECOVERY_REPORT.md",
-      "A  BITORA_LOAD_TEST_REPORT.md",
-      "A  BITORA_RELEASE_CANDIDATE.md",
-      "A  BITORA_RELEASE_CERTIFICATION.md",
-      "A  BITORA_SECURITY_REPORT.md",
-      "A  BITORA_SUPERTEST_FRAMEWORK.md",
-      "A  BITORA_SUPERTEST_REPORT.html",
-      "A  BITORA_SUPERTEST_RESULTS.json",
-      "A  BITORA_SUPERTEST_SUMMARY.md",
-      "A  run_bitora_supertest.py",
-      "M  server.py",
-      "A  tools/supertest/__init__.py",
-      "AM tools/supertest/runner.py"
+      "A  .env.staging.example",
+      "M  .gitignore",
+      "A  BITORA_BACKUP_REPORT.md",
+      "A  BITORA_CONCURRENCY_REPORT.md",
+      "M  BITORA_DISASTER_RECOVERY_REPORT.md",
+      "A  BITORA_DISASTER_TEST_REPORT.md",
+      "A  BITORA_ENDURANCE_24H_REPORT.md",
+      "A  BITORA_ENDURANCE_72H_REPORT.md",
+      "A  BITORA_FINAL_RELEASE_CERTIFICATION.md",
+      "M  BITORA_LOAD_TEST_REPORT.md",
+      "A  BITORA_MULTIEVENT_ISOLATION_REPORT.md",
+      "A  BITORA_POSTGRES_LIVE_REPORT.md",
+      "M  BITORA_RELEASE_CANDIDATE.md",
+      "M  BITORA_RELEASE_CERTIFICATION.md",
+      "A  BITORA_RELEASE_PROCESS.md",
+      "A  BITORA_RELEASE_TEST_REPORT.md",
+      "A  BITORA_RESTORE_REPORT.md",
+      "A  BITORA_STAGING_ARCHITECTURE.md",
+      "A  BITORA_STAGING_RUNBOOK.md",
+      "A  BITORA_STAGING_SETUP.md",
+      "A  BITORA_STORAGE_VALIDATION_REPORT.md",
+      "M  BITORA_SUPERTEST_REPORT.html",
+      "M  BITORA_SUPERTEST_RESULTS.json",
+      "M  BITORA_SUPERTEST_SUMMARY.md",
+      "A  BITORA_UPGRADE_REPORT.md",
+      "A  Dockerfile.staging",
+      "A  docker-compose.staging.yml",
+      "MM tools/supertest/runner.py"
     ],
     "max_migration": "013_whatsapp_production.sql",
-    "code_checksum": "9e5ac79f893d6a2d491f264a1866c8cd7d79668faaa64b28b542f81dd92d577e",
+    "code_checksum": "ff9ee8f542a7996a10cb05d612a9f15c81553ddf81734a4142a1d90724d3f61a",
     "critical_env": {
       "APP_ENV": "",
       "BASE_URL": "",
@@ -42,9 +54,9 @@
       "STORAGE_BACKEND": ""
     }
   },
-  "profile": "standard",
-  "started_at": "2026-07-20T21:58:01",
-  "finished_at": "2026-07-20T21:58:21",
+  "profile": "release",
+  "started_at": "2026-07-20T22:12:20",
+  "finished_at": "2026-07-20T22:12:39",
   "findings": [
     {
       "severity": "info",
@@ -358,7 +370,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.78,
+      "duration_seconds": 1.85,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -372,7 +384,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.7,
+      "duration_seconds": 1.69,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -386,7 +398,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.46,
+      "duration_seconds": 0.47,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -400,7 +412,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.78,
+      "duration_seconds": 0.77,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -414,7 +426,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.31,
+      "duration_seconds": 0.3,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -428,7 +440,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.26,
+      "duration_seconds": 0.27,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -442,7 +454,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.85,
+      "duration_seconds": 0.86,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -484,7 +496,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.76,
+      "duration_seconds": 0.74,
       "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -512,7 +524,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.44,
+      "duration_seconds": 1.48,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -526,7 +538,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.46,
+      "duration_seconds": 1.4,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -540,7 +552,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.5,
+      "duration_seconds": 1.48,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -558,6 +570,105 @@
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
+    },
+    {
+      "name": "staging_environment",
+      "category": "environment",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "APP_ENV=staging requerido para release final.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "postgres_live",
+      "category": "database",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "storage_persistent",
+      "category": "backup_restore",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Storage persistente de staging requerido. Ruta evaluada: C:\\Users\\Noxie-PC\\Documents\\qr white label\\storage",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "workers_live",
+      "category": "jobs",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Requiere levantar worker separado y validar recuperacion tras reinicio.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "communications_safe_mode",
+      "category": "communications",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Safe mode requiere destinatarios forzados de email y WhatsApp.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "multievent_isolation_20_events",
+      "category": "security",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente prueba sintetica 20 eventos/1000 participantes en staging.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "disaster_recovery_live",
+      "category": "disaster",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente perfil --disaster en staging destructible.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "endurance_24h",
+      "category": "endurance",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente ejecucion real de 24 horas.",
+      "stderr_tail": "",
+      "exit_code": null
+    },
+    {
+      "name": "upgrade_from_previous_version",
+      "category": "upgrade",
+      "command": [],
+      "required": true,
+      "status": "omitted",
+      "duration_seconds": 0,
+      "stdout_tail": "Pendiente prueba de actualizacion desde version anterior con datos.",
+      "stderr_tail": "",
+      "exit_code": null
     }
   ],
   "score": {
@@ -565,16 +676,21 @@
       "architecture": 88,
       "security": 0,
       "code": 0,
-      "database": 96,
-      "communications": 100,
-      "backup_restore": 100,
+      "database": 46,
+      "communications": 50,
+      "backup_restore": 50,
       "events": 100,
       "permissions": 100,
       "functional": 100,
       "concurrency": 100,
-      "stress": 100
+      "stress": 100,
+      "jobs": 50,
+      "disaster": 50,
+      "endurance": 50,
+      "upgrade": 50,
+      "environment": 50
     },
-    "weighted_average": 80.4
+    "weighted_average": 61.5
   },
-  "approved": true
+  "approved": false
 }

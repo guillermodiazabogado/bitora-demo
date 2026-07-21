@@ -1,5 +1,6 @@
 # Entorno local
 .env
+.env.staging
 .venv/
 venv/
 env/

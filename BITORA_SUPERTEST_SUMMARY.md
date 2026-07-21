@@ -1,29 +1,38 @@
 # BITORA Supertest Summary
 
-Perfil: `standard`
-Resultado: APROBADO
-Score: 80.4/100
-Pruebas ejecutadas: 15
-Pruebas fallidas/timeouts: 0
+Perfil: `release`
+Resultado: RECHAZADO
+Score: 61.5/100
+Pruebas ejecutadas: 24
+Pruebas fallidas/timeouts: 9
 Hallazgos criticos/altos: 0
 
 ## Pruebas
 
-- PASSED `integridad` (1.78s)
-- PASSED `convivencia` (1.7s)
-- PASSED `email_productivo` (0.46s)
-- PASSED `whatsapp_productivo` (0.78s)
-- PASSED `event_restore` (0.31s)
-- PASSED `storage_event_backup_restore` (0.26s)
-- PASSED `demo_live_10` (0.85s)
+- PASSED `integridad` (1.85s)
+- PASSED `convivencia` (1.69s)
+- PASSED `email_productivo` (0.47s)
+- PASSED `whatsapp_productivo` (0.77s)
+- PASSED `event_restore` (0.3s)
+- PASSED `storage_event_backup_restore` (0.27s)
+- PASSED `demo_live_10` (0.86s)
 - PASSED `postgres_static` (0.23s)
 - PASSED `production_postgres` (0.07s)
-- PASSED `comunicaciones_permisos` (0.76s)
+- PASSED `comunicaciones_permisos` (0.74s)
 - PASSED `usuarios_eventos` (0.76s)
-- PASSED `seguridad_basica` (1.44s)
-- PASSED `datos_basura` (1.46s)
-- PASSED `errores_humanos` (1.5s)
+- PASSED `seguridad_basica` (1.48s)
+- PASSED `datos_basura` (1.4s)
+- PASSED `errores_humanos` (1.48s)
 - PASSED `concurrencia_critica` (5.16s)
+- OMITTED `staging_environment` (0s)
+- OMITTED `postgres_live` (0s)
+- OMITTED `storage_persistent` (0s)
+- OMITTED `workers_live` (0s)
+- OMITTED `communications_safe_mode` (0s)
+- OMITTED `multievent_isolation_20_events` (0s)
+- OMITTED `disaster_recovery_live` (0s)
+- OMITTED `endurance_24h` (0s)
+- OMITTED `upgrade_from_previous_version` (0s)
 
 ## Hallazgos
 

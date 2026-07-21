@@ -1,11 +1,11 @@
 # BITORA Release Certification
 
-Estado: **APROBADO**
+Estado: **RECHAZADO**
 
-Commit certificado: `4f0d317fe13c95c75ec66992df524b7bd4e03d75`
-Perfil ejecutado: `standard`
-Score final: **80.4/100**
+Commit certificado: `4178cd7ac63ec6554d78fa7e06ef61c52a0d9f3e`
+Perfil ejecutado: `release`
+Score final: **61.5/100**
 
 ## Condicion
 
-La certificacion tecnica automatica no reemplaza la Demo Live fisica con personas y dispositivos reales. Si el perfil ejecutado no fue `release`, quedan pendientes endurance, disaster recovery destructivo y PostgreSQL live con DSN real.
+El perfil release fue ejecutado, pero no certifica porque hay gates requeridos omitidos o fallidos. Revisar BITORA_FINAL_RELEASE_CERTIFICATION.md.

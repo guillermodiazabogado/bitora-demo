@@ -1,0 +1,44 @@
+services:
+  bitora-staging-postgres:
+    image: postgres:16-alpine
+    container_name: bitora-staging-postgres
+    environment:
+      POSTGRES_DB: bitora_staging
+      POSTGRES_USER: bitora_staging
+      POSTGRES_PASSWORD: bitora_staging_password
+    ports:
+      - "55432:5432"
+    volumes:
+      - bitora-staging-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitora_staging -d bitora_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  bitora-staging-app:
+    build:
+      context: .
+    container_name: bitora-staging-app
+    env_file:
+      - .env.staging
+    environment:
+      QR_POSTGRES_DSN: postgresql://bitora_staging:bitora_staging_password@bitora-staging-postgres:5432/bitora_staging
+      DATABASE_URL: postgresql://bitora_staging:bitora_staging_password@bitora-staging-postgres:5432/bitora_staging
+      BITORA_STORAGE_PATH: /bitora/storage
+    ports:
+      - "8788:8787"
+    volumes:
+      - bitora-staging-storage:/bitora/storage
+      - bitora-staging-backups:/bitora/backups
+      - bitora-staging-logs:/bitora/logs
+    depends_on:
+      bitora-staging-postgres:
+        condition: service_healthy
+    command: ["python", "backend/app.py"]
+
+volumes:
+  bitora-staging-postgres:
+  bitora-staging-storage:
+  bitora-staging-backups:
+  bitora-staging-logs:

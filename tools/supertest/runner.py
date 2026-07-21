@@ -45,10 +45,11 @@ class TestResult:
 
 
 class SupertestRunner:
-    def __init__(self, profile: str, timeout: int = 180, allow_dirty: bool = True) -> None:
+    def __init__(self, profile: str, timeout: int = 180, allow_dirty: bool = True, hours: int = 0) -> None:
         self.profile = profile
         self.timeout = timeout
         self.allow_dirty = allow_dirty
+        self.hours = hours
         self.started_at = datetime.now().isoformat(timespec="seconds")
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.output_dir = OUTPUT_ROOT / stamp
@@ -81,6 +82,7 @@ class SupertestRunner:
         self.write_root_doc("BITORA_SUPERTEST_REPORT.html", self.render_html(payload))
         self.write_root_doc("BITORA_LOAD_TEST_REPORT.md", self.render_load_report(payload))
         self.write_root_doc("BITORA_DISASTER_RECOVERY_REPORT.md", self.render_disaster_report(payload))
+        self.write_certification_pack(payload)
         return 0 if approved else 1
 
     def release_candidate(self) -> dict[str, Any]:
@@ -269,17 +271,78 @@ class SupertestRunner:
         if self.profile in {"quick", "security"}:
             return [self.case(*item) for item in quick]
         if self.profile in {"standard", "full", "release"}:
-            return [self.case(*item) for item in standard]
+            plan = [self.case(*item) for item in standard]
+            if self.profile == "release":
+                plan.extend(self.release_gates())
+            return plan
         if self.profile == "stress":
             return [self.case(*item) for item in stress]
-        if self.profile in {"endurance", "disaster"}:
-            return [self.case(*item) for item in standard]
+        if self.profile == "disaster":
+            return [self.case(*item) for item in standard] + self.disaster_gates()
+        if self.profile == "endurance":
+            return [self.case(*item) for item in standard] + self.endurance_gates()
         return [self.case(*item) for item in quick]
 
     def case(self, name: str, category: str, script: str, required: bool) -> dict[str, Any]:
         return {"name": name, "category": category, "command": [sys.executable, script], "required": required}
 
+    def gate(self, name: str, category: str, required: bool, status: str, detail: str) -> dict[str, Any]:
+        return {"name": name, "category": category, "gate": True, "required": required, "status": status, "detail": detail, "command": []}
+
+    def release_gates(self) -> list[dict[str, Any]]:
+        live_postgres = bool(os.environ.get("QR_POSTGRES_DSN") or os.environ.get("DATABASE_URL"))
+        staging = os.environ.get("APP_ENV") == "staging"
+        safe_mode = all([
+            os.environ.get("EMAIL_SAFE_MODE", "true").lower() in {"1", "true", "yes", "si"},
+            os.environ.get("WHATSAPP_SAFE_MODE", "true").lower() in {"1", "true", "yes", "si"},
+            bool(os.environ.get("EMAIL_FORCE_RECIPIENT") or os.environ.get("EMAIL_TEST_RECIPIENT")),
+            bool(os.environ.get("WHATSAPP_FORCE_RECIPIENT") or os.environ.get("WHATSAPP_TEST_RECIPIENT")),
+        ])
+        storage_path = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
+        storage_live = staging and storage_path.exists() and os.access(storage_path, os.W_OK)
+        return [
+            self.gate("staging_environment", "environment", True, "passed" if staging else "omitted", "APP_ENV=staging requerido para release final."),
+            self.gate("postgres_live", "database", True, "passed" if live_postgres else "omitted", "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging."),
+            self.gate("storage_persistent", "backup_restore", True, "passed" if storage_live else "omitted", f"Storage persistente de staging requerido. Ruta evaluada: {storage_path}"),
+            self.gate("workers_live", "jobs", True, "omitted", "Requiere levantar worker separado y validar recuperacion tras reinicio."),
+            self.gate("communications_safe_mode", "communications", True, "passed" if safe_mode else "omitted", "Safe mode requiere destinatarios forzados de email y WhatsApp."),
+            self.gate("multievent_isolation_20_events", "security", True, "omitted", "Pendiente prueba sintetica 20 eventos/1000 participantes en staging."),
+            self.gate("disaster_recovery_live", "disaster", True, "omitted", "Pendiente perfil --disaster en staging destructible."),
+            self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
+            self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
+        ]
+
+    def disaster_gates(self) -> list[dict[str, Any]]:
+        staging = os.environ.get("APP_ENV") == "staging"
+        return [
+            self.gate("disaster_environment_guard", "disaster", True, "passed" if staging else "omitted", "Las pruebas destructivas solo corren con APP_ENV=staging."),
+            self.gate("postgres_failure_recovery", "disaster", True, "omitted", "Pendiente detener/reiniciar PostgreSQL de staging."),
+            self.gate("worker_failure_recovery", "disaster", True, "omitted", "Pendiente cortar worker durante campania sintetica."),
+            self.gate("storage_failure_recovery", "disaster", True, "omitted", "Pendiente suspender storage persistente."),
+            self.gate("clean_environment_restore", "disaster", True, "omitted", "Pendiente restauracion en entorno vacio."),
+        ]
+
+    def endurance_gates(self) -> list[dict[str, Any]]:
+        hours = self.hours or 24
+        staging = os.environ.get("APP_ENV") == "staging"
+        return [
+            self.gate("endurance_environment_guard", "endurance", True, "passed" if staging else "omitted", "Endurance requiere staging aislado."),
+            self.gate(f"endurance_{hours}h_live", "endurance", True, "omitted", f"Pendiente ejecucion continua real de {hours} horas."),
+        ]
+
     def run_case(self, case: dict[str, Any]) -> TestResult:
+        if case.get("gate"):
+            return TestResult(
+                case["name"],
+                case["category"],
+                case.get("command", []),
+                case["required"],
+                case["status"],
+                0,
+                case.get("detail", ""),
+                "",
+                0 if case["status"] == "passed" else None,
+            )
         started = time.perf_counter()
         try:
             proc = subprocess.run(case["command"], cwd=ROOT, capture_output=True, text=True, timeout=self.timeout)
@@ -289,7 +352,7 @@ class SupertestRunner:
             return TestResult(case["name"], case["category"], case["command"], case["required"], "timeout", round(time.perf_counter() - started, 2), tail(exc.stdout or ""), tail(exc.stderr or ""), None)
 
     def score(self) -> dict[str, Any]:
-        categories = ["architecture", "security", "code", "database", "communications", "backup_restore", "events", "permissions", "functional", "concurrency", "stress"]
+        categories = ["architecture", "security", "code", "database", "communications", "backup_restore", "events", "permissions", "functional", "concurrency", "stress", "jobs", "disaster", "endurance", "upgrade", "environment"]
         scores = {}
         for category in categories:
             base = 100
@@ -362,6 +425,12 @@ Checksum codigo: `{self.release['code_checksum']}`
 
     def render_certification(self, payload: dict[str, Any]) -> str:
         gate = "APROBADO" if payload.get("approved") else "RECHAZADO"
+        if payload["profile"] == "release" and not payload.get("approved"):
+            condition = "El perfil release fue ejecutado, pero no certifica porque hay gates requeridos omitidos o fallidos. Revisar BITORA_FINAL_RELEASE_CERTIFICATION.md."
+        elif payload["profile"] != "release":
+            condition = "La certificacion tecnica automatica no reemplaza la Demo Live fisica con personas y dispositivos reales. Si el perfil ejecutado no fue `release`, quedan pendientes endurance, disaster recovery destructivo y PostgreSQL live con DSN real."
+        else:
+            condition = "Perfil release aprobado sin gates requeridos pendientes."
         return f"""# BITORA Release Certification
 
 Estado: **{gate}**
@@ -372,7 +441,64 @@ Score final: **{payload['score']['weighted_average']}/100**
 
 ## Condicion
 
-La certificacion tecnica automatica no reemplaza la Demo Live fisica con personas y dispositivos reales. Si el perfil ejecutado no fue `release`, quedan pendientes endurance, disaster recovery destructivo y PostgreSQL live con DSN real.
+{condition}
+"""
+
+    def write_certification_pack(self, payload: dict[str, Any]) -> None:
+        self.write_root_doc("BITORA_POSTGRES_LIVE_REPORT.md", self.render_component_report(payload, "database", "PostgreSQL Live"))
+        self.write_root_doc("BITORA_STORAGE_VALIDATION_REPORT.md", self.render_component_report(payload, "backup_restore", "Storage Persistente"))
+        self.write_root_doc("BITORA_RELEASE_TEST_REPORT.md", self.render_component_report(payload, "functional", "Release Test"))
+        self.write_root_doc("BITORA_CONCURRENCY_REPORT.md", self.render_component_report(payload, "concurrency", "Concurrencia"))
+        self.write_root_doc("BITORA_MULTIEVENT_ISOLATION_REPORT.md", self.render_component_report(payload, "security", "Aislamiento Multievento"))
+        self.write_root_doc("BITORA_DISASTER_TEST_REPORT.md", self.render_component_report(payload, "disaster", "Disaster Test"))
+        self.write_root_doc("BITORA_BACKUP_REPORT.md", self.render_component_report(payload, "backup_restore", "Backup"))
+        self.write_root_doc("BITORA_RESTORE_REPORT.md", self.render_component_report(payload, "backup_restore", "Restauracion"))
+        self.write_root_doc("BITORA_ENDURANCE_24H_REPORT.md", self.render_endurance_report(payload, 24))
+        self.write_root_doc("BITORA_ENDURANCE_72H_REPORT.md", self.render_endurance_report(payload, 72))
+        self.write_root_doc("BITORA_UPGRADE_REPORT.md", self.render_component_report(payload, "upgrade", "Upgrade"))
+        self.write_root_doc("BITORA_FINAL_RELEASE_CERTIFICATION.md", self.render_final_certification(payload))
+
+    def render_component_report(self, payload: dict[str, Any], category: str, title: str) -> str:
+        rows = [item for item in payload["results"] if item["category"] == category]
+        body = "\n".join(f"- {item['status'].upper()} `{item['name']}`: {item.get('stdout_tail') or item.get('stderr_tail') or 'Sin detalle.'}" for item in rows) or "- Sin pruebas ejecutadas para esta categoria."
+        return f"# BITORA {title} Report\n\n{body}\n"
+
+    def render_endurance_report(self, payload: dict[str, Any], hours: int) -> str:
+        rows = [item for item in payload["results"] if item["category"] == "endurance" and (str(hours) in item["name"] or item["name"] == "endurance_environment_guard")]
+        body = "\n".join(f"- {item['status'].upper()} `{item['name']}`: {item.get('stdout_tail') or item.get('stderr_tail') or 'Sin detalle.'}" for item in rows) or "- No ejecutado. Requiere duracion real en staging."
+        return f"# BITORA Endurance {hours}H Report\n\n{body}\n"
+
+    def render_final_certification(self, payload: dict[str, Any]) -> str:
+        failures = [item for item in payload["results"] if item["required"] and item["status"] != "passed"]
+        highs = [item for item in payload["findings"] if item["severity"] in {"critical", "high"}]
+        decision = "APROBADA PARA DEMO FISICA CONTROLADA" if not failures and not highs and payload["profile"] == "release" else "APROBADA CON RESTRICCIONES DOCUMENTADAS"
+        if failures or highs:
+            decision = "NO APROBADA"
+        executed = "\n".join(f"- {item['status'].upper()} `{item['name']}`" for item in payload["results"])
+        pending = "\n".join(f"- `{item['name']}`: {item.get('stdout_tail') or 'Pendiente'}" for item in failures) or "- Sin pendientes bloqueantes."
+        return f"""# BITORA Final Release Certification
+
+Decision: **{decision}**
+
+Version evaluada: `{payload['release']['commit']}`
+Branch: `{payload['release']['branch']}`
+Perfil: `{payload['profile']}`
+Score: **{payload['score']['weighted_average']}/100**
+Fecha: {payload['finished_at']}
+
+## Pruebas y gates
+
+{executed}
+
+## Pendientes / restricciones
+
+{pending}
+
+## Riesgos residuales
+
+- No declarar aptitud para evento real hasta ejecutar PostgreSQL live, disaster recovery y endurance real en staging.
+- Las pruebas omitidas no computan como aprobadas.
+- La aprobacion con restricciones solo habilita una demo fisica controlada si el equipo acepta los pendientes documentados.
 """
 
     def render_load_report(self, payload: dict[str, Any]) -> str:
@@ -411,8 +537,9 @@ La certificacion tecnica automatica no reemplaza la Demo Live fisica con persona
         return "\n".join(lines)
 
     def write_root_doc(self, name: str, content: str) -> None:
-        (self.output_dir / name).write_text(content, encoding="utf-8")
-        (ROOT / name).write_text(content, encoding="utf-8")
+        text = content.rstrip() + "\n"
+        (self.output_dir / name).write_text(text, encoding="utf-8")
+        (ROOT / name).write_text(text, encoding="utf-8")
 
     def write_json(self, name: str, payload: dict[str, Any]) -> None:
         text = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -487,8 +614,21 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--disaster", action="store_true")
     group.add_argument("--release", action="store_true")
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--hours", type=int, default=0, help="Duracion objetivo para perfiles endurance.")
+    parser.add_argument("--report", action="store_true", help="Mostrar resumen existente sin ejecutar pruebas.")
+    parser.add_argument("--cleanup", action="store_true", help="Eliminar artefactos temporales de output/supertest.")
     parser.add_argument("--strict-dirty", action="store_true", help="Fallar si hay cambios sin commit")
     args = parser.parse_args(argv)
+    if args.report:
+        summary = ROOT / "BITORA_SUPERTEST_SUMMARY.md"
+        print(summary.read_text(encoding="utf-8") if summary.exists() else "No existe reporte BSTF.")
+        return 0 if summary.exists() else 1
+    if args.cleanup:
+        if OUTPUT_ROOT.exists():
+            shutil.rmtree(OUTPUT_ROOT)
+        OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        print(f"Limpieza completada: {OUTPUT_ROOT}")
+        return 0
     profile = "quick"
     for name in ["standard", "full", "stress", "endurance", "security", "disaster", "release"]:
         if getattr(args, name):
@@ -496,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             break
     if args.quick:
         profile = "quick"
-    runner = SupertestRunner(profile=profile, timeout=args.timeout, allow_dirty=not args.strict_dirty)
+    runner = SupertestRunner(profile=profile, timeout=args.timeout, allow_dirty=not args.strict_dirty, hours=args.hours)
     return runner.run()
 
 
