@@ -8,6 +8,8 @@ from pathlib import Path
 os.environ.setdefault("QR_REQUIRE_LOGIN", "0")
 os.environ.setdefault("EMAIL_ENABLED", "false")
 os.environ.setdefault("WHATSAPP_ENABLED", "false")
+os.environ["QR_DB_ENGINE"] = "sqlite"
+os.environ["DATABASE_ENGINE"] = "sqlite"
 
 import server
 

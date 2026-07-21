@@ -96,15 +96,17 @@ def dispatch(args) -> int:
 
 
 def check() -> int:
+    docker_cmd = find_docker()
     checks = {
         "python": sys.version.split()[0],
         "compose_file": COMPOSE_FILE.exists(),
         "env_example": ENV_EXAMPLE.exists(),
         "env_file": ENV_FILE.exists(),
-        "docker": bool(shutil.which("docker")),
+        "docker": bool(docker_cmd),
+        "docker_path": docker_cmd or "",
     }
     if checks["docker"]:
-        proc = run(["docker", "compose", "version"], check=False)
+        proc = run([docker_cmd, "compose", "version"], check=False)
         checks["docker_compose"] = proc.returncode == 0
         checks["docker_compose_output"] = (proc.stdout or proc.stderr).strip()[:300]
     else:
@@ -152,9 +154,9 @@ def backup() -> int:
     backup_file = BACKUP_DIR / f"bitora-staging-{stamp}.sql"
     storage_manifest = BACKUP_DIR / f"bitora-staging-{stamp}.manifest.json"
     proc = run([
-        "docker", "compose", "-f", str(COMPOSE_FILE), "exec", "-T", "bitora-staging-postgres",
+        docker(), "compose", "-f", str(COMPOSE_FILE), "exec", "-T", "bitora-staging-postgres",
         "pg_dump", "-U", "bitora_staging", "-d", "bitora_staging",
-    ], check=False)
+    ], check=False, echo=False)
     if proc.returncode != 0:
         raise BdfError(proc.stderr or "pg_dump fallo")
     backup_file.write_text(proc.stdout, encoding="utf-8")
@@ -175,12 +177,28 @@ def restore(path: Path) -> int:
     require_safe_env()
     if not path.exists():
         raise BdfError(f"No existe backup: {path}")
+    compose("stop", "bitora-staging-app", "bitora-staging-worker", "bitora-staging-monitor")
+    reset_sql = (
+        "DROP SCHEMA public CASCADE; "
+        "CREATE SCHEMA public; "
+        "GRANT ALL ON SCHEMA public TO bitora_staging; "
+        "GRANT ALL ON SCHEMA public TO public;"
+    )
+    reset = run([
+        docker(), "compose", "-f", str(COMPOSE_FILE), "exec", "-T", "bitora-staging-postgres",
+        "psql", "-v", "ON_ERROR_STOP=1", "-U", "bitora_staging", "-d", "bitora_staging", "-c", reset_sql,
+    ], check=False)
+    if reset.returncode != 0:
+        compose("up", "-d")
+        raise BdfError(reset.stderr or "reset previo al restore fallo")
     proc = run([
-        "docker", "compose", "-f", str(COMPOSE_FILE), "exec", "-T", "bitora-staging-postgres",
-        "psql", "-U", "bitora_staging", "-d", "bitora_staging",
-    ], input_text=path.read_text(encoding="utf-8", errors="replace"), check=False)
+        docker(), "compose", "-f", str(COMPOSE_FILE), "exec", "-T", "bitora-staging-postgres",
+        "psql", "-v", "ON_ERROR_STOP=1", "-U", "bitora_staging", "-d", "bitora_staging",
+    ], input_text=path.read_text(encoding="utf-8", errors="replace"), check=False, echo=False)
     if proc.returncode != 0:
+        compose("up", "-d")
         raise BdfError(proc.stderr or "restore fallo")
+    compose("up", "-d")
     write_report("restore", {"file": str(path), "sha256": sha256(path), "status": "completed"})
     print("Restore completado")
     return 0
@@ -204,16 +222,52 @@ def fault(target: str) -> int:
 
 
 def compose(*args: str) -> int:
-    if not shutil.which("docker"):
+    return run([docker(), "compose", "-f", str(COMPOSE_FILE), *args]).returncode
+
+
+def docker() -> str:
+    docker_cmd = find_docker()
+    if not docker_cmd:
         raise BdfError("Docker no esta instalado o no esta disponible en PATH.")
-    return run(["docker", "compose", "-f", str(COMPOSE_FILE), *args]).returncode
+    return docker_cmd
 
 
-def run(cmd: list[str], *, input_text: str | None = None, check: bool = True):
-    proc = subprocess.run(cmd, cwd=ROOT, input=input_text, capture_output=True, text=True)
-    if proc.stdout:
+def find_docker() -> str:
+    detected = shutil.which("docker")
+    if detected:
+        return detected
+    candidates = []
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / "Programs" / "DockerDesktop" / "resources" / "bin" / "docker.exe")
+    candidates.extend([
+        Path("C:/Program Files/Docker/Docker/resources/bin/docker.exe"),
+        Path("C:/Program Files/Docker/Docker/resources/bin/com.docker.cli.exe"),
+    ])
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return ""
+
+
+def run(cmd: list[str], *, input_text: str | None = None, check: bool = True, echo: bool = True):
+    env = os.environ.copy()
+    if cmd and Path(cmd[0]).name.lower() in {"docker.exe", "docker"}:
+        docker_dir = str(Path(cmd[0]).parent)
+        env["PATH"] = docker_dir + os.pathsep + env.get("PATH", "")
+    proc = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        input=input_text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+    if echo and proc.stdout:
         print(proc.stdout.rstrip())
-    if proc.stderr:
+    if echo and proc.stderr:
         print(proc.stderr.rstrip(), file=sys.stderr)
     if check and proc.returncode != 0:
         raise BdfError(f"Fallo comando: {' '.join(cmd)}")

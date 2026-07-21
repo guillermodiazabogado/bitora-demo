@@ -63,24 +63,28 @@ def run_postgres_migrations(config: DatabaseConfig, migrations_dir: Path) -> lis
         raise RuntimeError("QR_POSTGRES_DSN es obligatorio cuando QR_DB_ENGINE=postgres")
     psycopg, dict_row = _load_psycopg()
     applied: list[str] = []
-    with psycopg.connect(config.postgres_dsn, row_factory=dict_row) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version TEXT PRIMARY KEY,
-                applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    with psycopg.connect(config.postgres_dsn, row_factory=dict_row, autocommit=True) as conn:
+        conn.execute("SELECT pg_advisory_lock(74867201)")
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version TEXT PRIMARY KEY,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
             )
-            """
-        )
-        known = {row["version"] for row in conn.execute("SELECT version FROM schema_migrations").fetchall()}
-        for path in sorted(migrations_dir.glob("*.sql")):
-            if path.name in known:
-                continue
-            sql = path.read_text(encoding="utf-8")
-            with conn.transaction():
-                conn.execute(sql)
-                conn.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (path.name,))
-            applied.append(path.name)
+            known = {row["version"] for row in conn.execute("SELECT version FROM schema_migrations").fetchall()}
+            for path in sorted(migrations_dir.glob("*.sql")):
+                if path.name in known:
+                    continue
+                sql = path.read_text(encoding="utf-8")
+                with conn.transaction():
+                    conn.execute(sql)
+                    conn.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (path.name,))
+                applied.append(path.name)
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(74867201)")
     return applied
 
 
@@ -179,7 +183,7 @@ def _postgres_connection(config: DatabaseConfig):
                 )
             raw = _POSTGRES_POOL.getconn(timeout=config.connection_timeout)
             raw.execute("SELECT 1")
-            raw.execute("SET statement_timeout = %s", (config.statement_timeout_ms,))
+            raw.execute("SELECT set_config('statement_timeout', %s, false)", (str(config.statement_timeout_ms),))
             return PostgresConnection(raw, _POSTGRES_POOL)
         except Exception as exc:
             last_error = exc
@@ -278,6 +282,15 @@ def _translate_sql(sql: str) -> str:
     upper = stripped.upper()
     if upper.startswith("PRAGMA QUICK_CHECK"):
         return "__PRAGMA_OK__"
+    table_info = re.match(r"PRAGMA\s+table_info\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)", stripped, re.I)
+    if table_info:
+        table = table_info.group(1).lower()
+        return (
+            "SELECT column_name AS name "
+            "FROM information_schema.columns "
+            f"WHERE table_schema = 'public' AND table_name = '{table}' "
+            "ORDER BY ordinal_position"
+        )
     if upper.startswith("PRAGMA"):
         return "__PRAGMA_NOOP__"
     if upper == "BEGIN IMMEDIATE":

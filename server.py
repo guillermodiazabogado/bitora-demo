@@ -6087,7 +6087,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         FROM activities a
                         LEFT JOIN reservations r ON r.activity_id = a.id
                         WHERE a.event_id = ? AND a.status <> 'cancelled'
-                        GROUP BY a.id
+                        GROUP BY a.id, a.title, a.capacity, a.starts_at
                         ORDER BY value DESC, a.starts_at
                         LIMIT 8
                         """,
@@ -6120,7 +6120,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             LEFT JOIN reservations r ON r.activity_id = a.id
                             LEFT JOIN activity_attendance at ON at.activity_id = a.id
                             WHERE s.event_id = ? AND s.status <> 'cancelled'
-                            GROUP BY s.id
+                            GROUP BY s.id, s.name, s.capacity
                             ORDER BY s.name
                             """,
                             (event_id,),
@@ -6173,7 +6173,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             LEFT JOIN reservations r ON r.activity_id = a.id
                             LEFT JOIN activity_attendance at ON at.activity_id = a.id
                             WHERE a.event_id = ? AND a.status <> 'cancelled'
-                            GROUP BY a.id
+                            GROUP BY a.id, a.title, s.name, a.capacity, a.starts_at
                             HAVING COALESCE(a.capacity, 0) > 0
                                AND ROUND(COUNT(DISTINCT CASE WHEN at.status IN ('Presente', 'Completa', 'Parcial') THEN at.id END) * 100.0 / a.capacity, 0) < ?
                             ORDER BY present ASC, a.starts_at
@@ -6709,7 +6709,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         JOIN activities a ON a.id = b.activity_id
                         LEFT JOIN reservations r ON r.bag_id = b.id AND r.status = 'confirmed'
                         WHERE b.event_id = ?
-                        GROUP BY b.id
+                        GROUP BY b.id, a.title, a.capacity, a.starts_at
                         """,
                         (event_id,),
                     ).fetchall()
@@ -7196,7 +7196,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         JOIN activities a ON a.id = b.activity_id
                         LEFT JOIN reservations r ON r.bag_id = b.id AND r.status = 'confirmed'
                         WHERE {where}
-                        GROUP BY b.id
+                        GROUP BY b.id, a.title, a.capacity, a.starts_at
                         ORDER BY a.starts_at, b.priority, b.id
                         """,
                         params,

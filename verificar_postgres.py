@@ -86,7 +86,13 @@ def live_checks(dsn: str):
                 created_at=stamp,
             )
             require(db.execute("SELECT COUNT(*) AS c FROM access_logs WHERE event_id = ?", (event_id,)).fetchone()["c"] == 1, "Fallo acceso")
-            require(db.execute("SELECT COUNT(*) AS c FROM audit_logs WHERE entity_id = ?", (event_id,)).fetchone()["c"] == 1, "Fallo auditoria")
+            require(
+                db.execute(
+                    "SELECT COUNT(*) AS c FROM audit_logs WHERE entity_id = ? AND action = ?",
+                    (event_id, "postgres.checked"),
+                ).fetchone()["c"] == 1,
+                "Fallo auditoria",
+            )
         finally:
             db.execute("ROLLBACK")
     print(f"OK postgres live migrations={applied}")

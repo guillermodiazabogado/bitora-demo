@@ -1,66 +1,59 @@
 # LOCAL MACHINE READY STATUS
 
+Fecha: 2026-07-21
+
 Estado final:
 
 ```text
-PENDIENTE DE INSTALACION MANUAL DE DOCKER
+STAGING LOCAL OPERATIVO CON RESTRICCIONES
 ```
 
-## Resumen
-
-La PC esta parcialmente lista para ejecutar BITORA staging.
-
-Listo:
-
-- repositorio correcto;
-- commit correcto;
-- Git disponible;
-- Python disponible para Codex;
-- dependencias Python sin conflictos;
-- BDF presente;
-- Docker Compose file presente;
-- `.env.staging` presente;
-- safe mode configurado;
-- storage y PostgreSQL preparados a nivel de archivos BDF.
-
-Pendiente:
-
-- WSL2;
-- Ubuntu en WSL;
-- Docker Desktop;
-- Docker Compose;
-- validacion `docker run hello-world`;
-- ejecucion real de BDF build/up.
-
-## Checklist del usuario
+## Componentes aprobados
 
 ```text
-□ Abrir PowerShell como Administrador
-□ Ejecutar: wsl --install
-□ Reiniciar Windows si lo solicita
-□ Ejecutar: wsl --set-default-version 2
-□ Verificar: wsl -l -v
-□ Instalar Docker Desktop
-□ Activar backend WSL2 en Docker Desktop
-□ Activar integracion con Ubuntu
-□ Verificar: docker --version
-□ Verificar: docker compose version
-□ Verificar: docker run hello-world
-□ Ejecutar: python deployment/scripts/bdf.py check
+Docker: PASSED
+Docker Compose: PASSED
+BDF check: PASSED
+Build: PASSED
+PostgreSQL: PASSED
+App: PASSED
+Worker: PASSED
+Monitor: PASSED
+Storage: PASSED
+Safe mode: PASSED
+Health: PASSED
+Migrations: PASSED
+Backup: PASSED
+Restore: PASSED
+Smoke test: PASSED
 ```
 
-## Criterio alcanzado
+## Acceso local
 
-Escenario B de la tarea:
+BITORA staging queda disponible en:
 
 ```text
-No fue posible completar la preparacion porque falta instalacion manual, pero queda identificado exactamente que debe instalarse.
+http://localhost:8788
 ```
 
-## Proximo paso
+## Restricciones
 
-Instalar WSL2 y Docker Desktop. Luego volver a ejecutar:
+No forman parte de esta validacion local:
+
+- Google OAuth live;
+- email real por organizacion;
+- WhatsApp real por organizacion;
+- webhooks tenant-aware live;
+- endurance 24 horas;
+- disaster recovery extendido;
+- certificacion Release completa sin gates externos omitidos.
+
+## Proximo paso recomendado
+
+Configurar proveedores sandbox/live seguros y ejecutar:
 
 ```powershell
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py check
+python deployment/scripts/bdf.py supertest --profile release
 ```
+
+Solo despues de conectar proveedores reales controlados se podran eliminar los gates live omitidos.

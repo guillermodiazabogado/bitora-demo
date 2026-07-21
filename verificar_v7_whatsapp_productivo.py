@@ -6,6 +6,8 @@ import os
 import tempfile
 
 os.environ.setdefault("QR_REQUIRE_LOGIN", "0")
+os.environ["QR_DB_ENGINE"] = "sqlite"
+os.environ["DATABASE_ENGINE"] = "sqlite"
 os.environ.setdefault("WHATSAPP_PROVIDER", "meta")
 os.environ.setdefault("WHATSAPP_ENABLED", "false")
 

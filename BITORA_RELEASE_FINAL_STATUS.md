@@ -1,44 +1,69 @@
 # BITORA Release Final Status
 
+Fecha: 2026-07-21
+
 Decision:
 
 ```text
-RELEASE NO CERTIFICADA
+RELEASE CERTIFICADA CON RESTRICCIONES
 ```
 
-## Motivo
+## Alcance de esta decision
 
-La certificacion Release requiere staging real con Docker, PostgreSQL, worker separado, storage persistente, safe mode live, proveedores sandbox/live y webhooks reales.
+La certificacion con restricciones aplica al staging local BDF.
 
-En esta ejecucion:
+Queda certificado localmente:
 
-- Docker no esta instalado o no esta disponible en PATH.
-- Docker Compose no esta disponible.
-- WSL no esta instalado.
-- No se pudo levantar PostgreSQL.
-- No se pudo levantar worker separado.
-- No se pudo ejecutar smoke test en staging.
-- No se pudieron ejecutar pruebas live reales de proveedores.
-- Persisten gates obligatorios `OMITTED`.
+```text
+Docker
+Docker Compose
+BDF check
+Build
+PostgreSQL
+Aplicacion BITORA
+Worker separado
+Monitor
+Storage persistente
+Safe mode
+Migraciones
+Health checks
+Backup
+Restore
+Smoke test
+```
 
-## Que si quedo listo
+## Restricciones
 
-- `.env.staging` local creado y seguro.
-- BDF check valida safe env correctamente.
-- BDF informa ausencia de Docker de forma clara.
-- No se usaron credenciales productivas.
-- No se redujo cobertura de pruebas.
-- No se marco como live ninguna prueba contract/mock.
+No se certifica aun como release final para piloto/evento real porque faltan validaciones externas:
+
+```text
+Google OAuth live
+Email live por organizacion
+WhatsApp live por organizacion
+Webhooks tenant-aware live
+Disaster recovery live extendido
+Endurance 24 horas
+Upgrade desde version anterior
+```
+
+## Estado operativo
+
+```text
+STAGING LOCAL OPERATIVO CON RESTRICCIONES
+```
+
+URL local:
+
+```text
+http://localhost:8788
+```
 
 ## Proximo paso obligatorio
 
-Instalar Docker Desktop con WSL2 o mover la ejecucion BDF a un host Linux/VPS/CI con Docker disponible. Luego ejecutar:
+Configurar credenciales sandbox/live controladas y ejecutar:
 
-```bash
-python deployment/scripts/bdf.py check
-python deployment/scripts/bdf.py build
-python deployment/scripts/bdf.py up
-python deployment/scripts/bdf.py migrate
-python deployment/scripts/bdf.py smoke-test
+```powershell
 python deployment/scripts/bdf.py supertest --profile release
 ```
+
+No se debe declarar BITORA apta para evento real hasta completar los gates live externos, disaster recovery y endurance.

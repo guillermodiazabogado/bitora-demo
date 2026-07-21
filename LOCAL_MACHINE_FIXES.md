@@ -1,125 +1,86 @@
 # LOCAL MACHINE FIXES
 
-## Correcciones automaticas realizadas
+Fecha: 2026-07-21
 
-### 1. `.env.staging`
+## Correcciones aplicadas
 
-Se verifico que existe:
+### 1. Deteccion de Docker Desktop en Windows
+
+BDF ahora detecta Docker aunque no este publicado en el PATH global de PowerShell.
+
+Ruta detectada:
 
 ```text
-deployment/staging/.env.staging
+C:\Users\Noxie-PC\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe
 ```
 
-Estado:
+Tambien inyecta esa carpeta en el PATH del proceso hijo para que Docker pueda encontrar sus credenciales locales.
 
-- Existe.
-- No esta versionado por Git.
-- Esta protegido por `.gitignore`.
-- BDF lo acepta como `safe_env`.
+### 2. Build context de Docker
 
-### 2. Dependencias Python
+Se agrego `.dockerignore` para evitar que Docker copie bases SQLite, backups, storage, logs, entornos virtuales y archivos temporales al construir la imagen.
 
-Se ejecuto:
+Impacto:
 
-```powershell
-python -m pip check
+```text
+Build: PASSED
 ```
+
+### 3. Compatibilidad PostgreSQL
+
+Se corrigieron incompatibilidades detectadas al ejecutar BITORA sobre PostgreSQL:
+
+- configuracion de `statement_timeout`;
+- lock de migraciones para evitar carrera entre app y worker;
+- traduccion de `PRAGMA table_info(...)`;
+- consultas con `GROUP BY` estricto;
+- lectura de escalares en repositorios compartidos.
+
+### 4. Backup BDF
+
+El backup ya no imprime el dump completo de PostgreSQL en consola.
+
+Resultado validado:
+
+```text
+Backup generado: bitora-staging-20260721-040529.sql
+Checksum SHA-256: 95dbc7c065bbb171d6deb95f8c995980f3c83f389af56b21a8175d2f84c81f1a
+```
+
+### 5. Restore BDF
+
+La restauracion de staging ahora:
+
+- detiene app, worker y monitor;
+- limpia el esquema `public`;
+- restaura el dump;
+- vuelve a levantar servicios;
+- registra reporte.
 
 Resultado:
 
 ```text
-No broken requirements found.
+Restore: PASSED
+Health posterior: PASSED
 ```
 
-### 3. BDF
+### 6. Smoke-test idempotente
 
-Se ejecuto:
-
-```powershell
-python deployment/scripts/bdf.py check
-```
+`verificar_demo_live_10.py` fue ajustado para usar SQLite temporal como corresponde a su diseno original. Esto evita que el smoke-test escriba datos repetidos en PostgreSQL staging despues de un restore.
 
 Resultado:
 
-- configuracion BDF presente;
-- `.env.staging` presente;
-- safe mode configurado;
-- Docker faltante.
-
-### 4. Manejo de error Docker
-
-BDF ya informa correctamente cuando Docker no esta disponible:
-
 ```text
-BDF ERROR: Docker no esta instalado o no esta disponible en PATH.
+Smoke test: PASSED
 ```
 
-## Correcciones no ejecutables sin administrador
+## Correcciones no realizadas
 
-La sesion actual no tiene privilegios de administrador:
+No se configuraron proveedores externos live:
 
-```text
-net session -> Acceso denegado
-```
+- Google OAuth;
+- Resend/email real;
+- Meta/WhatsApp Cloud API;
+- webhooks publicos.
 
-Por lo tanto no se ejecutaron automaticamente:
-
-- instalacion de WSL;
-- activacion de Virtual Machine Platform;
-- instalacion de Ubuntu;
-- instalacion de Docker Desktop.
-
-## Comandos exactos para ejecutar manualmente
-
-Abrir PowerShell como Administrador y ejecutar:
-
-```powershell
-wsl --install
-```
-
-Reiniciar Windows si el instalador lo solicita.
-
-Despues del reinicio:
-
-```powershell
-wsl --set-default-version 2
-wsl -l -v
-```
-
-Si Ubuntu no queda instalada:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-Luego instalar Docker Desktop manualmente desde el sitio oficial de Docker.
-
-Configuracion requerida en Docker Desktop:
-
-- usar backend WSL2;
-- habilitar integracion con Ubuntu;
-- iniciar Docker Desktop;
-- esperar a que quede en estado running.
-
-Validar:
-
-```powershell
-docker --version
-docker compose version
-docker run hello-world
-```
-
-## Comandos BDF posteriores
-
-Cuando Docker funcione:
-
-```powershell
-cd "C:\Users\Noxie-PC\Documents\qr white label"
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py check
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py build
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py up
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py status
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py health
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py migrate
-& "C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" deployment\scripts\bdf.py smoke-test
-```
+Esos puntos quedan para la siguiente fase con credenciales sandbox/live controladas.

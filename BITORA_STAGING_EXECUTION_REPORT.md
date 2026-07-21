@@ -1,111 +1,141 @@
 # BITORA Staging Execution Report
 
+Fecha: 2026-07-21
+
 ## Objetivo
 
-Ejecutar staging real mediante BDF y obtener certificacion Release completa sin gates `OMITTED`.
+Levantar por primera vez el staging local completo de BITORA usando BDF, sin agregar funcionalidades nuevas ni configurar proveedores externos live.
 
 ## Commit base
 
-`6e05890e1c743911021a26426d7a5881e8355745`
+```text
+4f24920298647789d963dafe24fd35fa83635aa6
+```
 
-## Infraestructura verificada
+## Infraestructura utilizada
 
-Fecha de ejecucion: 2026-07-20
+```text
+Windows + WSL2 + Ubuntu
+Docker Desktop
+Docker Engine 29.6.2
+Docker Compose v5.3.1
+Python 3.12.13
+```
 
-Resultado:
+## Variables configuradas
 
-- Docker: no disponible en PATH.
-- Docker Compose: no disponible.
-- WSL: no instalado.
-- `winget`: no disponible.
-- `deployment/docker-compose.staging.yml`: existe.
-- `deployment/staging/.env.staging.example`: existe.
-- `deployment/staging/.env.staging`: creado localmente y no versionado.
-- Safe Mode: configurado en `.env.staging`.
-- PostgreSQL: preparado en Docker Compose, no ejecutado por falta de Docker.
-- Worker separado: preparado en Docker Compose, no ejecutado por falta de Docker.
-- Storage persistente: preparado en Docker Compose, no ejecutado por falta de Docker.
-- Monitor: preparado en Docker Compose, no ejecutado por falta de Docker.
+El archivo real usado fue:
 
-## Variables configuradas sin secretos
+```text
+deployment/staging/.env.staging
+```
 
-En `deployment/staging/.env.staging` local:
+No se versiona por Git.
 
-- `APP_ENV=staging`
-- `QR_DB_ENGINE=postgres`
-- `QR_POSTGRES_DSN=postgresql://.../bitora_staging`
-- `DATABASE_URL=postgresql://.../bitora_staging`
-- `BITORA_DISABLE_EMBEDDED_WORKER=1`
-- `BDF_WORKER_LIVE=1`
-- `BDF_STAGING_LIVE=1`
-- `BITORA_STORAGE_PATH=/bitora/storage`
-- `BITORA_BACKUP_PATH=/bitora/backups`
-- `BITORA_INTEGRATION_ENCRYPTION_KEY` configurada localmente.
-- `EMAIL_SAFE_MODE=true`
-- `EMAIL_FORCE_RECIPIENT` configurado con destinatario de staging.
-- `WHATSAPP_SAFE_MODE=true`
-- `WHATSAPP_FORCE_RECIPIENT` configurado con numero de prueba.
-- `GOOGLE_OAUTH_REDIRECT_URI` configurado.
-- `META_OAUTH_REDIRECT_URI` configurado.
+Variables relevantes, sin secretos:
 
-No se cargaron credenciales productivas ni de clientes.
+```text
+APP_ENV=staging
+BASE_URL=http://localhost:8788
+QR_DB_ENGINE=postgres
+DATABASE_ENGINE=postgres
+BITORA_DISABLE_EMBEDDED_WORKER=1
+BDF_WORKER_LIVE=1
+BDF_STAGING_LIVE=1
+EMAIL_SAFE_MODE=true
+WHATSAPP_SAFE_MODE=true
+BITORA_STORAGE_PATH=/bitora/storage
+BITORA_BACKUP_PATH=/bitora/backups
+```
 
 ## Comandos ejecutados
 
-```bash
+```powershell
 python deployment/scripts/bdf.py check
-```
-
-Resultado:
-
-- Python OK.
-- Compose file OK.
-- Env example OK.
-- Env file OK.
-- Safe env OK.
-- Docker no disponible.
-- Docker Compose no disponible.
-
-```bash
 python deployment/scripts/bdf.py build
 python deployment/scripts/bdf.py up
 python deployment/scripts/bdf.py status
-```
-
-Resultado:
-
-`BDF ERROR: Docker no esta instalado o no esta disponible en PATH.`
-
-```bash
 python deployment/scripts/bdf.py health
+python deployment/scripts/bdf.py migrate
+python deployment/scripts/bdf.py smoke-test
+python deployment/scripts/bdf.py backup
+python deployment/scripts/bdf.py restore deployment/backup/artifacts/bitora-staging-20260721-040529.sql --yes
+python deployment/scripts/bdf.py health
+python deployment/scripts/bdf.py smoke-test
 ```
 
-Resultado:
+## Resultados
 
-- APP: UNHEALTHY.
-- POSTGRES: UNKNOWN.
-- STORAGE: UNHEALTHY.
-- SAFE_MODE: ACTIVE.
-- BACKUP: AVAILABLE.
+```text
+Docker: PASSED
+Docker Compose: PASSED
+BDF check: PASSED
+Build: PASSED
+PostgreSQL: PASSED
+App: PASSED
+Worker separado: PASSED
+Monitor: PASSED
+Storage persistente: PASSED
+Safe mode: PASSED
+Health: PASSED
+Migrations: PASSED
+Backup: PASSED
+Restore: PASSED
+Smoke test final: PASSED
+```
 
-## Hallazgos
+## Servicios activos
 
-### Bloqueante
+```text
+bitora-staging-app: Up / healthy / http://localhost:8788
+bitora-staging-postgres: Up / healthy / localhost:55432
+bitora-staging-worker: Up
+bitora-staging-monitor: Up
+```
 
-Docker no esta instalado/disponible. Por lo tanto no se puede levantar staging real ni ejecutar PostgreSQL, worker, monitor, backup ni restore live.
+## Backup y restore
 
-### Correccion aplicada
+Backup validado:
 
-BDF ahora detecta la ausencia de Docker y devuelve error claro, sin traceback.
+```text
+Archivo: bitora-staging-20260721-040529.sql
+Tamanio: 213969 bytes
+SHA-256: 95dbc7c065bbb171d6deb95f8c995980f3c83f389af56b21a8175d2f84c81f1a
+```
 
-## Proveedores
+Restore validado:
 
-No se configuraron proveedores sandbox/live reales:
+```text
+Esquema public reconstruido.
+Dump restaurado.
+App, worker y monitor levantados nuevamente.
+Health posterior: PASSED.
+Smoke-test posterior: PASSED.
+```
 
-- Google OAuth: pendiente.
-- Email staging real: pendiente.
-- Meta/WhatsApp sandbox: pendiente.
+## Hallazgos corregidos
 
-## Resultado
+- Docker Desktop instalado por usuario no estaba en PATH global; BDF ahora lo detecta.
+- Build context incluia archivos locales pesados; se agrego `.dockerignore`.
+- PostgreSQL requirio ajustes de compatibilidad en migraciones, `statement_timeout`, `PRAGMA table_info`, `GROUP BY` y lectura escalar.
+- Restore BDF necesitaba limpiar esquema antes de restaurar.
+- Smoke-test `demo_live_10` necesitaba aislar su base temporal SQLite.
 
-Staging live no pudo ejecutarse en esta maquina por falta de Docker/Compose.
+## Restricciones pendientes
+
+Continuan fuera de esta etapa:
+
+```text
+google_oauth_live
+email_organization_live
+whatsapp_organization_live
+webhook_tenant_resolution_live
+```
+
+Estas validaciones requieren credenciales y proveedores sandbox/live reales.
+
+## Estado final
+
+```text
+STAGING LOCAL OPERATIVO CON RESTRICCIONES
+```

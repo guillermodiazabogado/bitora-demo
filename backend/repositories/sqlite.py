@@ -201,4 +201,11 @@ class SQLiteRepository:
 
     def scalar(self, db: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> Any:
         row = db.execute(sql, params).fetchone()
-        return row[0] if row else None
+        if not row:
+            return None
+        try:
+            return row[0]
+        except (KeyError, IndexError, TypeError):
+            if hasattr(row, "values"):
+                return next(iter(row.values()), None)
+            return None

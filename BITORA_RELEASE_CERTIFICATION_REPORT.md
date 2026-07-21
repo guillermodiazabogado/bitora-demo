@@ -1,61 +1,86 @@
 # BITORA Release Certification Report
 
+Fecha: 2026-07-21
+
 ## Objetivo
 
-Obtener certificacion Release completa sin gates obligatorios `OMITTED`.
+Registrar el estado de certificacion despues de levantar staging local mediante BDF.
 
 ## Commit base
 
-`6e05890e1c743911021a26426d7a5881e8355745`
+```text
+4f24920298647789d963dafe24fd35fa83635aa6
+```
 
-## Commit final
+## Estado BDF local
 
-El hash definitivo del commit que contiene este reporte se informa en el cierre de ejecucion. Un commit no puede autocontener su propio hash sin modificarlo.
+```text
+BDF local staging: PASSED
+PostgreSQL live local: PASSED
+Worker separado: PASSED
+Storage persistente: PASSED
+Safe mode: PASSED
+Backup local: PASSED
+Restore local: PASSED
+Smoke test: PASSED
+```
 
-## BSTF Release
+## BSTF quick
 
-Ultima ejecucion disponible del perfil release:
+Resultado final:
 
-- Resultado: RECHAZADO.
-- Pruebas ejecutadas: 42.
-- Hallazgos criticos/altos: 0.
-- Fallas funcionales conocidas: 0.
+```text
+PASSED
+```
 
-## Gates pendientes
+Incluye:
 
-Continuan sin poder aprobarse en esta maquina:
+- integridad;
+- convivencia de modulos;
+- email productivo en modo seguro/test;
+- WhatsApp productivo en modo seguro/test;
+- restauracion de evento;
+- storage por evento;
+- Demo Live 10;
+- compatibilidad PostgreSQL estatica.
 
-- `staging_environment`
-- `postgres_live`
-- `storage_persistent`
-- `workers_live`
-- `communications_safe_mode`
-- `google_oauth_live`
-- `email_organization_live`
-- `whatsapp_organization_live`
-- `webhook_tenant_resolution_live`
-- `backup_multitenant_live`
-- `restore_multitenant_live`
-- `disaster_recovery_live`
-- `endurance_24h`
-- `upgrade_from_previous_version`
+## Release completo
 
-## Causa
+No se declara Release certificada todavia.
 
-No existe entorno staging real ejecutandose porque Docker no esta instalado/disponible.
+Motivo:
 
-## Reproducibilidad
+```text
+Los proveedores externos live todavia no fueron configurados ni ejecutados.
+```
 
-No se pudo ejecutar la fase de destruir y reconstruir staging porque el entorno no llego a levantarse.
+Gates que pueden seguir omitidos en esta etapa:
+
+```text
+google_oauth_live
+email_organization_live
+whatsapp_organization_live
+webhook_tenant_resolution_live
+```
+
+Adicionalmente quedan pendientes para otra etapa:
+
+```text
+disaster_recovery_live
+endurance_24h
+upgrade_from_previous_version
+```
 
 ## Riesgos pendientes
 
-- Instalar Docker Desktop/WSL o ejecutar BDF en un host Linux/VPS/CI con Docker.
-- Completar credenciales sandbox/live.
-- Ejecutar BDF completo.
-- Ejecutar BSTF release dentro de staging.
-- Ejecutar reconstruccion limpia.
+- Conectar credenciales sandbox/live reales sin exponer secretos.
+- Validar callbacks publicos para OAuth y webhooks.
+- Ejecutar BSTF release completo.
+- Ejecutar reconstruccion limpia completa despues de configurar proveedores.
+- Ejecutar endurance real de 24 horas.
 
 ## Decision tecnica
 
-No corresponde certificar Release todavia.
+El entorno local ya esta operativo para staging y pruebas internas.
+
+La certificacion Release completa queda pendiente hasta ejecutar los gates externos live.
