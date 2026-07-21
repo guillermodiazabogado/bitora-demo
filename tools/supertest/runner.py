@@ -275,6 +275,13 @@ class SupertestRunner:
             if self.profile == "release":
                 plan.append(self.case("multievent_isolation_20_events", "security", "verificar_multievent_isolation_20_events.py", True))
                 plan.append(self.case("multitenant_integrations", "security", "verificar_multitenant_integrations.py", True))
+                plan.append(self.case("google_oauth_multitenant_live", "integrations", "verificar_google_oauth_multitenant_live.py", False))
+                plan.append(self.case("email_multitenant_live", "integrations", "verificar_email_multitenant_live.py", False))
+                plan.append(self.case("whatsapp_multitenant_live", "integrations", "verificar_whatsapp_multitenant_live.py", False))
+                plan.append(self.case("webhooks_multitenant_live", "integrations", "verificar_webhooks_multitenant_live.py", False))
+                plan.append(self.case("backup_multitenant_live", "backup_restore", "verificar_backup_multitenant_live.py", False))
+                plan.append(self.case("restore_multitenant_live", "backup_restore", "verificar_restore_multitenant_live.py", False))
+                plan.append(self.case("integrations_disaster_recovery", "disaster", "verificar_integrations_disaster_recovery.py", False))
                 plan.extend(self.release_gates())
             return plan
         if self.profile == "stress":
@@ -302,6 +309,12 @@ class SupertestRunner:
         ])
         storage_path = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
         storage_live = staging and storage_path.exists() and os.access(storage_path, os.W_OK)
+        google_status, google_detail = self.live_gate_status("google_oauth_multitenant_live")
+        email_status, email_detail = self.live_gate_status("email_multitenant_live")
+        whatsapp_status, whatsapp_detail = self.live_gate_status("whatsapp_multitenant_live")
+        webhook_status, webhook_detail = self.live_gate_status("webhooks_multitenant_live")
+        backup_status, backup_detail = self.live_gate_status("backup_multitenant_live")
+        restore_status, restore_detail = self.live_gate_status("restore_multitenant_live")
         return [
             self.gate("staging_environment", "environment", True, "passed" if staging else "omitted", "APP_ENV=staging requerido para release final."),
             self.gate("postgres_live", "database", True, "passed" if live_postgres else "omitted", "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging."),
@@ -311,17 +324,37 @@ class SupertestRunner:
             self.gate("multitenant_organization_isolation", "security", True, "passed", "Cubierto por verificar_multitenant_integrations.py."),
             self.gate("integration_secret_protection", "security", True, "passed", "Secretos cifrados y respuestas sanitizadas validadas localmente."),
             self.gate("integration_assignment", "integrations", True, "passed", "Asignacion evento-integracion bloquea cruces entre organizaciones."),
-            self.gate("google_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente OAuth real con credenciales de cliente."),
-            self.gate("meta_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente OAuth/Meta real y webhooks productivos."),
-            self.gate("email_integration_flow", "integrations", False, "omitted", "Preparado a nivel de modelo; pendiente prueba live con dominio y proveedor asignado por organizacion."),
-            self.gate("webhook_tenant_resolution", "integrations", False, "omitted", "Pendiente prueba live con webhooks reales y resolucion tenant."),
+            self.gate("google_oauth_live", "integrations", True, google_status, google_detail),
+            self.gate("email_organization_live", "integrations", True, email_status, email_detail),
+            self.gate("whatsapp_organization_live", "integrations", True, whatsapp_status, whatsapp_detail),
+            self.gate("webhook_tenant_resolution_live", "integrations", True, webhook_status, webhook_detail),
             self.gate("communications_tenant_isolation", "communications", True, "passed", "La cola guarda organization_id/integration_id y aplica safe mode por organizacion."),
-            self.gate("backup_multitenant", "backup_restore", False, "omitted", "Pendiente extender backup completo con varias organizaciones."),
-            self.gate("restore_multitenant", "backup_restore", False, "omitted", "Pendiente prueba live de restauracion multiorganizacion."),
+            self.gate("backup_multitenant_live", "backup_restore", True, backup_status, backup_detail),
+            self.gate("restore_multitenant_live", "backup_restore", True, restore_status, restore_detail),
             self.gate("disaster_recovery_live", "disaster", True, "omitted", "Pendiente perfil --disaster en staging destructible."),
             self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
             self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
         ]
+
+    def live_gate_status(self, name: str) -> tuple[str, str]:
+        path = ROOT / "output" / "live_integrations" / f"{name}.json"
+        if not path.exists():
+            return "omitted", f"Sin evidencia live/contract. Falta ejecutar {name}."
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return "failed", f"Evidencia invalida: {path}"
+        mode = payload.get("mode", "unknown")
+        status = payload.get("status", "failed")
+        missing = payload.get("missing_env") or []
+        if mode == "live" and status == "passed":
+            return "passed", "Evidencia live aprobada."
+        if status == "passed" and mode in {"contract", "sandbox"}:
+            return "omitted", f"Solo se ejecuto modo {mode}; falta proveedor live real."
+        detail = f"Modo {mode}; estado {status}."
+        if missing:
+            detail += " Faltan variables: " + ", ".join(missing)
+        return "omitted" if status == "omitted" else "failed", detail
 
     def disaster_gates(self) -> list[dict[str, Any]]:
         staging = os.environ.get("APP_ENV") == "staging"

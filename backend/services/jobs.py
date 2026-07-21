@@ -26,20 +26,39 @@ class JobQueueService:
         max_retries: int = 3,
         actor: str = "system",
         event_id: int | None = None,
+        organization_id: int | None = None,
+        integration_id: int | None = None,
     ) -> int:
         with self.connect() as db:
-            cursor = db.execute(
-                """
-                INSERT INTO jobs (
-                    event_id, kind, priority, status, payload, retry_count, max_retries,
-                    retry_at, created_by, created_at, updated_at
+            if getattr(db, "engine", "") == "postgres":
+                has_tenant_columns = True
+            else:
+                columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)").fetchall()}
+                has_tenant_columns = {"organization_id", "integration_id"}.issubset(columns)
+            if has_tenant_columns:
+                cursor = db.execute(
+                    """
+                    INSERT INTO jobs (
+                        event_id, organization_id, integration_id, kind, priority, status, payload,
+                        retry_count, max_retries, retry_at, created_by, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, NULL, ?, ?, ?)
+                    """,
+                    (event_id, organization_id, integration_id, kind, priority, json.dumps(payload, ensure_ascii=True), max_retries, actor, utc_now(), utc_now()),
                 )
-                VALUES (?, ?, ?, 'pending', ?, 0, ?, NULL, ?, ?, ?)
-                """,
-                (event_id, kind, priority, json.dumps(payload, ensure_ascii=True), max_retries, actor, utc_now(), utc_now()),
-            )
+            else:
+                cursor = db.execute(
+                    """
+                    INSERT INTO jobs (
+                        event_id, kind, priority, status, payload, retry_count, max_retries,
+                        retry_at, created_by, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, 'pending', ?, 0, ?, NULL, ?, ?, ?)
+                    """,
+                    (event_id, kind, priority, json.dumps(payload, ensure_ascii=True), max_retries, actor, utc_now(), utc_now()),
+                )
             job_id = int(cursor.lastrowid)
-            self.audit(db, actor, "job.created", "job", job_id, {"kind": kind, "priority": priority, "event_id": event_id})
+            self.audit(db, actor, "job.created", "job", job_id, {"kind": kind, "priority": priority, "event_id": event_id, "organization_id": organization_id, "integration_id": integration_id})
         return job_id
 
     def claim_next(self, worker_id: str) -> dict[str, Any] | None:

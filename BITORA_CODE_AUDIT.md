@@ -1,6 +1,6 @@
 # BITORA Code Audit
 
-Archivos Python analizados: 117
+Archivos Python analizados: 125
 Errores de sintaxis: 0
 Funciones extensas detectadas: 20
 Marcadores criticos: 0
@@ -25,7 +25,7 @@ Marcadores criticos: 0
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v6_8_data_visualization.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v7_whatsapp_productivo.py)
 - **MEDIUM** [code] Funcion muy extensa: _simulate_peak_operations ocupa mas de 120 lineas (backend/services/demo_real.py)
-- **LOW** [code] Funcion repetida por nombre: assert_true: verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52, verificar_layout_control_room.py:36
+- **LOW** [code] Funcion repetida por nombre: assert_true: live_integrations_utils.py:35, verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52
 - **LOW** [code] Funcion repetida por nombre: connect: server.py:454, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_persistencia_backups.py:61, verificar_storage_event_backup_restore.py:87, verificar_v6_1_email_productivo.py:18
 - **LOW** [code] Funcion repetida por nombre: do_POST: server.py:5527, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21
 - **LOW** [code] Funcion repetida por nombre: main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9976, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43

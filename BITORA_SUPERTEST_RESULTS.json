@@ -2,56 +2,42 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-20T23:05:22",
+    "started_at": "2026-07-20T23:18:04",
     "python": "3.12.13",
     "platform": "Windows-11-10.0.26200-SP0",
     "branch": "main",
-    "commit": "9bbba102b37ae19c160c54af038da5eb41d14937",
+    "commit": "3b5aca166b3da733e46011970413e1785a21d52f",
     "dirty_files": [
       "M .env.example",
-      " M BITORA_ARCHITECTURE_REPORT.md",
-      " M BITORA_BACKUP_REPORT.md",
-      " M BITORA_CODE_AUDIT.md",
-      " M BITORA_DATABASE_REPORT.md",
-      " M BITORA_DISASTER_RECOVERY_REPORT.md",
-      " M BITORA_FINAL_RELEASE_CERTIFICATION.md",
-      " M BITORA_LOAD_TEST_REPORT.md",
-      " M BITORA_MULTIEVENT_ISOLATION_REPORT.md",
-      " M BITORA_RELEASE_CANDIDATE.md",
-      " M BITORA_RELEASE_CERTIFICATION.md",
-      " M BITORA_RESTORE_REPORT.md",
-      " M BITORA_SECURITY_REPORT.md",
-      " M BITORA_STORAGE_VALIDATION_REPORT.md",
-      " M BITORA_SUPERTEST_REPORT.html",
-      " M BITORA_SUPERTEST_RESULTS.json",
-      " M BITORA_SUPERTEST_SUMMARY.md",
-      " M backend/database.py",
+      " M backend/services/jobs.py",
+      " M deployment/scripts/bdf.py",
       " M deployment/staging/.env.staging.example",
-      " M frontend/app.js",
-      " M requirements.txt",
-      " M server.py",
-      " M static/app.js",
       " M tools/supertest/runner.py",
-      "?? BITORA_EMAIL_INTEGRATION_SETUP.md",
-      "?? BITORA_GOOGLE_INTEGRATION_SETUP.md",
-      "?? BITORA_INTEGRATIONS_ARCHITECTURE.md",
-      "?? BITORA_INTEGRATIONS_TEST_REPORT.md",
-      "?? BITORA_INTEGRATION_OPERATIONS.md",
-      "?? BITORA_INTEGRATION_SECURITY.md",
-      "?? BITORA_META_WHATSAPP_INTEGRATION_SETUP.md",
-      "?? BITORA_MULTITENANT_ARCHITECTURE.md",
-      "?? BITORA_MULTITENANT_CURRENT_STATE.md",
-      "?? BITORA_MULTITENANT_FINAL_STATUS.md",
-      "?? BITORA_MULTITENANT_IMPLEMENTATION_REPORT.md",
-      "?? BITORA_MULTITENANT_MIGRATION.md",
-      "?? BITORA_MULTITENANT_TEST_REPORT.md",
-      "?? BITORA_ORGANIZATIONS_MODEL.md",
-      "?? backend/migrations/014_multitenant_integrations.sql",
-      "?? backend/services/integration_secrets.py",
-      "?? verificar_multitenant_integrations.py"
+      "?? BITORA_EMAIL_LIVE_SETUP.md",
+      "?? BITORA_GOOGLE_OAUTH_LIVE_SETUP.md",
+      "?? BITORA_LIVE_INTEGRATIONS_CURRENT_STATE.md",
+      "?? BITORA_LIVE_INTEGRATIONS_FINAL_STATUS.md",
+      "?? BITORA_LIVE_INTEGRATIONS_IMPLEMENTATION_REPORT.md",
+      "?? BITORA_LIVE_INTEGRATIONS_RUNBOOK.md",
+      "?? BITORA_LIVE_INTEGRATIONS_TEST_REPORT.md",
+      "?? BITORA_META_WHATSAPP_LIVE_SETUP.md",
+      "?? BITORA_MULTITENANT_BACKUP_LIVE_REPORT.md",
+      "?? BITORA_MULTITENANT_BACKUP_RESTORE.md",
+      "?? BITORA_MULTITENANT_RESTORE_LIVE_REPORT.md",
+      "?? BITORA_STAGING_LIVE_REPORT.md",
+      "?? BITORA_STAGING_LIVE_SETUP.md",
+      "?? BITORA_WEBHOOKS_MULTITENANT.md",
+      "?? live_integrations_utils.py",
+      "?? verificar_backup_multitenant_live.py",
+      "?? verificar_email_multitenant_live.py",
+      "?? verificar_google_oauth_multitenant_live.py",
+      "?? verificar_integrations_disaster_recovery.py",
+      "?? verificar_restore_multitenant_live.py",
+      "?? verificar_webhooks_multitenant_live.py",
+      "?? verificar_whatsapp_multitenant_live.py"
     ],
     "max_migration": "014_multitenant_integrations.sql",
-    "code_checksum": "650658f203b9f3bd95a654e711b916eedcff420826ed68ec1f96fe120d233913",
+    "code_checksum": "6be260439a29f194dbb6ba4877cccc6df1b95f40cb7faab11f6765bcd0bc22d1",
     "critical_env": {
       "APP_ENV": "",
       "BASE_URL": "",
@@ -68,8 +54,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-20T23:05:22",
-  "finished_at": "2026-07-20T23:05:49",
+  "started_at": "2026-07-20T23:18:04",
+  "finished_at": "2026-07-20T23:18:37",
   "findings": [
     {
       "severity": "info",
@@ -222,7 +208,7 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "assert_true: verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52, verificar_layout_control_room.py:36",
+      "detail": "assert_true: live_integrations_utils.py:35, verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52",
       "file": ""
     },
     {
@@ -411,7 +397,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.03,
+      "duration_seconds": 2.0,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -425,7 +411,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.14,
+      "duration_seconds": 2.16,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -439,7 +425,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.87,
+      "duration_seconds": 0.79,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -453,7 +439,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.14,
+      "duration_seconds": 0.97,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -467,7 +453,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.46,
+      "duration_seconds": 0.34,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -481,7 +467,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.4,
+      "duration_seconds": 0.34,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -537,7 +523,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.82,
+      "duration_seconds": 0.84,
       "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -551,7 +537,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.8,
+      "duration_seconds": 0.84,
       "stdout_tail": "{\"ok\": true, \"event_id\": 1, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -565,7 +551,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.47,
+      "duration_seconds": 1.5,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -579,7 +565,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.5,
+      "duration_seconds": 1.46,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -593,7 +579,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.65,
+      "duration_seconds": 1.64,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -607,7 +593,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.59,
+      "duration_seconds": 5.33,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -621,7 +607,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.4,
+      "duration_seconds": 3.49,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -635,8 +621,106 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.81,
+      "duration_seconds": 0.8,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_multitenant_live",
+      "category": "integrations",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_google_oauth_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.8,
+      "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"GOOGLE_OAUTH_CLIENT_ID\", \"GOOGLE_OAUTH_CLIENT_SECRET\", \"GOOGLE_OAUTH_REDIRECT_URI\"], \"checks\": {\"state_single_use_contract\": true, \"token_encryption\": true, \"cross_organization_callback_blocked_by_model\": true, \"tokens_exposed\": 0, \"callbacks_misassigned\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "email_multitenant_live",
+      "category": "integrations",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_email_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.79,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"EMAIL_PROVIDER\", \"EMAIL_FORCE_RECIPIENT\", \"EMAIL_SAFE_MODE\"], \"checks\": {\"queue_has_organization\": true, \"queue_has_integration\": true, \"safe_mode_required\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "whatsapp_multitenant_live",
+      "category": "integrations",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_whatsapp_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.82,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_ACCESS_TOKEN\", \"WHATSAPP_PHONE_NUMBER_ID\", \"WHATSAPP_BUSINESS_ACCOUNT_ID\", \"WHATSAPP_FORCE_RECIPIENT\", \"WHATSAPP_SAFE_MODE\"], \"checks\": {\"whatsapp_integration_assignment\": true, \"safe_mode_required\": true, \"cross_messages\": 0, \"misassigned_webhooks\": 0, \"tokens_exposed\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "webhooks_multitenant_live",
+      "category": "integrations",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_webhooks_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.8,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"EMAIL_WEBHOOK_SECRET\", \"WHATSAPP_VERIFY_TOKEN\", \"WHATSAPP_APP_SECRET\"], \"checks\": {\"email_webhook_resolves_queue\": true, \"duplicate_idempotent\": true, \"cross_webhooks_processed\": 0, \"invalid_signatures_accepted\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "backup_multitenant_live",
+      "category": "backup_restore",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_backup_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.81,
+      "stdout_tail": "{\"name\": \"backup_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BITORA_STORAGE_PATH\"], \"checks\": {\"organizations_present\": 2, \"events_with_organization\": 2, \"plain_secrets\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "restore_multitenant_live",
+      "category": "backup_restore",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_restore_multitenant_live.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.8,
+      "stdout_tail": "{\"name\": \"restore_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BITORA_STORAGE_PATH\"], \"checks\": {\"external_jobs_emitted_after_restore\": 0, \"cross_organization_after_restore\": 0, \"secrets_exposed\": 0, \"safe_mode_after_restore\": true}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "integrations_disaster_recovery",
+      "category": "disaster",
+      "command": [
+        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "verificar_integrations_disaster_recovery.py"
+      ],
+      "required": false,
+      "status": "passed",
+      "duration_seconds": 0.79,
+      "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BDF_WORKER_LIVE\"], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -729,46 +813,46 @@
       "exit_code": 0
     },
     {
-      "name": "google_integration_flow",
+      "name": "google_oauth_live",
       "category": "integrations",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Preparado a nivel de modelo; pendiente OAuth real con credenciales de cliente.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI",
       "stderr_tail": "",
       "exit_code": null
     },
     {
-      "name": "meta_integration_flow",
+      "name": "email_organization_live",
       "category": "integrations",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Preparado a nivel de modelo; pendiente OAuth/Meta real y webhooks productivos.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: EMAIL_PROVIDER, EMAIL_FORCE_RECIPIENT, EMAIL_SAFE_MODE",
       "stderr_tail": "",
       "exit_code": null
     },
     {
-      "name": "email_integration_flow",
+      "name": "whatsapp_organization_live",
       "category": "integrations",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Preparado a nivel de modelo; pendiente prueba live con dominio y proveedor asignado por organizacion.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_BUSINESS_ACCOUNT_ID, WHATSAPP_FORCE_RECIPIENT, WHATSAPP_SAFE_MODE",
       "stderr_tail": "",
       "exit_code": null
     },
     {
-      "name": "webhook_tenant_resolution",
+      "name": "webhook_tenant_resolution_live",
       "category": "integrations",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Pendiente prueba live con webhooks reales y resolucion tenant.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: EMAIL_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -784,24 +868,24 @@
       "exit_code": 0
     },
     {
-      "name": "backup_multitenant",
+      "name": "backup_multitenant_live",
       "category": "backup_restore",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Pendiente extender backup completo con varias organizaciones.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH",
       "stderr_tail": "",
       "exit_code": null
     },
     {
-      "name": "restore_multitenant",
+      "name": "restore_multitenant_live",
       "category": "backup_restore",
       "command": [],
-      "required": false,
+      "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Pendiente prueba live de restauracion multiorganizacion.",
+      "stdout_tail": "Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -846,7 +930,7 @@
       "code": 0,
       "database": 46,
       "communications": 50,
-      "backup_restore": 20,
+      "backup_restore": 0,
       "events": 100,
       "permissions": 100,
       "functional": 100,
@@ -858,7 +942,7 @@
       "upgrade": 50,
       "environment": 50
     },
-    "weighted_average": 59.6
+    "weighted_average": 58.4
   },
   "approved": false
 }

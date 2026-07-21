@@ -2,11 +2,11 @@
 
 Decision: **NO APROBADA**
 
-Version evaluada: `9bbba102b37ae19c160c54af038da5eb41d14937`
+Version evaluada: `3b5aca166b3da733e46011970413e1785a21d52f`
 Branch: `main`
 Perfil: `release`
-Score: **59.6/100**
-Fecha: 2026-07-20T23:05:49
+Score: **58.4/100**
+Fecha: 2026-07-20T23:18:37
 
 ## Pruebas y gates
 
@@ -27,6 +27,13 @@ Fecha: 2026-07-20T23:05:49
 - PASSED `concurrencia_critica`
 - PASSED `multievent_isolation_20_events`
 - PASSED `multitenant_integrations`
+- PASSED `google_oauth_multitenant_live`
+- PASSED `email_multitenant_live`
+- PASSED `whatsapp_multitenant_live`
+- PASSED `webhooks_multitenant_live`
+- PASSED `backup_multitenant_live`
+- PASSED `restore_multitenant_live`
+- PASSED `integrations_disaster_recovery`
 - OMITTED `staging_environment`
 - OMITTED `postgres_live`
 - OMITTED `storage_persistent`
@@ -35,13 +42,13 @@ Fecha: 2026-07-20T23:05:49
 - PASSED `multitenant_organization_isolation`
 - PASSED `integration_secret_protection`
 - PASSED `integration_assignment`
-- OMITTED `google_integration_flow`
-- OMITTED `meta_integration_flow`
-- OMITTED `email_integration_flow`
-- OMITTED `webhook_tenant_resolution`
+- OMITTED `google_oauth_live`
+- OMITTED `email_organization_live`
+- OMITTED `whatsapp_organization_live`
+- OMITTED `webhook_tenant_resolution_live`
 - PASSED `communications_tenant_isolation`
-- OMITTED `backup_multitenant`
-- OMITTED `restore_multitenant`
+- OMITTED `backup_multitenant_live`
+- OMITTED `restore_multitenant_live`
 - OMITTED `disaster_recovery_live`
 - OMITTED `endurance_24h`
 - OMITTED `upgrade_from_previous_version`
@@ -53,6 +60,12 @@ Fecha: 2026-07-20T23:05:49
 - `storage_persistent`: Storage persistente de staging requerido. Ruta evaluada: C:\Users\Noxie-PC\Documents\qr white label\storage
 - `workers_live`: Requiere levantar worker separado y validar recuperacion tras reinicio.
 - `communications_safe_mode`: Safe mode requiere destinatarios forzados de email y WhatsApp.
+- `google_oauth_live`: Modo contract; estado omitted. Faltan variables: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI
+- `email_organization_live`: Modo contract; estado omitted. Faltan variables: EMAIL_PROVIDER, EMAIL_FORCE_RECIPIENT, EMAIL_SAFE_MODE
+- `whatsapp_organization_live`: Modo contract; estado omitted. Faltan variables: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_BUSINESS_ACCOUNT_ID, WHATSAPP_FORCE_RECIPIENT, WHATSAPP_SAFE_MODE
+- `webhook_tenant_resolution_live`: Modo contract; estado omitted. Faltan variables: EMAIL_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET
+- `backup_multitenant_live`: Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH
+- `restore_multitenant_live`: Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH
 - `disaster_recovery_live`: Pendiente perfil --disaster en staging destructible.
 - `endurance_24h`: Pendiente ejecucion real de 24 horas.
 - `upgrade_from_previous_version`: Pendiente prueba de actualizacion desde version anterior con datos.

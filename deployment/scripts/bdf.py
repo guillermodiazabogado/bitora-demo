@@ -263,6 +263,22 @@ def safe_env_errors(env: dict[str, str]) -> list[str]:
         errors.append("Configuracion parece contener referencias productivas")
     if not safe_mode_active(env):
         errors.append("Safe mode de email/whatsapp requiere force/test recipients")
+    if not env.get("BITORA_INTEGRATION_ENCRYPTION_KEY"):
+        errors.append("BITORA_INTEGRATION_ENCRYPTION_KEY es obligatoria en staging")
+    if env.get("BITORA_DISABLE_EMBEDDED_WORKER") != "1":
+        errors.append("BITORA_DISABLE_EMBEDDED_WORKER=1 es obligatorio para validar worker separado")
+    if env.get("BDF_WORKER_LIVE") != "1":
+        errors.append("BDF_WORKER_LIVE=1 es obligatorio para validar worker separado")
+    storage_path = env.get("BITORA_STORAGE_PATH", "")
+    if not storage_path:
+        errors.append("BITORA_STORAGE_PATH es obligatorio")
+    callback_keys = ["GOOGLE_OAUTH_REDIRECT_URI", "META_OAUTH_REDIRECT_URI"]
+    for key in callback_keys:
+        value = env.get(key, "")
+        if not value:
+            errors.append(f"{key} es obligatorio para staging de integraciones")
+        elif any(token in value.lower() for token in ("production", "prod", "bitora-demo.onrender.com")):
+            errors.append(f"{key} no debe apuntar a produccion")
     return errors
 
 

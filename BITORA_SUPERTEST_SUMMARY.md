@@ -2,30 +2,37 @@
 
 Perfil: `release`
 Resultado: RECHAZADO
-Score: 59.6/100
-Pruebas ejecutadas: 35
+Score: 58.4/100
+Pruebas ejecutadas: 42
 Pruebas fallidas/timeouts: 14
 Hallazgos criticos/altos: 0
 
 ## Pruebas
 
-- PASSED `integridad` (2.03s)
-- PASSED `convivencia` (2.14s)
-- PASSED `email_productivo` (0.87s)
-- PASSED `whatsapp_productivo` (1.14s)
-- PASSED `event_restore` (0.46s)
-- PASSED `storage_event_backup_restore` (0.4s)
+- PASSED `integridad` (2.0s)
+- PASSED `convivencia` (2.16s)
+- PASSED `email_productivo` (0.79s)
+- PASSED `whatsapp_productivo` (0.97s)
+- PASSED `event_restore` (0.34s)
+- PASSED `storage_event_backup_restore` (0.34s)
 - PASSED `demo_live_10` (0.97s)
 - PASSED `postgres_static` (0.26s)
 - PASSED `production_postgres` (0.07s)
-- PASSED `comunicaciones_permisos` (0.82s)
-- PASSED `usuarios_eventos` (0.8s)
-- PASSED `seguridad_basica` (1.47s)
-- PASSED `datos_basura` (1.5s)
-- PASSED `errores_humanos` (1.65s)
-- PASSED `concurrencia_critica` (5.59s)
-- PASSED `multievent_isolation_20_events` (3.4s)
-- PASSED `multitenant_integrations` (0.81s)
+- PASSED `comunicaciones_permisos` (0.84s)
+- PASSED `usuarios_eventos` (0.84s)
+- PASSED `seguridad_basica` (1.5s)
+- PASSED `datos_basura` (1.46s)
+- PASSED `errores_humanos` (1.64s)
+- PASSED `concurrencia_critica` (5.33s)
+- PASSED `multievent_isolation_20_events` (3.49s)
+- PASSED `multitenant_integrations` (0.8s)
+- PASSED `google_oauth_multitenant_live` (0.8s)
+- PASSED `email_multitenant_live` (0.79s)
+- PASSED `whatsapp_multitenant_live` (0.82s)
+- PASSED `webhooks_multitenant_live` (0.8s)
+- PASSED `backup_multitenant_live` (0.81s)
+- PASSED `restore_multitenant_live` (0.8s)
+- PASSED `integrations_disaster_recovery` (0.79s)
 - OMITTED `staging_environment` (0s)
 - OMITTED `postgres_live` (0s)
 - OMITTED `storage_persistent` (0s)
@@ -34,13 +41,13 @@ Hallazgos criticos/altos: 0
 - PASSED `multitenant_organization_isolation` (0s)
 - PASSED `integration_secret_protection` (0s)
 - PASSED `integration_assignment` (0s)
-- OMITTED `google_integration_flow` (0s)
-- OMITTED `meta_integration_flow` (0s)
-- OMITTED `email_integration_flow` (0s)
-- OMITTED `webhook_tenant_resolution` (0s)
+- OMITTED `google_oauth_live` (0s)
+- OMITTED `email_organization_live` (0s)
+- OMITTED `whatsapp_organization_live` (0s)
+- OMITTED `webhook_tenant_resolution_live` (0s)
 - PASSED `communications_tenant_isolation` (0s)
-- OMITTED `backup_multitenant` (0s)
-- OMITTED `restore_multitenant` (0s)
+- OMITTED `backup_multitenant_live` (0s)
+- OMITTED `restore_multitenant_live` (0s)
 - OMITTED `disaster_recovery_live` (0s)
 - OMITTED `endurance_24h` (0s)
 - OMITTED `upgrade_from_previous_version` (0s)
@@ -68,7 +75,7 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v6_8_data_visualization.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v7_whatsapp_productivo.py)
 - **MEDIUM** [code] Funcion muy extensa: _simulate_peak_operations ocupa mas de 120 lineas (backend/services/demo_real.py)
-- **LOW** [code] Funcion repetida por nombre: assert_true: verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52, verificar_layout_control_room.py:36
+- **LOW** [code] Funcion repetida por nombre: assert_true: live_integrations_utils.py:35, verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52
 - **LOW** [code] Funcion repetida por nombre: connect: server.py:454, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_persistencia_backups.py:61, verificar_storage_event_backup_restore.py:87, verificar_v6_1_email_productivo.py:18
 - **LOW** [code] Funcion repetida por nombre: do_POST: server.py:5527, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21
 - **LOW** [code] Funcion repetida por nombre: main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9976, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43
