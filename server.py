@@ -54,6 +54,7 @@ from backend.services.google_oauth import (
     GoogleOAuthClient,
     GoogleOAuthError,
     granted_scopes,
+    has_required_scopes,
     load_google_oauth_config,
     sanitize_google_error,
     token_expires_at,
@@ -5552,6 +5553,11 @@ def network_info(handler: SimpleHTTPRequestHandler) -> dict:
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "AcreditacionesMVP/0.1"
 
+    def log_message(self, format: str, *args) -> None:
+        if args and isinstance(args[0], str) and "/api/integrations/google/callback?" in args[0]:
+            args = (re.sub(r"(/api/integrations/google/callback)\?[^ ]*", r"\1?[redacted]", args[0]), *args[1:])
+        super().log_message(format, *args)
+
     def send_response(self, code: int, message: str | None = None) -> None:
         self._response_status = int(code)
         super().send_response(code, message)
@@ -5862,9 +5868,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         account = client.userinfo(access_token)
                         fallback_scopes = google_oauth_scopes()
                         scopes = granted_scopes(tokens, fallback_scopes)
-                        required = set(fallback_scopes)
-                        granted = set(scopes)
-                        if not required.issubset(granted):
+                        if not has_required_scopes(fallback_scopes, scopes):
                             raise GoogleOAuthError("Google no concedio todos los scopes requeridos", "insufficient_scopes")
                         expires_at = token_expires_at(now_iso, tokens.get("expires_in"))
                         payload = {

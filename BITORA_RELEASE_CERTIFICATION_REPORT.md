@@ -1,126 +1,134 @@
 # BITORA Release Certification Report
 
-Fecha: 2026-07-21
+Fecha: 2026-07-22
 
 ## Objetivo
 
-Registrar el estado de certificacion despues de levantar staging local mediante BDF.
+Registrar el estado de certificacion despues de activar Google OAuth live por organizacion en staging local.
 
-## Commit base
+## Estado actual
 
 ```text
-3163057aea826e22ae6f50da2c4f5eca9f6e1974
+Release global: NO APROBADA
+Motivo: quedan gates live externos y pruebas prolongadas pendientes.
+Google OAuth Live: PASSED
 ```
 
-## Estado BDF local
+## Entorno BDF local
 
 ```text
-BDF local staging: PASSED
-PostgreSQL live local: PASSED
+Docker: PASSED
+Docker Compose: PASSED
+PostgreSQL: PASSED
+Aplicacion BITORA: PASSED
 Worker separado: PASSED
+Monitor: PASSED
 Storage persistente: PASSED
-Safe mode: PASSED
+Safe Mode: PASSED
 Backup local: PASSED
 Restore local: PASSED
-Smoke test: PASSED
+Health: PASSED
 ```
 
-## BSTF quick
+## Google OAuth Live
 
-Resultado final:
-
-```text
-PASSED
-```
-
-Incluye:
-
-- integridad;
-- convivencia de modulos;
-- email productivo en modo seguro/test;
-- WhatsApp productivo en modo seguro/test;
-- restauracion de evento;
-- storage por evento;
-- Demo Live 10;
-- compatibilidad PostgreSQL estatica.
-
-## Email live
-
-La etapa Email Live fue ejecutada y certificada despues de conectar Resend en staging.
+La etapa Google OAuth Live fue ejecutada y certificada despues de conectar una aplicacion Google Cloud de staging.
 
 Resultado:
 
 ```text
-email_multitenant_live: passed
-email_organization_live: passed
+google_oauth_live: PASSED
+google_oauth_multitenant_live: PASSED
 ```
 
 Evidencia:
 
 ```text
-provider=resend
-message_id_masked=edcfdd***ed642d
-recepcion_gmail=confirmada
-safe_mode=active
-cross_emails=0
-secrets_exposed=0
+OAuth iniciado desde BITORA: PASSED
+Consentimiento Google real: PASSED
+Callback real: PASSED
+Userinfo live: PASSED
+Refresh live: PASSED
+Revocacion/desconexion: PASSED
+Reconexion: PASSED
+Auditoria: PASSED
+tokens_exposed: 0
+cross_event_assignments: 0
+account_email_masked: gui***@gmail.com
 ```
 
-## Release completo
-
-No se declara Release final completa todavia.
-
-Motivo:
+## Correcciones incorporadas
 
 ```text
-Todavia faltan proveedores externos live que no forman parte de la etapa Email.
+Scope normalization para Google: PASSED
+Sanitizacion de callback OAuth en logs: PASSED
+Verificador live Google actualizado contra esquema real PostgreSQL: PASSED
 ```
 
-Gates que pueden seguir omitidos en esta etapa:
+## BSTF Release ejecutado
+
+Comando ejecutado dentro del contenedor staging:
 
 ```text
-google_oauth_live
-whatsapp_organization_live
-webhook_tenant_resolution_live
+python run_bitora_supertest.py --release
 ```
 
-Detalle de Google OAuth:
+Resultado general:
 
 ```text
-google_oauth_live: omitted
-enablement: implementado
-motivo live pendiente: faltan credenciales Google Cloud y consentimiento real contra Google.
-reporte: GOOGLE_OAUTH_LIVE_CERTIFICATION_REPORT.md
+approved: false
+weighted_average: 70.1
 ```
 
-Gates habilitantes Google agregados en BSTF release:
+Google dentro de BSTF:
 
 ```text
-google_oauth_http_flow
-google_oauth_state_security
-google_oauth_multitenant_isolation
-google_oauth_refresh_contract
-google_oauth_backup_restore
+google_oauth_http_flow: passed
+google_oauth_state_security: passed
+google_oauth_multitenant_isolation: passed
+google_oauth_refresh_contract: passed
+google_oauth_backup_restore: passed
+google_oauth_multitenant_live: passed
+google_oauth_live: passed
 ```
 
-Adicionalmente quedan pendientes para otra etapa:
+## Gates aun pendientes
+
+Estos gates siguen pendientes y explican por que la Release global no se declara certificada:
 
 ```text
-disaster_recovery_live
-endurance_24h
-upgrade_from_previous_version
+email_organization_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
+whatsapp_organization_live: omitted
+webhook_tenant_resolution_live: omitted
+disaster_recovery_live: omitted
+endurance_24h: omitted
+upgrade_from_previous_version: omitted
+```
+
+Nota: Email Live ya fue certificado en una etapa anterior, pero la corrida actual dentro del contenedor no tenia la evidencia `email_multitenant_live` disponible en `output/live_integrations`. Debe reejecutarse o persistirse esa evidencia antes de una Release final completa.
+
+## Seguridad
+
+```text
+Secretos versionados: 0
+Tokens OAuth expuestos: 0
+Authorization code en logs nuevos: redacted
+Datos personales en reportes: enmascarados
 ```
 
 ## Riesgos pendientes
 
-- Conectar credenciales sandbox/live reales sin exponer secretos.
-- Validar callbacks publicos para OAuth y webhooks.
-- Ejecutar BSTF release completo.
-- Ejecutar reconstruccion limpia completa despues de configurar proveedores.
-- Ejecutar endurance real de 24 horas.
+- Rotar el Client Secret de Google antes de uso prolongado o productivo.
+- Reejecutar Email Live en el mismo entorno de certificacion final.
+- Certificar WhatsApp Live.
+- Certificar webhooks tenant-aware live.
+- Ejecutar Disaster Recovery live.
+- Ejecutar Endurance 24 horas.
+- Ejecutar upgrade desde version anterior.
 
 ## Decision tecnica
 
-El entorno local ya esta operativo para staging y pruebas internas.
-
-La certificacion Release completa queda pendiente hasta ejecutar los gates externos live.
+```text
+GOOGLE OAUTH LIVE CERTIFICADO
+RELEASE GLOBAL NO CERTIFICADA TODAVIA
+```

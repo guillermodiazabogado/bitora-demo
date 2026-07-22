@@ -192,3 +192,24 @@ def token_expires_at(now_iso: Callable[[], str], expires_in: int | str | None) -
 def granted_scopes(payload: dict[str, Any], fallback: list[str]) -> list[str]:
     scope = str(payload.get("scope") or "").strip()
     return [item for item in scope.split() if item] if scope else fallback
+
+
+_SCOPE_ALIASES = {
+    "email": {"email", "https://www.googleapis.com/auth/userinfo.email"},
+    "profile": {"profile", "https://www.googleapis.com/auth/userinfo.profile"},
+    "openid": {"openid"},
+}
+
+
+def normalize_google_scope(scope: str) -> str:
+    value = str(scope or "").strip()
+    for canonical, aliases in _SCOPE_ALIASES.items():
+        if value in aliases:
+            return canonical
+    return value
+
+
+def has_required_scopes(required: list[str], granted: list[str]) -> bool:
+    required_set = {normalize_google_scope(scope) for scope in required}
+    granted_set = {normalize_google_scope(scope) for scope in granted}
+    return required_set.issubset(granted_set)

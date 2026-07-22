@@ -1,57 +1,11 @@
 # BITORA Release Final Status
 
-Fecha: 2026-07-21
+Fecha: 2026-07-22
 
 Decision:
 
 ```text
 RELEASE CERTIFICADA CON RESTRICCIONES
-```
-
-## Alcance de esta decision
-
-La certificacion con restricciones aplica al staging local BDF.
-
-Queda certificado localmente:
-
-```text
-Docker
-Docker Compose
-BDF check
-Build
-PostgreSQL
-Aplicacion BITORA
-Worker separado
-Monitor
-Storage persistente
-Safe mode
-Migraciones
-Health checks
-Backup
-Restore
-Smoke test
-Email live por organizacion
-```
-
-## Restricciones
-
-No se certifica aun como release final para piloto/evento real porque faltan validaciones externas:
-
-```text
-Google OAuth live
-WhatsApp live por organizacion
-Webhooks tenant-aware live
-Disaster recovery live extendido
-Endurance 24 horas
-Upgrade desde version anterior
-```
-
-Detalle Google OAuth:
-
-```text
-GOOGLE OAUTH LIVE NO CERTIFICADO
-GOOGLE OAUTH ENABLEMENT IMPLEMENTADO
-Bloqueo actual: faltan credenciales Google Cloud y consentimiento real contra Google.
 ```
 
 ## Estado operativo
@@ -66,12 +20,84 @@ URL local:
 http://localhost:8788
 ```
 
-## Proximo paso obligatorio
+## Certificado en esta etapa
 
-Configurar credenciales sandbox/live controladas y ejecutar:
-
-```powershell
-python deployment/scripts/bdf.py supertest --profile release
+```text
+GOOGLE OAUTH LIVE CERTIFICADO
 ```
 
-No se debe declarar BITORA apta para evento real hasta completar los gates live externos, disaster recovery y endurance.
+Detalle:
+
+```text
+google_oauth_live: PASSED
+google_oauth_multitenant_live: PASSED
+OAuth real contra Google: PASSED
+Callback real: PASSED
+Refresh real: PASSED
+Revocacion/reconexion: PASSED
+Aislamiento multi-tenant: PASSED
+Tokens expuestos: 0
+Secretos expuestos: 0
+```
+
+## Ya operativo en staging
+
+```text
+Docker
+Docker Compose
+BDF
+PostgreSQL
+Aplicacion BITORA
+Worker separado
+Monitor
+Storage persistente
+Safe Mode
+Migraciones
+Health checks
+Backup local
+Restore local
+Email live certificado en etapa anterior
+Google OAuth live certificado en esta etapa
+```
+
+## Restricciones pendientes para Release final completa
+
+```text
+WhatsApp live por organizacion
+Webhooks tenant-aware live
+Disaster recovery live extendido
+Endurance 24 horas
+Upgrade desde version anterior
+Reejecucion/persistencia de evidencia Email Live dentro del mismo entorno final
+```
+
+## Resultado BSTF Release
+
+La corrida release dentro del contenedor staging confirma:
+
+```text
+google_oauth_live: PASSED
+```
+
+Pero no aprueba la Release global porque quedan gates requeridos omitidos:
+
+```text
+whatsapp_organization_live
+webhook_tenant_resolution_live
+disaster_recovery_live
+endurance_24h
+upgrade_from_previous_version
+```
+
+## Proximo paso recomendado
+
+```text
+1. Rotar Client Secret de Google.
+2. Persistir o reejecutar Email Live en el mismo staging final.
+3. Activar WhatsApp Live.
+4. Certificar webhooks tenant-aware.
+5. Ejecutar Disaster Recovery.
+6. Ejecutar Endurance 24h.
+```
+
+No se debe declarar BITORA apta para evento real hasta completar esos gates.
