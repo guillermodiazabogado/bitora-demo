@@ -4,7 +4,7 @@ Fecha: 2026-07-22
 
 ## Objetivo
 
-Registrar el estado de certificacion despues de activar Google OAuth live por organizacion en staging local.
+Registrar el estado de certificacion despues de auditar y endurecer la etapa WhatsApp Cloud API Live.
 
 ## Estado actual
 
@@ -12,6 +12,7 @@ Registrar el estado de certificacion despues de activar Google OAuth live por or
 Release global: NO APROBADA
 Motivo: quedan gates live externos y pruebas prolongadas pendientes.
 Google OAuth Live: PASSED
+WhatsApp Live: NO CERTIFICADO
 ```
 
 ## Entorno BDF local
@@ -107,12 +108,47 @@ upgrade_from_previous_version: omitted
 
 Nota: Email Live ya fue certificado en una etapa anterior, pero la corrida actual dentro del contenedor no tenia la evidencia `email_multitenant_live` disponible en `output/live_integrations`. Debe reejecutarse o persistirse esa evidencia antes de una Release final completa.
 
+## WhatsApp Cloud API
+
+La auditoria de WhatsApp confirma que el flujo tecnico base ya existe:
+
+```text
+Proveedor Meta desacoplado: PASSED
+Cola communication_queue: PASSED
+Worker whatsapp.send: PASSED
+Safe Mode WhatsApp: PASSED
+Asignacion por organization_id/event_id/integration_id: PASSED
+Webhook endpoint preparado: PASSED contract
+```
+
+La certificacion live sigue pendiente porque no se ejecuto todavia un envio real contra Meta ni se confirmo recepcion en telefono autorizado.
+
+Se incorporo una correccion de certificacion:
+
+```text
+verificar_whatsapp_multitenant_live.py ahora exige:
+- envio iniciado desde BITORA;
+- job procesado por worker;
+- message_id devuelto por Meta;
+- Safe Mode activo;
+- recepcion real confirmada o webhook delivered/read.
+```
+
+Estado:
+
+```text
+whatsapp_organization_live: OMITTED
+webhook_tenant_resolution_live: OMITTED
+WHATSAPP LIVE NO CERTIFICADO
+```
+
 ## Seguridad
 
 ```text
 Secretos versionados: 0
 Tokens OAuth expuestos: 0
 Authorization code en logs nuevos: redacted
+Tokens WhatsApp expuestos: 0
 Datos personales en reportes: enmascarados
 ```
 

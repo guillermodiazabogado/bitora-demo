@@ -38,7 +38,17 @@ class FakeMetaHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    keys = ("WHATSAPP_PROVIDER", "WHATSAPP_ENABLED", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID", "WHATSAPP_META_API_URL")
+    keys = (
+        "WHATSAPP_PROVIDER",
+        "WHATSAPP_ENABLED",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_BUSINESS_ACCOUNT_ID",
+        "WHATSAPP_VERIFY_TOKEN",
+        "WHATSAPP_META_API_URL",
+        "WHATSAPP_SAFE_MODE",
+        "WHATSAPP_FORCE_RECIPIENT",
+    )
     old_env = {key: os.environ.get(key) for key in keys}
     tmp = Path(tempfile.mkdtemp(prefix="bitora-v7-whatsapp-"))
     meta = ThreadingHTTPServer(("127.0.0.1", 0), FakeMetaHandler)
@@ -51,7 +61,10 @@ def main() -> None:
             "WHATSAPP_ACCESS_TOKEN": "test-token",
             "WHATSAPP_PHONE_NUMBER_ID": "123456",
             "WHATSAPP_BUSINESS_ACCOUNT_ID": "business-1",
+            "WHATSAPP_VERIFY_TOKEN": "verify-token",
             "WHATSAPP_META_API_URL": f"http://127.0.0.1:{meta.server_address[1]}",
+            "WHATSAPP_SAFE_MODE": "true",
+            "WHATSAPP_FORCE_RECIPIENT": "5492991234567",
         })
         server.DB_PATH = tmp / "whatsapp.sqlite3"
         server.init_db()
@@ -77,7 +90,7 @@ def main() -> None:
                 (event_id, person_id, accreditation_id, server.now_iso()),
             ).lastrowid
         result = server.process_whatsapp_queue_item(queue_id)
-        assert result["ok"] and result["status"] == "enviado"
+        assert result["ok"] and result["status"] == "enviado", result
         with server.connect() as db:
             webhook = server.apply_whatsapp_webhook(db, {"entry": [{"changes": [{"value": {"statuses": [{"id": result["message_id"], "status": "delivered"}, {"id": result["message_id"], "status": "read"}]}}]}]})
             row = db.execute("SELECT status FROM communication_queue WHERE id = ?", (queue_id,)).fetchone()

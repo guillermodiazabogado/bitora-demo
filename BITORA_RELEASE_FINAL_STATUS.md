@@ -71,6 +71,16 @@ Upgrade desde version anterior
 Reejecucion/persistencia de evidencia Email Live dentro del mismo entorno final
 ```
 
+## Estado WhatsApp
+
+```text
+WHATSAPP LIVE NO CERTIFICADO
+```
+
+La arquitectura de envio a Meta esta implementada y fue auditada. El gate fue endurecido para no aprobarse sin envio real desde BITORA, procesamiento por worker, `message_id` de Meta y recepcion real en telefono autorizado.
+
+Falta cargar credenciales Meta de staging y ejecutar la prueba real.
+
 ## Resultado BSTF Release
 
 La corrida release dentro del contenedor staging confirma:

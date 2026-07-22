@@ -12,6 +12,23 @@ from dataclasses import dataclass
 from typing import Any
 
 
+SECRET_PATTERNS = (
+    re.compile(r"(access_token=)[^&\s]+", re.IGNORECASE),
+    re.compile(r"(\"access_token\"\s*:\s*\")[^\"]+(\")", re.IGNORECASE),
+    re.compile(r"(\"token\"\s*:\s*\")[^\"]+(\")", re.IGNORECASE),
+)
+
+
+def sanitize_meta_error(message: str) -> str:
+    text = str(message or "")
+    for pattern in SECRET_PATTERNS:
+        if pattern.groups == 2:
+            text = pattern.sub(r"\1[REDACTED]\2", text)
+        else:
+            text = pattern.sub(r"\1[REDACTED]", text)
+    return text[:800]
+
+
 @dataclass(frozen=True)
 class WhatsAppSendResult:
     ok: bool
@@ -119,9 +136,9 @@ class MetaCloudWhatsAppProvider(WhatsAppProvider):
                 return json.loads(raw.decode("utf-8")) if raw else {}
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Meta Cloud API HTTP {exc.code}: {raw}") from exc
+            raise RuntimeError(sanitize_meta_error(f"Meta Cloud API HTTP {exc.code}: {raw}")) from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(f"No se pudo conectar con Meta Cloud API: {exc.reason}") from exc
+            raise RuntimeError(sanitize_meta_error(f"No se pudo conectar con Meta Cloud API: {exc.reason}")) from exc
 
     def _send(self, payload: dict[str, Any]) -> WhatsAppSendResult:
         if not self.ready:
@@ -265,13 +282,17 @@ def create_whatsapp_provider() -> WhatsAppProvider:
     if not enabled or provider == "demo":
         return DemoWhatsAppProvider()
     if provider == "meta":
+        api_url = os.environ.get("WHATSAPP_META_API_URL", "").strip()
+        if not api_url:
+            api_version = os.environ.get("WHATSAPP_API_VERSION", "v22.0").strip() or "v22.0"
+            api_url = f"https://graph.facebook.com/{api_version}"
         return MetaCloudWhatsAppProvider(
             access_token=os.environ.get("WHATSAPP_ACCESS_TOKEN", ""),
             phone_number_id=os.environ.get("WHATSAPP_PHONE_NUMBER_ID", os.environ.get("WHATSAPP_PHONE_ID", "")),
             business_account_id=os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", ""),
             verify_token=os.environ.get("WHATSAPP_VERIFY_TOKEN", ""),
             app_secret=os.environ.get("WHATSAPP_APP_SECRET", ""),
-            api_url=os.environ.get("WHATSAPP_META_API_URL", "https://graph.facebook.com/v22.0"),
+            api_url=api_url,
             timeout=float(os.environ.get("WHATSAPP_TIMEOUT_SECONDS", "15")),
         )
     raise ValueError(f"Proveedor WhatsApp no soportado: {provider}")
