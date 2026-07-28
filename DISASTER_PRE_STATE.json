@@ -1,0 +1,7 @@
+{
+  "commit": "c3ae63585c53105c2e99912148df0be8ae803afb",
+  "compose_ps": "NAME                      IMAGE                COMMAND                  SERVICE                   CREATED         STATUS                   PORTS\nbitora-staging-postgres   postgres:16-alpine   \"docker-entrypoint.s…\"   bitora-staging-postgres   7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:55432->5432/tcp, [::]:55432->5432/tcp\n",
+  "health_error": "<urlopen error [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión>",
+  "source_backup_run_id": "BACKUP-RESTORE-LIVE-20260728-182640",
+  "timestamp": "2026-07-28T18:45:31+00:00"
+}

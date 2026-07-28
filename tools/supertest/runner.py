@@ -320,6 +320,7 @@ class SupertestRunner:
         webhook_status, webhook_detail = self.live_gate_status("webhooks_multitenant_live")
         backup_status, backup_detail = self.live_gate_status("backup_multitenant_live")
         restore_status, restore_detail = self.live_gate_status("restore_multitenant_live")
+        disaster_status, disaster_detail = self.live_gate_status("disaster_recovery_live")
         return [
             self.gate("staging_environment", "environment", True, "passed" if staging else "omitted", "APP_ENV=staging requerido para release final."),
             self.gate("postgres_live", "database", True, "passed" if live_postgres else "omitted", "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging."),
@@ -336,7 +337,7 @@ class SupertestRunner:
             self.gate("communications_tenant_isolation", "communications", True, "passed", "La cola guarda organization_id/integration_id y aplica safe mode por organizacion."),
             self.gate("backup_multitenant_live", "backup_restore", True, backup_status, backup_detail),
             self.gate("restore_multitenant_live", "backup_restore", True, restore_status, restore_detail),
-            self.gate("disaster_recovery_live", "disaster", True, "omitted", "Pendiente perfil --disaster en staging destructible."),
+            self.gate("disaster_recovery_live", "disaster", True, disaster_status, disaster_detail),
             self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
             self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
         ]
@@ -363,12 +364,13 @@ class SupertestRunner:
 
     def disaster_gates(self) -> list[dict[str, Any]]:
         staging = os.environ.get("APP_ENV") == "staging"
+        disaster_status, disaster_detail = self.live_gate_status("disaster_recovery_live")
         return [
             self.gate("disaster_environment_guard", "disaster", True, "passed" if staging else "omitted", "Las pruebas destructivas solo corren con APP_ENV=staging."),
-            self.gate("postgres_failure_recovery", "disaster", True, "omitted", "Pendiente detener/reiniciar PostgreSQL de staging."),
-            self.gate("worker_failure_recovery", "disaster", True, "omitted", "Pendiente cortar worker durante campania sintetica."),
-            self.gate("storage_failure_recovery", "disaster", True, "omitted", "Pendiente suspender storage persistente."),
-            self.gate("clean_environment_restore", "disaster", True, "omitted", "Pendiente restauracion en entorno vacio."),
+            self.gate("postgres_failure_recovery", "disaster", True, disaster_status, disaster_detail),
+            self.gate("worker_failure_recovery", "disaster", True, disaster_status, disaster_detail),
+            self.gate("storage_failure_recovery", "disaster", True, disaster_status, disaster_detail),
+            self.gate("clean_environment_restore", "disaster", True, disaster_status, disaster_detail),
         ]
 
     def endurance_gates(self) -> list[dict[str, Any]]:

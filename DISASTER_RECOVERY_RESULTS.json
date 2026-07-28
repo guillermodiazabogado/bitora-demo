@@ -1,0 +1,184 @@
+{
+  "checks": {
+    "application_recovery": true,
+    "backup_reuse": true,
+    "cross_event_access": 0,
+    "cross_organization_access": 0,
+    "external_side_effects": 0,
+    "functional_validation": true,
+    "infrastructure_rebuild": true,
+    "isolation_validation": true,
+    "restore": true,
+    "secrets_exposed": 0,
+    "storage_recovery": true,
+    "worker_recovery": true
+  },
+  "disaster": {
+    "components_destroyed": [
+      "containers",
+      "postgres_volume",
+      "storage_volume",
+      "backup_volume",
+      "logs_volume"
+    ],
+    "finished_at": "2026-07-28T18:45:36+00:00",
+    "started_at": "2026-07-28T18:45:35+00:00"
+  },
+  "finished_at": "2026-07-28T18:46:31+00:00",
+  "metrics": {
+    "downtime_seconds": 55.202,
+    "rebuild_seconds": 3.21,
+    "restore_seconds": 8.887,
+    "rpo_seconds_observed": 0,
+    "rto_seconds_observed": 55.202,
+    "validation_seconds": 42.205
+  },
+  "mode": "live",
+  "name": "disaster_recovery_live",
+  "post_restore_validation": {
+    "count_errors": {},
+    "current": {
+      "checksums": {
+        "accreditations": "555d2c4c3332c06cb56c043de4b54e1aebbb0d944294d0fdab7615397980d26c",
+        "activities": "562b64fc4fccaa9f919312d7a9c4dc591a07b77364df9aab9f4d1e0e562644ca",
+        "audit_logs": "f4c02129d20352e8ac58c838fe71e44e0b27a5168d1403c9ea1c31d30b8e824f",
+        "events": "c0ad6fe3cb29ab5ee9e8f690134df2d9eaf36fc61867142be784a3141524f6cc",
+        "integrations": "d2c959515dd247ff8c3394a6e493ce22e100af449be6c7397243e8189109b3a9",
+        "jobs": "2c4c221fc117fa5cf44287516f9fdd5505b35376eb20296164fbe6a54bc27707",
+        "organizations": "1ffb5dba817d8a202d6be602946408326e23db13e7bd611f6a896764f18fa6e7",
+        "participants": "ec4a8e4b876e5d95b23e10a643f4b7000ddc35b4ccee88845ebcd1f3f678769d",
+        "reservations": "32e1bab6cf6a99d18508c62b5f3983d1c0d4eb2fdcc83a3aafd26b4682b7bba4",
+        "storage": "83177a652b764316600856f4ab35d19fe43ebb9faa1486e48204926805731280",
+        "users": "f727e0450c5e4a8ca9d98b7df86d232aa6acb060c56bdb34a910b869419a4228"
+      },
+      "commit": "",
+      "counts": {
+        "accreditations": 1000,
+        "activities": 40,
+        "attendance": 100,
+        "audit_logs": 20,
+        "communication_queue": 20,
+        "event_integrations": 20,
+        "events": 20,
+        "integrations": 4,
+        "jobs": 20,
+        "organization_users": 8,
+        "organizations": 4,
+        "participants": 1000,
+        "reservations": 100,
+        "spaces": 60,
+        "storage_files": 40,
+        "users": 8
+      },
+      "db_engine": "postgres",
+      "environment": "staging",
+      "event_ids_sample": [
+        408,
+        409,
+        410,
+        411,
+        412
+      ],
+      "integrity": {
+        "cross_event_integrations": 0,
+        "cross_jobs": 0,
+        "orphan_accreditations": 0,
+        "orphan_jobs": 0,
+        "orphan_reservations": 0,
+        "provider_message_duplicates": 0,
+        "qr_duplicates": 0
+      },
+      "job_status_counts": {
+        "completed": 20
+      },
+      "organization_ids_sample": [
+        58,
+        59,
+        60,
+        61
+      ],
+      "postgres_version": "PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+      "run_id": "BACKUP-RESTORE-LIVE-20260728-182640",
+      "storage": {
+        "file_count": 40,
+        "sample": [
+          {
+            "backend": "local",
+            "key": "events/408/certificates/brl-BACKUP-RESTORE-LIVE-20260728-182640-certificate.txt",
+            "sha256": "f9fb9d101df205fd62929c60900d577d75f9ac9a43e5b19482bfccfd0adc524e",
+            "size": 55
+          },
+          {
+            "backend": "local",
+            "key": "events/408/uploads/brl-BACKUP-RESTORE-LIVE-20260728-182640-evidence.txt",
+            "sha256": "bee68238d4fff90bae19257e4fa38922a7fd1dee971a2e9e8392ba058b084445",
+            "size": 50
+          },
+          {
+            "backend": "local",
+            "key": "events/409/certificates/brl-BACKUP-RESTORE-LIVE-20260728-182640-certificate.txt",
+            "sha256": "89ca65062ce55640ef09fd545810b4d8e88296d38b7e29feb1521e06c76c9dab",
+            "size": 55
+          },
+          {
+            "backend": "local",
+            "key": "events/409/uploads/brl-BACKUP-RESTORE-LIVE-20260728-182640-evidence.txt",
+            "sha256": "503e8bce3eeb25da5fc676bb5cf69aa4e483f99e5add11f105ecf59feef1aac1",
+            "size": 50
+          },
+          {
+            "backend": "local",
+            "key": "events/410/certificates/brl-BACKUP-RESTORE-LIVE-20260728-182640-certificate.txt",
+            "sha256": "935c99a82fdcf23ad0eaccb3949f6afc4878f7b8fe694c8af472a7f37598cf95",
+            "size": 55
+          },
+          {
+            "backend": "local",
+            "key": "events/410/uploads/brl-BACKUP-RESTORE-LIVE-20260728-182640-evidence.txt",
+            "sha256": "5046b65050bf799ec15e08756196e164a793c2815d7fd975efaffa020fd1f045",
+            "size": 50
+          },
+          {
+            "backend": "local",
+            "key": "events/411/certificates/brl-BACKUP-RESTORE-LIVE-20260728-182640-certificate.txt",
+            "sha256": "e538f4a8c80f303f15d3d750c9e64abb8815eaa2a351d52f9148d098a1645178",
+            "size": 55
+          },
+          {
+            "backend": "local",
+            "key": "events/411/uploads/brl-BACKUP-RESTORE-LIVE-20260728-182640-evidence.txt",
+            "sha256": "af8a3932408343254a4c5ece2d80cfd00da7ec57a58e579c3fd8c23d83e3b92f",
+            "size": 50
+          }
+        ],
+        "total_bytes": 2100
+      }
+    },
+    "integrity_errors": {},
+    "mismatches": [],
+    "regression": {
+      "multievent_isolation_20_events": "PASSED",
+      "security_baseline": "PASSED"
+    },
+    "run_id": "BACKUP-RESTORE-LIVE-20260728-182640",
+    "status": "passed"
+  },
+  "pre_state": {
+    "commit": "c3ae63585c53105c2e99912148df0be8ae803afb",
+    "compose_ps": "NAME                      IMAGE                COMMAND                  SERVICE                   CREATED         STATUS                   PORTS\nbitora-staging-postgres   postgres:16-alpine   \"docker-entrypoint.s…\"   bitora-staging-postgres   7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:55432->5432/tcp, [::]:55432->5432/tcp\n",
+    "health_error": "<urlopen error [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión>",
+    "source_backup_run_id": "BACKUP-RESTORE-LIVE-20260728-182640",
+    "timestamp": "2026-07-28T18:45:31+00:00"
+  },
+  "run_id": "DISASTER-LIVE-20260728-184531",
+  "source_backup_run_id": "BACKUP-RESTORE-LIVE-20260728-182640",
+  "started_at": "2026-07-28T18:45:31+00:00",
+  "status": "passed",
+  "worker_effects": {
+    "external_effects": 0,
+    "processing_or_retrying_jobs": 0,
+    "queue_status": {
+      "pendiente": 20
+    }
+  }
+}

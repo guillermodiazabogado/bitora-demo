@@ -1,11 +1,22 @@
-# BITORA_RELEASE_FINAL_STATUS
+# BITORA Release Final Status
 
-BACKUP & RESTORE MULTITENANT LIVE CERTIFICATION: PASSED
+Fecha: 2026-07-28
 
-Release final: NO CERTIFICADA TODAVIA.
+Decision:
+
+```text
+RELEASE NO CERTIFICADA
+```
+
+Sprint actual:
+
+```text
+DISASTER RECOVERY LIVE CERTIFICATION: PASSED
+```
 
 Pendientes:
 
-- disaster_recovery_live
-- upgrade_from_previous_version
-- endurance_24h
+```text
+upgrade_from_previous_version
+endurance_24h
+```
