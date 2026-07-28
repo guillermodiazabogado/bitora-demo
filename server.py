@@ -40,7 +40,7 @@ from reportlab.platypus import (
 from backend.database import connect_database, integrity_error_types, load_database_config, run_postgres_migrations
 from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
-from backend.services.attendance import AttendanceService
+from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
@@ -167,30 +167,37 @@ MULTITENANT_PERMISSION_CODES = [
     "communications.configure",
     "communications.send_test",
 ]
+ATTENDANCE_PERMISSION_CODES = [
+    "attendance.read",
+    "attendance.record",
+    "attendance.correct",
+    "attendance.invalidate",
+    "attendance.read_audit",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
-        "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data"],
+        "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data", "attendance.read"],
     },
     "Operador de acceso": {
         "modules": ["access"],
-        "actions": ["scan_qr"],
+        "actions": ["scan_qr", "attendance.record"],
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -980,6 +987,74 @@ def init_db() -> None:
                 UNIQUE(activity_id, accreditation_id)
             );
 
+            CREATE TABLE IF NOT EXISTS feature_flags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                flag_key TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                scope_id INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                updated_by TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                UNIQUE(flag_key, scope_type, scope_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                attendance_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                recorded_by TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                invalidated_at TEXT,
+                invalidated_by TEXT,
+                invalidation_reason TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attendance_id INTEGER NOT NULL REFERENCES attendance_records(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                event_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL DEFAULT '',
+                correlation_id TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_corrections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attendance_id INTEGER NOT NULL REFERENCES attendance_records(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                previous_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                previous_metadata_json TEXT NOT NULL DEFAULT '{}',
+                new_metadata_json TEXT NOT NULL DEFAULT '{}',
+                reason TEXT NOT NULL,
+                corrected_by TEXT NOT NULL,
+                corrected_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS technical_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 level TEXT NOT NULL DEFAULT 'info',
@@ -1116,6 +1191,16 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_attendance_event_activity ON activity_attendance(event_id, activity_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_accreditation ON activity_attendance(accreditation_id);
         CREATE INDEX IF NOT EXISTS idx_certificate_event ON certificate_eligibility(event_id, estado);
+        CREATE INDEX IF NOT EXISTS idx_feature_flags_lookup ON feature_flags(flag_key, scope_type, scope_id, enabled);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_org_event ON attendance_records(organization_id, event_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_event_participant ON attendance_records(event_id, participant_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_event_activity ON attendance_records(event_id, activity_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_participant_time ON attendance_records(participant_id, occurred_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_status ON attendance_records(status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_created ON attendance_records(created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_events_attendance ON attendance_events(attendance_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_events_event ON attendance_events(event_id, event_type, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_corrections_attendance ON attendance_corrections(attendance_id, corrected_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
@@ -1957,6 +2042,39 @@ def event_organization_id(db: sqlite3.Connection, event_id: int) -> int:
     except sqlite3.OperationalError:
         return 0
     return int(row["organization_id"] or bootstrap_default_organization(db)) if row else 0
+
+
+def feature_flag_enabled(db: sqlite3.Connection, flag_key: str, *, organization_id: int = 0, event_id: int = 0) -> bool:
+    env_key = f"BITORA_{flag_key.upper()}"
+    if os.environ.get(env_key, "").strip().lower() in {"1", "true", "yes", "si"}:
+        return True
+    rows = db.execute(
+        """
+        SELECT scope_type, scope_id, enabled
+        FROM feature_flags
+        WHERE flag_key = ? AND enabled = 1
+        """,
+        (flag_key,),
+    ).fetchall()
+    for row in rows:
+        scope_type = str(row["scope_type"] or "").lower()
+        scope_id = int(row["scope_id"] or 0)
+        if scope_type == "platform":
+            return True
+        if scope_type == "organization" and organization_id and scope_id == int(organization_id):
+            return True
+        if scope_type == "event" and event_id and scope_id == int(event_id):
+            return True
+    return False
+
+
+def attendance_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "attendance_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def attendance_error_payload(exc: AttendanceDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def sanitize_integration(row: sqlite3.Row | dict) -> dict:
@@ -5831,6 +5949,92 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"items": [dict(row) for row in rows], "available": [sanitize_integration(row) for row in available], "organization_id": org_id})
                 return
 
+            attendance_list_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
+            attendance_detail_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)", path)
+            attendance_events_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/events", path)
+            participant_attendance_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/attendance", path)
+            if attendance_list_match:
+                event_id = int(attendance_list_match.group(1))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    filters = {
+                        "participant_id": query.get("participant_id", [""])[0],
+                        "activity_id": query.get("activity_id", [""])[0],
+                        "status": query.get("status", [""])[0],
+                        "source": query.get("source", [""])[0],
+                        "from": query.get("from", [""])[0],
+                        "to": query.get("to", [""])[0],
+                    }
+                    result = attendance_service().list_attendance(
+                        db,
+                        organization_id=org_id,
+                        event_id=event_id,
+                        filters={k: v for k, v in filters.items() if str(v).strip()},
+                        limit=int(query.get("limit", ["50"])[0] or 50),
+                        offset=int(query.get("offset", ["0"])[0] or 0),
+                    )
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_detail_match:
+                event_id = int(attendance_detail_match.group(1))
+                attendance_id = int(attendance_detail_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = attendance_service().get_attendance(db, organization_id=org_id, event_id=event_id, attendance_id=attendance_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if attendance_events_match:
+                event_id = int(attendance_events_match.group(1))
+                attendance_id = int(attendance_events_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read_audit", "attendance.read_audit")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().list_attendance_events(db, organization_id=org_id, event_id=event_id, attendance_id=attendance_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if participant_attendance_match:
+                event_id = int(participant_attendance_match.group(1))
+                participant_id = int(participant_attendance_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().get_participant_attendance_history(db, organization_id=org_id, event_id=event_id, participant_id=participant_id)
+                self.send_json({"ok": True, **result})
+                return
+
             if path == "/api/integrations/google/status":
                 integration_id = int(query.get("integration_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -8090,6 +8294,123 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not session_can_access_event(db, session, event_id_for_access):
                         self.send_json({"error": "No tenes permiso para operar este evento"}, 403)
                         return
+
+            attendance_create_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
+            attendance_correct_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/correct", path)
+            attendance_invalidate_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/invalidate", path)
+            if attendance_create_match:
+                event_id = int(attendance_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.record", "attendance.record", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().record_attendance(
+                            db,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            participant_id=int(data.get("participant_id") or 0) or None,
+                            accreditation_id=int(data.get("accreditation_id") or 0) or None,
+                            activity_id=int(data.get("activity_id") or 0) or None,
+                            attendance_type=str(data.get("attendance_type") or "EVENT"),
+                            status=str(data.get("status") or "PRESENT"),
+                            source=str(data.get("source") or "MANUAL"),
+                            occurred_at=str(data.get("occurred_at") or "").strip() or None,
+                            idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""),
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        if exc.code in {"ATTENDANCE_CROSS_TENANT_REFERENCE", "ATTENDANCE_PARTICIPANT_EVENT_MISMATCH", "ATTENDANCE_ACTIVITY_EVENT_MISMATCH"}:
+                            db.execute("BEGIN IMMEDIATE")
+                            audit(db, actor, "attendance.permission_denied", "event", event_id, {"organization_id": org_id, "code": exc.code})
+                            db.execute("COMMIT")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_correct_match:
+                event_id = int(attendance_correct_match.group(1))
+                attendance_id = int(attendance_correct_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.correct", "attendance.correct", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().correct_attendance(
+                            db,
+                            attendance_id=attendance_id,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            status=str(data.get("status") or ""),
+                            reason=str(data.get("reason") or "").strip(),
+                            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_invalidate_match:
+                event_id = int(attendance_invalidate_match.group(1))
+                attendance_id = int(attendance_invalidate_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.invalidate", "attendance.invalidate", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().invalidate_attendance(
+                            db,
+                            attendance_id=attendance_id,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            reason=str(data.get("reason") or "").strip(),
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
 
             if path == "/api/waiting-room/join":
                 event_id = int(data.get("event_id") or 0)

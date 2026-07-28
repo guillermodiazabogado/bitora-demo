@@ -6,6 +6,7 @@ Objetivo: base de asistencia real.
 Alcance: modelo, permisos, endpoints, UI minima, auditoria y pruebas multitenant.
 Exclusiones: certificados PDF y automatizaciones.
 Gates: seguridad, aislamiento, backup/restore, upgrade.
+Estado: IMPLEMENTED / TESTED / PENDING CERTIFICATION.
 
 ## Sprint V4.2 - Attendance Closing and Eligibility
 

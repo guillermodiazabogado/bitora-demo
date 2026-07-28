@@ -261,6 +261,9 @@ class EventBackupService:
         ("captation_events", "SELECT * FROM captation_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("conversation_sources", "SELECT * FROM conversation_sources WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("activity_attendance", "SELECT * FROM activity_attendance WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_records", "SELECT * FROM attendance_records WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_events", "SELECT * FROM attendance_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_corrections", "SELECT * FROM attendance_corrections WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("certificate_eligibility", "SELECT * FROM certificate_eligibility WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -415,6 +418,9 @@ class EventRestoreService:
         "accreditations",
         "reservations",
         "activity_attendance",
+        "attendance_records",
+        "attendance_events",
+        "attendance_corrections",
         "certificate_eligibility",
         "access_logs",
         "communication_logs",
@@ -494,7 +500,7 @@ class EventRestoreService:
                 "activities": counts.get("activities", 0),
                 "reservations": counts.get("reservations", 0),
                 "accesses": counts.get("access_logs", 0),
-                "attendance": counts.get("activity_attendance", 0),
+                "attendance": counts.get("activity_attendance", 0) + counts.get("attendance_records", 0),
                 "certificates": counts.get("certificate_eligibility", 0),
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
                 "templates": counts.get("communication_templates", 0),
@@ -554,6 +560,7 @@ class EventRestoreService:
                     "capacity_bags": {},
                     "accreditations": {},
                     "reservations": {},
+                    "attendance_records": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -757,8 +764,12 @@ class EventRestoreService:
                 row["bag_id"] = maps["capacity_bags"].get(int(row["bag_id"]), row["bag_id"])
             if "person_id" in row and row.get("person_id") is not None:
                 row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
+            if "participant_id" in row and row.get("participant_id") is not None:
+                row["participant_id"] = maps["people"].get(int(row["participant_id"]), row["participant_id"])
             if "accreditation_id" in row and row.get("accreditation_id") is not None:
                 row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
+            if "attendance_id" in row and row.get("attendance_id") is not None:
+                row["attendance_id"] = maps["attendance_records"].get(int(row["attendance_id"]), row["attendance_id"])
             if "reservation_id" in row and row.get("reservation_id") is not None:
                 row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
             if "queue_id" in row and row.get("queue_id") is not None:

@@ -9,3 +9,5 @@
 | V4-ADR-005 | 2026-07-28 | Automatizaciones solo supervisadas | Riesgo de efectos externos | Automatizacion autonoma | Mantiene explicabilidad | Menos automatismo inicial | Aceptada |
 | V4-ADR-006 | 2026-07-28 | Certificados dependen de elegibilidad versionada | Reglas deben ser reproducibles | Calculo dinamico sin version | Auditoria y reemision coherentes | Requiere snapshot de regla | Aceptada |
 | V4-ADR-007 | 2026-07-28 | Rutas legacy se conservan | Frontend actual depende de contratos | Reemplazo inmediato | Compatibilidad | APIs nuevas seran incrementales | Aceptada |
+| V4-ADR-008 | 2026-07-28 | V4.1 usa tablas nuevas paralelas a `activity_attendance` | La asistencia historica esta ligada a certificados | Reusar tabla historica | Evita romper compatibilidad y separa cierre/elegibilidad futuros | Requiere puente en reportes | Aceptada |
+| V4-ADR-009 | 2026-07-28 | Idempotencia scoped por organizacion | Multi-tenant requiere aislamiento de reintentos | Key global | Evita colisiones entre tenants | Unique organization_id + idempotency_key | Aceptada |
