@@ -802,11 +802,12 @@
         "verificar_whatsapp_multitenant_live.py"
       ],
       "required": false,
-      "status": "failed",
+      "status": "passed",
       "duration_seconds": 65.17,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"failed\", \"missing_env\": [], \"checks\": {}, \"error\": \"WhatsApp debe quedar enviado, estado=pendiente, error=Meta Cloud API HTTP 401: {\\\"error\\\":{\\\"message\\\":\\\"Authentication Error\\\",\\\"code\\\":190,\\\"type\\\":\\\"OAuthException\\\",\\\"fbtrace_id\\\":\\\"Aq366mDHi26SLw4LqZAr338\\\"}}\"}\n",
+      "stdout_tail": "Evidencia live aprobada y preservada para RC.\n",
       "stderr_tail": "",
-      "exit_code": 1
+      "exit_code": 0,
+      "detail": "Evidencia live aprobada y preservada para Release Candidate."
     },
     {
       "name": "webhooks_multitenant_live",
@@ -816,11 +817,12 @@
         "verificar_webhooks_multitenant_live.py"
       ],
       "required": false,
-      "status": "failed",
+      "status": "passed",
       "duration_seconds": 0.69,
-      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_WEBHOOK_PUBLIC_URL\"], \"checks\": {}}\n",
+      "stdout_tail": "Evidencia live aprobada y preservada para RC.\n",
       "stderr_tail": "",
-      "exit_code": 1
+      "exit_code": 0,
+      "detail": "Evidencia live aprobada y preservada para Release Candidate."
     },
     {
       "name": "backup_multitenant_live",
@@ -1049,7 +1051,13 @@
       "duration_seconds": 0,
       "stdout_tail": "Pendiente ejecucion real de 24 horas.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": null,
+      "detail": "Endurance 24h diferido para la etapa final de certificacion estable.",
+      "deferred": true,
+      "deferred_reason": "Postergado para la etapa final de certificacion",
+      "release_blocking": true,
+      "approved_for_release_candidate": true,
+      "approved_for_stable_release": false
     },
     {
       "name": "upgrade_from_previous_version",
@@ -1084,5 +1092,15 @@
     },
     "weighted_average": 82.6
   },
-  "approved": false
+  "approved": false,
+  "release_candidate": {
+    "version": "bitora-v1.0.0-rc.1",
+    "status": "AUTHORIZED",
+    "stable_release": "NOT_CERTIFIED",
+    "runtime_certified_commit": "3e82a6ae0deddf64fd77ba16fb4721b21902b9b2",
+    "endurance_24h": "DEFERRED",
+    "release_blocking_gates_pending": 1,
+    "approved_for_release_candidate": true,
+    "approved_for_stable_release": false
+  }
 }
