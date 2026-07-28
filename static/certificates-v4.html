@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA V4.3 Certificados</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { background: #f6f7f9; color: #172033; }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; align-items: end; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-top: 14px; }
+    section { background: white; border: 1px solid #d9dee8; border-radius: 8px; padding: 14px; }
+    label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+    input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #c8ced8; border-radius: 6px; padding: 8px; font: inherit; }
+    textarea { min-height: 86px; resize: vertical; }
+    button { border: 0; border-radius: 6px; background: #174ea6; color: white; padding: 9px 12px; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #42526e; }
+    button.danger { background: #b42318; }
+    pre { overflow: auto; background: #101828; color: #e6edf7; border-radius: 8px; padding: 12px; min-height: 180px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>BITORA V4.3 Certificados</h1>
+  <div class="toolbar">
+    <label>Evento<input id="eventId" type="number" min="1"></label>
+    <label>Participante<input id="participantId" type="number" min="1"></label>
+    <label>Decision elegibilidad<input id="decisionId" type="number" min="1"></label>
+    <button id="load">Actualizar</button>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>Tipo</h2>
+      <label>Codigo<input id="typeCode" value="ATTENDANCE"></label>
+      <label>Nombre<input id="typeName" value="Certificado de asistencia"></label>
+      <button id="createType">Crear tipo</button>
+    </section>
+    <section>
+      <h2>Plantilla</h2>
+      <label>Tipo ID<input id="typeId" type="number"></label>
+      <label>Nombre<input id="templateName" value="Plantilla V4.3"></label>
+      <button id="createTemplate">Crear plantilla</button>
+    </section>
+    <section>
+      <h2>Version</h2>
+      <label>Plantilla ID<input id="templateId" type="number"></label>
+      <textarea id="templateBody">{"title":"Certificado de {{certificate_type}}","body":"Se certifica que {{participant_name}} participo en {{event_name}}.","footer":"Validar con {{verification_code}}"}</textarea>
+      <button id="createVersion">Crear version</button>
+      <label>Version ID<input id="versionId" type="number"></label>
+      <button id="publishVersion" class="secondary">Publicar</button>
+      <button id="previewVersion" class="secondary">Preview</button>
+    </section>
+    <section>
+      <h2>Emision</h2>
+      <button id="issue">Emitir individual</button>
+      <button id="batch" class="secondary">Emitir lote</button>
+      <label>Emision ID<input id="issuanceId" type="number"></label>
+      <button id="download" class="secondary">Descargar</button>
+      <button id="revoke" class="danger">Revocar</button>
+      <button id="reissue" class="secondary">Reemitir</button>
+    </section>
+  </div>
+  <pre id="out"></pre>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+const request = async (path, payload) => {
+  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const data = await response.json().catch(() => ({}));
+  out.textContent = JSON.stringify(data, null, 2);
+  if (data.item?.id) {
+    if (path.includes("certificate-types")) $("typeId").value = data.item.id;
+    if (path.includes("certificate-templates") && !path.includes("versions")) $("templateId").value = data.item.id;
+    if (path.includes("versions") && data.item.version_number) $("versionId").value = data.item.id;
+    if (path.includes("certificates/issue") || path.includes("reissue")) $("issuanceId").value = data.item.id;
+  }
+  return data;
+};
+const eventPayload = () => ({ event_id: Number($("eventId").value || 0), actor: "Admin" });
+$("load").onclick = async () => {
+  const eventId = $("eventId").value;
+  const [types, templates, certificates] = await Promise.all([
+    fetch(`/api/certificate-types?event_id=${eventId}`).then(r => r.json()),
+    fetch(`/api/certificate-templates?event_id=${eventId}`).then(r => r.json()),
+    fetch(`/api/events/${eventId}/certificates`).then(r => r.json()),
+  ]);
+  out.textContent = JSON.stringify({ types, templates, certificates }, null, 2);
+};
+$("createType").onclick = () => request("/api/certificate-types", { ...eventPayload(), code: $("typeCode").value, name: $("typeName").value, kind: "ATTENDANCE" });
+$("createTemplate").onclick = () => request("/api/certificate-templates", { ...eventPayload(), certificate_type_id: Number($("typeId").value), name: $("templateName").value });
+$("createVersion").onclick = () => request(`/api/certificate-templates/${$("templateId").value}/versions`, { ...eventPayload(), content_schema: JSON.parse($("templateBody").value) });
+$("publishVersion").onclick = () => request(`/api/certificate-templates/${$("templateId").value}/versions/${$("versionId").value}/publish`, { ...eventPayload(), idempotency_key: `ui-publish-${$("versionId").value}` });
+$("previewVersion").onclick = () => request(`/api/certificate-templates/${$("templateId").value}/versions/${$("versionId").value}/preview`, eventPayload());
+$("issue").onclick = () => request(`/api/events/${$("eventId").value}/certificates/issue`, { actor: "Admin", participant_id: Number($("participantId").value), certificate_type_id: Number($("typeId").value), template_version_id: Number($("versionId").value), eligibility_decision_id: Number($("decisionId").value), idempotency_key: `ui-issue-${$("participantId").value}-${Date.now()}` });
+$("batch").onclick = () => request(`/api/events/${$("eventId").value}/certificates/batches`, { actor: "Admin", certificate_type_id: Number($("typeId").value), template_version_id: Number($("versionId").value), idempotency_key: `ui-batch-${Date.now()}` });
+$("download").onclick = () => { window.open(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/download`, "_blank"); };
+$("revoke").onclick = () => request(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/revoke`, { actor: "Admin", reason: "Revocacion QA" });
+$("reissue").onclick = () => request(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/reissue`, { actor: "Admin", reason: "Reemision QA", idempotency_key: `ui-reissue-${Date.now()}` });
+</script>
+</body>
+</html>
