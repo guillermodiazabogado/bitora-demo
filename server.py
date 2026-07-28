@@ -9668,13 +9668,17 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, RECEPTION_ROLES):
-                        db.execute("ROLLBACK")
-                        self.send_json(deny_message(actor), 403)
-                        return
                     row = db.execute(
                         """
-                        SELECT a.*, p.id AS person_id
+                        SELECT
+                            a.*,
+                            p.id AS person_id,
+                            p.first_name,
+                            p.last_name,
+                            p.email,
+                            p.phone,
+                            p.dni,
+                            p.company
                         FROM accreditations a
                         JOIN people p ON p.id = a.person_id
                         WHERE a.id = ?
@@ -9685,6 +9689,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                         db.execute("ROLLBACK")
                         self.send_json({"error": "Acreditacion inexistente"}, 404)
                         return
+                    ok, session = self.require_event_permission(db, int(row["event_id"]), "manual_accredit", "accreditation.update", actor)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
                     db.execute(
                         """
                         UPDATE people
@@ -9692,12 +9700,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                         WHERE id = ?
                         """,
                         (
-                            data.get("first_name", "").strip(),
-                            data.get("last_name", "").strip(),
-                            data.get("email", "").strip().lower(),
-                            data.get("phone", "").strip(),
-                            data.get("dni", "").strip(),
-                            data.get("company", "").strip(),
+                            str(data.get("first_name", row["first_name"] or "") or "").strip(),
+                            str(data.get("last_name", row["last_name"] or "") or "").strip(),
+                            str(data.get("email", row["email"] or "") or "").strip().lower(),
+                            str(data.get("phone", row["phone"] or "") or "").strip(),
+                            str(data.get("dni", row["dni"] or "") or "").strip(),
+                            str(data.get("company", row["company"] or "") or "").strip(),
                             row["person_id"],
                         ),
                     )
@@ -9705,7 +9713,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         "UPDATE accreditations SET type = ? WHERE id = ?",
                         (data.get("type", row["type"]).strip() or row["type"], accreditation_id),
                     )
-                    audit(db, actor, "accreditation.updated", "accreditation", accreditation_id, data)
+                    audit(db, session["name"], "accreditation.updated", "accreditation", accreditation_id, {"event_id": int(row["event_id"]), **data})
                     db.execute("COMMIT")
                 self.send_json({"ok": True})
                 return

@@ -10,11 +10,13 @@ Registrar el estado de certificacion despues de ejecutar WhatsApp Cloud API Live
 
 ```text
 Release global: NO APROBADA
-Motivo: quedan fallas/omisiones fuera de integraciones finales.
+Motivo: quedan pruebas prolongadas/destructivas pendientes.
 Google OAuth Live: PASSED
 Email Live: PASSED
 WhatsApp Live: PASSED
 WhatsApp Webhook Live: PASSED
+Security Baseline: PASSED
+20-Event Isolation: PASSED
 ```
 
 ## Revalidacion Final De Integraciones
@@ -111,12 +113,14 @@ Resultado general:
 
 ```text
 approved: false
-weighted_average: 70.1
+weighted_average: 76.4
 ```
 
-WhatsApp dentro de BSTF:
+Gates relevantes dentro de BSTF:
 
 ```text
+seguridad_basica: passed
+multievent_isolation_20_events: passed
 email_organization_live: passed
 google_oauth_live: passed
 whatsapp_organization_live: passed
@@ -160,21 +164,17 @@ integration_id: 30
 evidence_file: output/live_integrations/webhooks_multitenant_live.json
 ```
 
-## Gates aun pendientes o fallidos
+## Gates Aun Pendientes
 
 Estos gates explican por que la Release global no se declara certificada:
 
 ```text
-seguridad_basica: failed
-multievent_isolation_20_events: failed
-backup_multitenant_live: omitted
-restore_multitenant_live: omitted
 disaster_recovery_live: omitted
 endurance_24h: omitted
 upgrade_from_previous_version: omitted
 ```
 
-Nota: los cuatro gates live de integraciones externas ya fueron revalidados en el mismo staging final. Los pendientes corresponden a seguridad/regresion multi-evento, backup/restore live, disaster, endurance y upgrade.
+Nota: los gates `seguridad_basica` y `multievent_isolation_20_events` fueron remediados en este sprint. Los gates `backup_multitenant_live` y `restore_multitenant_live` aparecen aprobados por evidencia live existente, pero no fueron modificados funcionalmente en este sprint.
 
 ## WhatsApp Cloud API
 
@@ -224,9 +224,6 @@ Webhook payloads completos en reportes: 0
 ## Riesgos pendientes
 
 - Rotar el Client Secret de Google antes de uso prolongado o productivo.
-- Corregir `seguridad_basica`.
-- Corregir `multievent_isolation_20_events`.
-- Revalidar backup/restore multitenant live.
 - Ejecutar Disaster Recovery live.
 - Ejecutar Endurance 24 horas.
 - Ejecutar upgrade desde version anterior.
@@ -238,5 +235,7 @@ GOOGLE OAUTH LIVE CERTIFICADO
 EMAIL LIVE CERTIFICADO
 WHATSAPP LIVE CERTIFICADO
 WHATSAPP WEBHOOK LIVE CERTIFICADO
+SECURITY BASELINE REMEDIADO
+20-EVENT ISOLATION REMEDIADO
 RELEASE GLOBAL NO CERTIFICADA TODAVIA
 ```

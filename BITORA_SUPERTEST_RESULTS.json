@@ -2,14 +2,14 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-28T16:25:53",
+    "started_at": "2026-07-28T16:41:25",
     "python": "3.12.13",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
     "branch": "",
     "commit": "",
     "dirty_files": [],
     "max_migration": "015_role_permissions.sql",
-    "code_checksum": "35b95b777ef70660718666dfe6ecab6ec7890c7147c7781ef333a752f5913306",
+    "code_checksum": "6d0a468e1a539cb59ecbc0bf8d9b6b147623c4574df8cafa09a87f3b32c87c04",
     "critical_env": {
       "APP_ENV": "staging",
       "BASE_URL": "http***8788",
@@ -26,9 +26,65 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-28T16:25:53",
-  "finished_at": "2026-07-28T16:26:43",
+  "started_at": "2026-07-28T16:41:25",
+  "finished_at": "2026-07-28T16:42:19",
   "findings": [
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_multievent_isolation_20_events.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "init_db ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "queue_communication ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "portal_payload ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "executive_report_data ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "executive_report_pdf_bytes ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "handle_api_get ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "handle_api_post ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
     {
       "severity": "medium",
       "category": "code",
@@ -117,55 +173,6 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
-      "detail": "init_db ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "queue_communication ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "portal_payload ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "executive_report_data ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "executive_report_pdf_bytes ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "handle_api_get ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "handle_api_post ocupa mas de 120 lineas",
-      "file": "server.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
       "detail": "run_checks ocupa mas de 120 lineas",
       "file": "verificar_mvp.py"
     },
@@ -194,35 +201,35 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_9_visual_reports.py:37, verificar_reorganizacion_inscribir_recepcion.py:12",
+      "detail": "assert_true: verificar_multievent_isolation_20_events.py:12, verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_9_visual_reports.py:37",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:466",
+      "detail": "connect: server.py:466, verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:5702",
+      "detail": "do_POST: server.py:5702, verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:5573",
+      "detail": "log_message: server.py:5573, verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: verificar_google_oauth_multitenant_live.py:158, verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31",
+      "detail": "main: verificar_multievent_isolation_20_events.py:17, server.py:10401, verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42",
       "file": ""
     },
     {
@@ -366,6 +373,13 @@
       "file": "backend/services/capacity_buckets.py"
     },
     {
+      "severity": "medium",
+      "category": "database",
+      "title": "Prefijo de migracion duplicado",
+      "detail": "Prefijo 015 aparece mas de una vez",
+      "file": ""
+    },
+    {
       "severity": "low",
       "category": "database",
       "title": "Prefijo de migracion duplicado conocido",
@@ -374,16 +388,9 @@
     },
     {
       "severity": "medium",
-      "category": "database",
-      "title": "Prefijo de migracion duplicado",
-      "detail": "Prefijo 015 aparece mas de una vez",
-      "file": ""
-    },
-    {
-      "severity": "medium",
       "category": "architecture",
       "title": "Controlador principal muy grande",
-      "detail": "server.py tiene 10445 lineas",
+      "detail": "server.py tiene 10453 lineas",
       "file": ""
     }
   ],
@@ -397,7 +404,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.51,
+      "duration_seconds": 4.05,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -411,7 +418,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.26,
+      "duration_seconds": 4.16,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -425,7 +432,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.81,
+      "duration_seconds": 0.71,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -439,7 +446,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.79,
+      "duration_seconds": 0.71,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -453,7 +460,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.52,
+      "duration_seconds": 0.53,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -467,7 +474,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.48,
+      "duration_seconds": 0.51,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -481,7 +488,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.87,
+      "duration_seconds": 0.85,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -509,7 +516,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.43,
+      "duration_seconds": 0.42,
       "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -523,8 +530,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.65,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 187, \"event_b\": 188}\n",
+      "duration_seconds": 1.88,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 272, \"event_b\": 273}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -537,8 +544,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.52,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 189, \"team_members\": 3}\n",
+      "duration_seconds": 1.78,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 274, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -550,11 +557,11 @@
         "verificar_seguridad_basica.py"
       ],
       "required": true,
-      "status": "failed",
-      "duration_seconds": 2.45,
-      "stdout_tail": "",
-      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/verificar_seguridad_basica.py\", line 71, in <module>\n    main()\n  File \"/app/verificar_seguridad_basica.py\", line 36, in main\n    must_forbid(request(h.base, \"POST\", \"/api/accreditations/update\", {\"actor\": \"Visualizador\", \"id\": acc_id, \"first_name\": \"No\"}), \"Visualizador edita\")\n  File \"/app/verificar_seguridad_basica.py\", line 17, in must_forbid\n    raise QA2Error(f\"{label}: no fue bloqueado, status={result[0]} body={result[1]}\")\nqa2_utils.QA2Error: Visualizador edita: no fue bloqueado, status=409 body={'error': 'Dato duplicado o invalido', 'detail': 'duplicate key value violates unique constraint \"people_email_key\"\\nDETAIL:  Key (email)=() already exists.'}\n",
-      "exit_code": 1
+      "status": "passed",
+      "duration_seconds": 3.05,
+      "stdout_tail": "OK: seguridad basica y permisos\n",
+      "stderr_tail": "",
+      "exit_code": 0
     },
     {
       "name": "datos_basura",
@@ -565,7 +572,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.19,
+      "duration_seconds": 2.47,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -579,7 +586,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.28,
+      "duration_seconds": 2.62,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -593,7 +600,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 6.18,
+      "duration_seconds": 6.14,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -606,11 +613,11 @@
         "verificar_multievent_isolation_20_events.py"
       ],
       "required": true,
-      "status": "failed",
-      "duration_seconds": 1.56,
-      "stdout_tail": "",
-      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/verificar_multievent_isolation_20_events.py\", line 137, in <module>\n    main()\n  File \"/app/verificar_multievent_isolation_20_events.py\", line 29, in main\n    user_id = db.execute(\n              ^^^^^^^^^^^\n  File \"/app/backend/database.py\", line 240, in execute\n    cursor = self.raw.execute(translated, tuple(params or ()))\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/psycopg/connection.py\", line 300, in execute\n    raise ex.with_traceback(None)\npsycopg.errors.UniqueViolation: duplicate key value violates unique constraint \"users_name_key\"\nDETAIL:  Key (name)=(Usuario QA 0) already exists.\n",
-      "exit_code": 1
+      "status": "passed",
+      "duration_seconds": 6.4,
+      "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
+      "stderr_tail": "",
+      "exit_code": 0
     },
     {
       "name": "multitenant_integrations",
@@ -621,7 +628,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.8,
+      "duration_seconds": 0.71,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -635,7 +642,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.62,
+      "duration_seconds": 0.54,
       "stdout_tail": "{\"name\": \"google_oauth_contract\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"authorization_url\": true, \"offline_access\": true, \"prompt_consent\": true, \"scopes_minimos\": [\"openid\", \"email\", \"profile\"], \"secret_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -649,7 +656,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.78,
+      "duration_seconds": 0.7,
       "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -663,7 +670,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.7,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -677,7 +684,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.66,
+      "duration_seconds": 0.55,
       "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -691,7 +698,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.79,
+      "duration_seconds": 0.71,
       "stdout_tail": "{\"name\": \"google_oauth_backup_restore\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"encrypted_backup_safe\": true, \"metadata_sanitized\": true, \"restore_requires_safe_reconnect_policy\": true, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -704,11 +711,11 @@
         "verificar_google_oauth_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
+      "status": "failed",
       "duration_seconds": 2.56,
-      "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"connected_integration\": true, \"provider\": \"google\", \"organization_id\": 3, \"integration_id\": 5, \"userinfo_live\": true, \"refresh_live\": true, \"refresh_before_userinfo\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"cross_event_assignments\": 0, \"audit_connected\": true, \"audit_tested\": true, \"audit_refreshed\": true, \"audit_disconnected\": true, \"account_email_masked\": \"gui***@gmail.com\"}}\n",
-      "stderr_tail": "",
-      "exit_code": 0
+      "stdout_tail": "",
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/backend/services/google_oauth.py\", line 163, in _open_json\n    with self._opener(request, timeout=self.config.timeout) as response:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 215, in urlopen\n    return opener.open(url, data, timeout)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 521, in open\n    response = meth(req, response)\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 630, in http_response\n    response = self.parent.error(\n               ^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 559, in error\n    return self._call_chain(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 639, in http_error_default\n    raise HTTPError(req.full_url, code, msg, hdrs, fp)\nurllib.error.HTTPError: HTTP Error 401: Unauthorized\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 156, in <module>\n    main()\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 150, in main\n    result = _contract_result(mode, missing) if mode != \"live\" or missing else _live_result()\n                                                                               ^^^^^^^^^^^^^^\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 95, in _live_result\n    account = client.userinfo(access_token)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 146, in userinfo\n    return self._open_json(request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 175, in _open_json\n    raise GoogleOAuthError(f\"Google HTTP {exc.code}: {message}\", \"google_http_error\") from exc\nbackend.services.google_oauth.GoogleOAuthError: Google HTTP 401: Invalid Credentials\n",
+      "exit_code": 1
     },
     {
       "name": "email_multitenant_live",
@@ -719,8 +726,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 2.63,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"4e4fc6***414017\", \"job_id\": 48, \"queue_id\": 204, \"organization_id\": 1, \"integration_id\": 45, \"event_id\": 196, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 3.07,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"129c67***906cd7\", \"job_id\": 129, \"queue_id\": 299, \"organization_id\": 1, \"integration_id\": 66, \"event_id\": 301, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -733,8 +740,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 2.82,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***5QgA=\", \"job_id\": 49, \"queue_id\": 205, \"organization_id\": 1, \"integration_id\": 47, \"event_id\": 198, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"manual_operator_confirmation\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
+      "duration_seconds": 3.59,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***wRAA=\", \"job_id\": 130, \"queue_id\": 300, \"organization_id\": 1, \"integration_id\": 68, \"event_id\": 303, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"manual_operator_confirmation\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -746,11 +753,11 @@
         "verificar_webhooks_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
-      "duration_seconds": 5.71,
-      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"public_url_masked\": \"https://teaches-ferrari-landing-pit.trycloudflare.com/api/...\", \"meta_verification\": true, \"signature_validation\": true, \"message_id_masked\": \"wamid***xNwA=\", \"webhook_event_type\": \"delivered\", \"queue_id\": 206, \"job_id\": 50, \"organization_id\": 1, \"event_id\": 200, \"integration_id\": 49, \"tenant_resolution\": true, \"message_state_update\": true, \"idempotency\": true, \"audit\": true, \"cross_tenant_incidents\": 0, \"invalid_signatures_accepted\": 0, \"secrets_exposed\": 0, \"source\": \"meta_webhook\"}}\n",
+      "status": "failed",
+      "duration_seconds": 0.53,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_WEBHOOK_PUBLIC_URL\"], \"checks\": {}}\n",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": 1
     },
     {
       "name": "backup_multitenant_live",
@@ -761,7 +768,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.74,
       "stdout_tail": "{\"name\": \"backup_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"organizations_present\": 2, \"events_with_organization\": 2, \"plain_secrets\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -775,7 +782,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.71,
       "stdout_tail": "{\"name\": \"restore_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"external_jobs_emitted_after_restore\": 0, \"cross_organization_after_restore\": 0, \"secrets_exposed\": 0, \"safe_mode_after_restore\": true}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -789,7 +796,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.82,
+      "duration_seconds": 0.73,
       "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -942,22 +949,22 @@
       "category": "backup_restore",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar backup_multitenant_live.",
+      "stdout_tail": "Evidencia live aprobada.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "restore_multitenant_live",
       "category": "backup_restore",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar restore_multitenant_live.",
+      "stdout_tail": "Evidencia live aprobada.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "disaster_recovery_live",
@@ -1000,7 +1007,7 @@
       "code": 0,
       "database": 84,
       "communications": 100,
-      "backup_restore": 0,
+      "backup_restore": 100,
       "events": 100,
       "permissions": 100,
       "functional": 100,
@@ -1012,7 +1019,7 @@
       "upgrade": 50,
       "environment": 100
     },
-    "weighted_average": 70.1
+    "weighted_average": 76.4
   },
   "approved": false
 }

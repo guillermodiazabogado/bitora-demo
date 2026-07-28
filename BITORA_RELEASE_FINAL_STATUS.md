@@ -75,9 +75,6 @@ WhatsApp webhook tenant-aware revalidado en staging final
 Disaster recovery live extendido
 Endurance 24 horas
 Upgrade desde version anterior
-Correccion de seguridad_basica
-Correccion de multievent_isolation_20_events
-Backup/restore multitenant live
 ```
 
 ## Revalidacion Final De Integraciones
@@ -143,34 +140,34 @@ Secretos expuestos: 0
 La corrida release actual dentro del contenedor staging confirma:
 
 ```text
+seguridad_basica: PASSED
+multievent_isolation_20_events: PASSED
 email_organization_live: PASSED
 google_oauth_live: PASSED
 whatsapp_organization_live: PASSED
 webhook_tenant_resolution_live: PASSED
+backup_multitenant_live: PASSED
+restore_multitenant_live: PASSED
+weighted_average: 76.4
 ```
 
 Pero no aprueba la Release global porque quedan gates requeridos fallidos u omitidos:
 
 ```text
-seguridad_basica
-multievent_isolation_20_events
-backup_multitenant_live
-restore_multitenant_live
 disaster_recovery_live
 endurance_24h
 upgrade_from_previous_version
 ```
 
-Nota: Email Live, Google OAuth Live, WhatsApp Live y WhatsApp Webhook Live ya quedaron revalidados en el mismo staging final.
+Nota: Email Live, Google OAuth Live, WhatsApp Live, WhatsApp Webhook Live, Security Baseline y 20-Event Isolation ya quedaron en PASSED dentro de BSTF. Backup/Restore live figura PASSED por evidencia existente, pero no fue el foco funcional de este sprint.
 
 ## Proximo paso recomendado
 
 ```text
 1. Rotar Client Secret de Google.
-2. Corregir seguridad_basica y multievent_isolation_20_events.
-3. Ejecutar backup/restore multitenant live.
-4. Ejecutar Disaster Recovery.
-5. Ejecutar Endurance 24h.
+2. Ejecutar Disaster Recovery.
+3. Ejecutar Endurance 24h.
+4. Ejecutar Upgrade desde version anterior.
 ```
 
 No se debe declarar BITORA apta para evento real hasta completar esos gates.
