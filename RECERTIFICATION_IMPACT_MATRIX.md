@@ -15,7 +15,7 @@ Esta matriz define que gates deben repetirse cuando un cambio futuro modifica un
 | Google OAuth | Google OAuth Live, cifrado, callbacks, tenant isolation |
 | WhatsApp | WhatsApp Live, Webhooks Live, Safe Mode, tenant resolution |
 | Infraestructura | BDF, health, `disaster_recovery_live`, `upgrade_from_previous_version`, `endurance_24h` |
-| Asistencia V4 | `seguridad_basica`, `multievent_isolation_20_events`, auditoria, QR/acceso, backup, restore, upgrade |
+| Asistencia V4 | `seguridad_basica`, `multievent_isolation_20_events`, auditoria, QR/acceso, backup, restore, upgrade; V4.1 requiere repetir pruebas dirigidas de idempotencia y feature flag |
 | Cierre de asistencia | Seguridad, auditoria, jobs si hay cierres programados, upgrade |
 | Certificados V4 | Storage, comunicaciones, auditoria, backup, restore, disaster recovery, upgrade |
 | Encuestas V4 | Privacidad, multitenant, exportaciones, backup, restore, upgrade |
