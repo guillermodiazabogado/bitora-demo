@@ -173,6 +173,16 @@ ATTENDANCE_PERMISSION_CODES = [
     "attendance.correct",
     "attendance.invalidate",
     "attendance.read_audit",
+    "attendance.rules.read",
+    "attendance.rules.manage",
+    "attendance.rules.publish",
+    "attendance.closure.read",
+    "attendance.closure.execute",
+    "attendance.closure.reopen",
+    "attendance.evaluation.read",
+    "attendance.eligibility.read",
+    "attendance.eligibility.override",
+    "attendance.snapshot.read",
 ]
 PERMISSION_MATRIX = {
     "Super Admin": {
@@ -185,7 +195,7 @@ PERMISSION_MATRIX = {
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -1055,6 +1065,153 @@ def init_db() -> None:
                 corrected_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS attendance_rule_sets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                name TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'DRAFT',
+                current_version_id INTEGER,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, event_id, scope_type, activity_id, name)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_rule_set_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_set_id INTEGER NOT NULL REFERENCES attendance_rule_sets(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                version_number INTEGER NOT NULL,
+                configuration_json TEXT NOT NULL,
+                configuration_hash TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'DRAFT',
+                published_at TEXT,
+                published_by TEXT,
+                idempotency_key TEXT NOT NULL DEFAULT '',
+                request_hash TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(rule_set_id, version_number),
+                UNIQUE(rule_set_id, configuration_hash)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_closures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                scope_type TEXT NOT NULL,
+                rule_set_version_id INTEGER NOT NULL REFERENCES attendance_rule_set_versions(id) ON DELETE RESTRICT,
+                status TEXT NOT NULL,
+                closed_at TEXT,
+                closed_by TEXT NOT NULL,
+                closure_reason TEXT NOT NULL DEFAULT '',
+                cutoff_at TEXT NOT NULL,
+                algorithm_version TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL DEFAULT '{}',
+                snapshot_hash TEXT NOT NULL DEFAULT '',
+                supersedes_closure_id INTEGER REFERENCES attendance_closures(id) ON DELETE SET NULL,
+                reopened_at TEXT,
+                reopened_by TEXT,
+                reopening_reason TEXT,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                result_status TEXT NOT NULL,
+                attendance_percentage TEXT NOT NULL DEFAULT '0.00',
+                attended_count INTEGER NOT NULL DEFAULT 0,
+                required_count INTEGER NOT NULL DEFAULT 0,
+                duration_minutes INTEGER NOT NULL DEFAULT 0,
+                eligible INTEGER NOT NULL DEFAULT 0,
+                failure_reasons_json TEXT NOT NULL DEFAULT '[]',
+                calculation_details_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                UNIQUE(closure_id, participant_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_evaluation_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                attendance_record_id INTEGER REFERENCES attendance_records(id) ON DELETE SET NULL,
+                unit_key TEXT NOT NULL,
+                status TEXT NOT NULL,
+                weight TEXT NOT NULL DEFAULT '1.00',
+                details_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_eligibility_decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                automatic_result TEXT NOT NULL,
+                effective_result TEXT NOT NULL,
+                override_id INTEGER,
+                status TEXT NOT NULL,
+                reasons_json TEXT NOT NULL DEFAULT '[]',
+                decided_at TEXT NOT NULL,
+                decided_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(evaluation_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_overrides (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                previous_effective_result TEXT NOT NULL,
+                manual_result TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                evidence_json TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_reopenings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                reason TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                reopened_by TEXT NOT NULL,
+                reopened_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
             CREATE TABLE IF NOT EXISTS technical_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 level TEXT NOT NULL DEFAULT 'info',
@@ -1201,6 +1358,14 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_attendance_events_attendance ON attendance_events(attendance_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_attendance_events_event ON attendance_events(event_id, event_type, created_at);
         CREATE INDEX IF NOT EXISTS idx_attendance_corrections_attendance ON attendance_corrections(attendance_id, corrected_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_rule_sets_scope ON attendance_rule_sets(organization_id, event_id, scope_type, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_rule_versions_set ON attendance_rule_set_versions(rule_set_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_attendance_closures_scope ON attendance_closures(organization_id, event_id, scope_type, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_closures_rule_version ON attendance_closures(rule_set_version_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_evaluations_closure ON attendance_evaluations(closure_id, participant_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_eligibility_event_participant ON attendance_eligibility_decisions(event_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_overrides_evaluation ON attendance_overrides(evaluation_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_reopenings_closure ON attendance_reopenings(closure_id, reopened_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
@@ -2071,6 +2236,11 @@ def feature_flag_enabled(db: sqlite3.Connection, flag_key: str, *, organization_
 def attendance_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     organization_id = event_organization_id(db, event_id)
     return feature_flag_enabled(db, "attendance_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def attendance_closure_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return attendance_v4_enabled(db, event_id) and feature_flag_enabled(db, "attendance_closure_eligibility_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
@@ -5953,6 +6123,92 @@ class AppHandler(SimpleHTTPRequestHandler):
             attendance_detail_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)", path)
             attendance_events_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/events", path)
             participant_attendance_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/attendance", path)
+            attendance_rule_sets_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets", path)
+            attendance_closures_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
+            attendance_closure_detail_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)", path)
+            attendance_closure_evaluations_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/evaluations", path)
+            participant_eligibility_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility", path)
+            if attendance_rule_sets_match:
+                event_id = int(attendance_rule_sets_match.group(1))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.rules.read", "attendance.rules.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().list_rule_sets(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_closures_match:
+                event_id = int(attendance_closures_match.group(1))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.closure.read", "attendance.closure.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().list_closures(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_closure_detail_match:
+                event_id = int(attendance_closure_detail_match.group(1))
+                closure_id = int(attendance_closure_detail_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.snapshot.read", "attendance.snapshot.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = attendance_service().get_closure(db, organization_id=org_id, event_id=event_id, closure_id=closure_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if attendance_closure_evaluations_match:
+                event_id = int(attendance_closure_evaluations_match.group(1))
+                closure_id = int(attendance_closure_evaluations_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.evaluation.read", "attendance.evaluation.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().list_closure_evaluations(db, organization_id=org_id, event_id=event_id, closure_id=closure_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if participant_eligibility_match:
+                event_id = int(participant_eligibility_match.group(1))
+                participant_id = int(participant_eligibility_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.eligibility.read", "attendance.eligibility.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().participant_eligibility(db, organization_id=org_id, event_id=event_id, participant_id=participant_id)
+                self.send_json({"ok": True, **result})
+                return
+
             if attendance_list_match:
                 event_id = int(attendance_list_match.group(1))
                 with connect() as db:
@@ -8298,6 +8554,167 @@ class AppHandler(SimpleHTTPRequestHandler):
             attendance_create_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
             attendance_correct_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/correct", path)
             attendance_invalidate_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/invalidate", path)
+            attendance_rule_set_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets", path)
+            attendance_rule_version_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets/(\d+)/versions", path)
+            attendance_rule_version_publish_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets/(\d+)/versions/(\d+)/publish", path)
+            attendance_closure_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
+            attendance_closure_reopen_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/reopen", path)
+            attendance_eligibility_override_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility/override", path)
+            if attendance_rule_set_create_match:
+                event_id = int(attendance_rule_set_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.manage", "attendance.rules.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().create_rule_set(db, organization_id=org_id, event_id=event_id, actor=actor, name=str(data.get("name") or ""), scope_type=str(data.get("scope_type") or "EVENT"), activity_id=int(data.get("activity_id") or 0) or None)
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if attendance_rule_version_create_match:
+                event_id = int(attendance_rule_version_create_match.group(1))
+                rule_set_id = int(attendance_rule_version_create_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.manage", "attendance.rules.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().create_rule_set_version(db, organization_id=org_id, event_id=event_id, rule_set_id=rule_set_id, actor=actor, configuration=data.get("configuration") if isinstance(data.get("configuration"), dict) else {})
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_rule_version_publish_match:
+                event_id = int(attendance_rule_version_publish_match.group(1))
+                rule_set_id = int(attendance_rule_version_publish_match.group(2))
+                version_id = int(attendance_rule_version_publish_match.group(3))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.publish", "attendance.rules.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().publish_rule_set_version(db, organization_id=org_id, event_id=event_id, rule_set_id=rule_set_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_closure_create_match:
+                event_id = int(attendance_closure_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.closure.execute", "attendance.closure.execute", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().close_attendance(db, organization_id=org_id, event_id=event_id, actor=actor, rule_set_version_id=int(data.get("rule_set_version_id") or 0), scope_type=str(data.get("scope_type") or "EVENT"), activity_id=int(data.get("activity_id") or 0) or None, reason=str(data.get("reason") or ""), cutoff_at=str(data.get("cutoff_at") or "").strip() or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_closure_reopen_match:
+                event_id = int(attendance_closure_reopen_match.group(1))
+                closure_id = int(attendance_closure_reopen_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.closure.reopen", "attendance.closure.reopen", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().reopen_closure(db, organization_id=org_id, event_id=event_id, closure_id=closure_id, actor=actor, reason=str(data.get("reason") or ""), idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_eligibility_override_match:
+                event_id = int(attendance_eligibility_override_match.group(1))
+                participant_id = int(attendance_eligibility_override_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.eligibility.override", "attendance.eligibility.override", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().override_eligibility(db, organization_id=org_id, event_id=event_id, participant_id=participant_id, actor=actor, manual_result=str(data.get("manual_result") or ""), reason=str(data.get("reason") or ""), evidence=data.get("evidence") if isinstance(data.get("evidence"), dict) else {}, closure_id=int(data.get("closure_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
             if attendance_create_match:
                 event_id = int(attendance_create_match.group(1))
                 actor_override = str(data.get("actor") or "").strip() or None
