@@ -321,6 +321,7 @@ class SupertestRunner:
         backup_status, backup_detail = self.live_gate_status("backup_multitenant_live")
         restore_status, restore_detail = self.live_gate_status("restore_multitenant_live")
         disaster_status, disaster_detail = self.live_gate_status("disaster_recovery_live")
+        upgrade_status, upgrade_detail = self.live_gate_status("upgrade_from_previous_version")
         return [
             self.gate("staging_environment", "environment", True, "passed" if staging else "omitted", "APP_ENV=staging requerido para release final."),
             self.gate("postgres_live", "database", True, "passed" if live_postgres else "omitted", "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging."),
@@ -339,7 +340,7 @@ class SupertestRunner:
             self.gate("restore_multitenant_live", "backup_restore", True, restore_status, restore_detail),
             self.gate("disaster_recovery_live", "disaster", True, disaster_status, disaster_detail),
             self.gate("endurance_24h", "endurance", True, "omitted", "Pendiente ejecucion real de 24 horas."),
-            self.gate("upgrade_from_previous_version", "upgrade", True, "omitted", "Pendiente prueba de actualizacion desde version anterior con datos."),
+            self.gate("upgrade_from_previous_version", "upgrade", True, upgrade_status, upgrade_detail),
         ]
 
     def live_gate_status(self, name: str) -> tuple[str, str]:

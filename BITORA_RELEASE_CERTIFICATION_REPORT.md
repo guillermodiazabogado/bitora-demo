@@ -5,28 +5,18 @@ Fecha: 2026-07-28
 ## Sprint Actual
 
 ```text
-BITORA - DISASTER RECOVERY LIVE CERTIFICATION
+BITORA - UPGRADE FROM PREVIOUS VERSION LIVE CERTIFICATION
 ```
 
 Resultado:
 
 ```text
-disaster_recovery_live: PASSED
+upgrade_from_previous_version: PASSED
 ```
 
-Gates previamente certificados:
+Pendiente fuera de este sprint:
 
 ```text
-backup_multitenant_live: PASSED
-restore_multitenant_live: PASSED
-seguridad_basica: PASSED
-multievent_isolation_20_events: PASSED
-```
-
-Pendientes fuera de este sprint:
-
-```text
-upgrade_from_previous_version: OMITTED
 endurance_24h: OMITTED
 ```
 

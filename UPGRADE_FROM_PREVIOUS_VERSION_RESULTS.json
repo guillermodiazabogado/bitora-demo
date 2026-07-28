@@ -1,0 +1,315 @@
+{
+  "backup": {
+    "database_sha256": "4f5a80f48d76f38bed643c094fbe22e4115045f347476a4f0f699cda47dfe2b6",
+    "database_size": 217251,
+    "status": "passed",
+    "storage_sha256": "0449a542a1146a242872521a8b7d6ad873b333b42d3a1e411a8f7604700e56c5",
+    "storage_size": 1861
+  },
+  "checks": {
+    "corrupted_files": 0,
+    "cross_event_access": 0,
+    "cross_organization_access": 0,
+    "data_integrity": true,
+    "database_migrations": true,
+    "duplicate_jobs": 0,
+    "duplicate_sends": 0,
+    "external_effects": 0,
+    "failed_upgrade_recovery": true,
+    "functional_validation": true,
+    "jobs_compatibility": true,
+    "migration_idempotency": true,
+    "missing_records": 0,
+    "multitenant_isolation": true,
+    "pre_upgrade_backup": true,
+    "pre_upgrade_manifest": true,
+    "previous_version_dataset": true,
+    "previous_version_installation": true,
+    "previous_version_selection": true,
+    "secrets_exposed": 0,
+    "sequence_integrity": true,
+    "storage_integrity": true,
+    "upgrade_execution": true,
+    "upgrade_precheck": true
+  },
+  "comparison": {
+    "count_errors": {},
+    "integrity_errors": {},
+    "mismatches": []
+  },
+  "failed_upgrade_recovery": {
+    "bad_restore_rejected": true,
+    "external_effects": 0,
+    "good_restore_recovered": true,
+    "status": "passed"
+  },
+  "finished_at": "2026-07-28T19:05:54+00:00",
+  "jobs": {
+    "duplicate_jobs": 0,
+    "duplicate_sends": 0,
+    "external_effects": 0,
+    "processing_or_retrying_jobs": 0
+  },
+  "metrics": {
+    "pre_backup_seconds": 0.852,
+    "precheck_seconds": 32.371,
+    "quiescence_started_at": "2026-07-28T19:05:22+00:00",
+    "total_seconds": 76.04,
+    "upgrade_seconds": 31.723
+  },
+  "mode": "live",
+  "name": "upgrade_from_previous_version",
+  "post_manifest": {
+    "checksums": {
+      "accreditations": "c617bebcd698d528acb1e40f57dfe91c211eec030bbab58dfdd6b6ee77815c18",
+      "activities": "645236634a7c5bc283a6089f641812bf1560f09e0f00229b27b030978101882b",
+      "audit_logs": "fdc228939cda8e80073b70eb600091f43efb0967fa0fbaa15999b1862d804328",
+      "events": "819077a463f556dc48382ccaee13796f16e766f5973e50b9297446b1b76580dc",
+      "integrations": "c0cf7de9024df740bb86b7eeae66b33308666ff3cd7be427615ae3fc285c1458",
+      "jobs": "eb5f4fe1e0e27e5d108245fb38f05c410acbf81fcebaf929ad3e6a0872dc4467",
+      "organizations": "4b823dc64c37cf2ce809da4b33185d54f23513898e8a925f5e58238d631ee32f",
+      "participants": "801a14785b90141f49a2e66117a40d1a9aefae119e0c9e09e5fbe3924c3ce2cf",
+      "reservations": "32e717e709fad04ead9dc071cf0063a882cfdb062b52a3255dc86a7e75a90ba1",
+      "storage": "b8397df0ee7546b169cf84d81e1e08745af245c9c0d3f1086637d78f8a2dc9b7",
+      "users": "c14365731574d2e7f9d2842a45f1669b5a11927ec047bfb7c826c28f56f699a3"
+    },
+    "commit": "",
+    "counts": {
+      "accreditations": 1000,
+      "activities": 40,
+      "attendance": 100,
+      "audit_logs": 20,
+      "communication_queue": 20,
+      "event_integrations": 20,
+      "events": 20,
+      "integrations": 4,
+      "jobs": 20,
+      "organization_users": 8,
+      "organizations": 4,
+      "participants": 1000,
+      "reservations": 100,
+      "spaces": 60,
+      "storage_files": 40,
+      "users": 8
+    },
+    "db_engine": "postgres",
+    "environment": "staging",
+    "event_ids_sample": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "integrity": {
+      "cross_event_integrations": 0,
+      "cross_jobs": 0,
+      "orphan_accreditations": 0,
+      "orphan_jobs": 0,
+      "orphan_reservations": 0,
+      "provider_message_duplicates": 0,
+      "qr_duplicates": 0
+    },
+    "job_status_counts": {
+      "completed": 10,
+      "pending": 10
+    },
+    "organization_ids_sample": [
+      2,
+      3,
+      4,
+      5
+    ],
+    "postgres_version": "PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "run_id": "UPGRADE-LIVE-20260728-190438",
+    "storage": {
+      "file_count": 40,
+      "sample": [
+        {
+          "backend": "local",
+          "key": "events/2/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "0e41d1e9274022ef2e611d6fb3cee462c7284723fd7d5de7c55394c61681f901",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/2/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "f0b7b26cfc5becf6e3c81b134378ba081428d945b2669e9a2c759c4fa19373e3",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/3/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "8c237b491984124d941af4fa4cbadce6f75fa00baaa18cc69f058f9bacec5827",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/3/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "ad1a84a12c40bba21d3d19968da166c56fbff9505235454b4f8c967389361b39",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/4/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "4f25b967fc3a791e01193e8839030e0a92b7f3d6c496228699cc795eb6201ad6",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/4/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "a7f14d542eaab4fa233f360517888197f4839063791769b9a1866d88b00dfb50",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/5/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "dbd9843864081be297dacaa2a231588e0f7280adf380e460b289ca2087b19064",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/5/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "49c4f7002b0ba69962b54e3e672fc6341e05eb4df4e7ec465fd33e1c6292f582",
+          "size": 41
+        }
+      ],
+      "total_bytes": 1764
+    }
+  },
+  "post_upgrade_create": {
+    "accreditation_id": 2003,
+    "event_id": 43,
+    "person_id": 2003
+  },
+  "pre_manifest": {
+    "checksums": {
+      "accreditations": "c617bebcd698d528acb1e40f57dfe91c211eec030bbab58dfdd6b6ee77815c18",
+      "activities": "645236634a7c5bc283a6089f641812bf1560f09e0f00229b27b030978101882b",
+      "audit_logs": "fdc228939cda8e80073b70eb600091f43efb0967fa0fbaa15999b1862d804328",
+      "events": "819077a463f556dc48382ccaee13796f16e766f5973e50b9297446b1b76580dc",
+      "integrations": "c0cf7de9024df740bb86b7eeae66b33308666ff3cd7be427615ae3fc285c1458",
+      "jobs": "eb5f4fe1e0e27e5d108245fb38f05c410acbf81fcebaf929ad3e6a0872dc4467",
+      "organizations": "4b823dc64c37cf2ce809da4b33185d54f23513898e8a925f5e58238d631ee32f",
+      "participants": "801a14785b90141f49a2e66117a40d1a9aefae119e0c9e09e5fbe3924c3ce2cf",
+      "reservations": "32e717e709fad04ead9dc071cf0063a882cfdb062b52a3255dc86a7e75a90ba1",
+      "storage": "b8397df0ee7546b169cf84d81e1e08745af245c9c0d3f1086637d78f8a2dc9b7",
+      "users": "c14365731574d2e7f9d2842a45f1669b5a11927ec047bfb7c826c28f56f699a3"
+    },
+    "commit": "",
+    "counts": {
+      "accreditations": 1000,
+      "activities": 40,
+      "attendance": 100,
+      "audit_logs": 20,
+      "communication_queue": 20,
+      "event_integrations": 20,
+      "events": 20,
+      "integrations": 4,
+      "jobs": 20,
+      "organization_users": 8,
+      "organizations": 4,
+      "participants": 1000,
+      "reservations": 100,
+      "spaces": 60,
+      "storage_files": 40,
+      "users": 8
+    },
+    "db_engine": "postgres",
+    "environment": "staging",
+    "event_ids_sample": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "integrity": {
+      "cross_event_integrations": 0,
+      "cross_jobs": 0,
+      "orphan_accreditations": 0,
+      "orphan_jobs": 0,
+      "orphan_reservations": 0,
+      "provider_message_duplicates": 0,
+      "qr_duplicates": 0
+    },
+    "job_status_counts": {
+      "completed": 10,
+      "pending": 10
+    },
+    "organization_ids_sample": [
+      2,
+      3,
+      4,
+      5
+    ],
+    "postgres_version": "PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "run_id": "UPGRADE-LIVE-20260728-190438",
+    "storage": {
+      "file_count": 40,
+      "sample": [
+        {
+          "backend": "local",
+          "key": "events/2/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "0e41d1e9274022ef2e611d6fb3cee462c7284723fd7d5de7c55394c61681f901",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/2/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "f0b7b26cfc5becf6e3c81b134378ba081428d945b2669e9a2c759c4fa19373e3",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/3/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "8c237b491984124d941af4fa4cbadce6f75fa00baaa18cc69f058f9bacec5827",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/3/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "ad1a84a12c40bba21d3d19968da166c56fbff9505235454b4f8c967389361b39",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/4/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "4f25b967fc3a791e01193e8839030e0a92b7f3d6c496228699cc795eb6201ad6",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/4/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "a7f14d542eaab4fa233f360517888197f4839063791769b9a1866d88b00dfb50",
+          "size": 41
+        },
+        {
+          "backend": "local",
+          "key": "events/5/certificates/brl-UPGRADE-LIVE-20260728-190438-certificate.txt",
+          "sha256": "dbd9843864081be297dacaa2a231588e0f7280adf380e460b289ca2087b19064",
+          "size": 46
+        },
+        {
+          "backend": "local",
+          "key": "events/5/uploads/brl-UPGRADE-LIVE-20260728-190438-evidence.txt",
+          "sha256": "49c4f7002b0ba69962b54e3e672fc6341e05eb4df4e7ec465fd33e1c6292f582",
+          "size": 41
+        }
+      ],
+      "total_bytes": 1764
+    }
+  },
+  "previous_version_commit": "c3ae63585c53105c2e99912148df0be8ae803afb",
+  "previous_version_ref": "c3ae63585c53105c2e99912148df0be8ae803afb",
+  "regression": {
+    "backup_multitenant_live": "PASSED",
+    "multievent_isolation_20_events": "PASSED",
+    "restore_multitenant_live": "PASSED",
+    "security_baseline": "PASSED"
+  },
+  "run_id": "UPGRADE-LIVE-20260728-190438",
+  "started_at": "2026-07-28T19:04:38+00:00",
+  "status": "passed",
+  "target_version_commit": "524f13890c1df02e095077f9fc58204042b1682d"
+}

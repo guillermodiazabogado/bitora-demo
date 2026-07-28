@@ -11,12 +11,11 @@ RELEASE NO CERTIFICADA
 Sprint actual:
 
 ```text
-DISASTER RECOVERY LIVE CERTIFICATION: PASSED
+UPGRADE FROM PREVIOUS VERSION LIVE CERTIFICATION: PASSED
 ```
 
-Pendientes:
+Unico gate pendiente:
 
 ```text
-upgrade_from_previous_version
 endurance_24h
 ```
