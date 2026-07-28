@@ -264,6 +264,14 @@ class EventBackupService:
         ("attendance_records", "SELECT * FROM attendance_records WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("attendance_events", "SELECT * FROM attendance_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("attendance_corrections", "SELECT * FROM attendance_corrections WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_rule_sets", "SELECT * FROM attendance_rule_sets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_rule_set_versions", "SELECT * FROM attendance_rule_set_versions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_closures", "SELECT * FROM attendance_closures WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_evaluations", "SELECT * FROM attendance_evaluations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_evaluation_items", "SELECT * FROM attendance_evaluation_items WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_eligibility_decisions", "SELECT * FROM attendance_eligibility_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_overrides", "SELECT * FROM attendance_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_reopenings", "SELECT * FROM attendance_reopenings WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("certificate_eligibility", "SELECT * FROM certificate_eligibility WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -421,6 +429,14 @@ class EventRestoreService:
         "attendance_records",
         "attendance_events",
         "attendance_corrections",
+        "attendance_rule_sets",
+        "attendance_rule_set_versions",
+        "attendance_closures",
+        "attendance_evaluations",
+        "attendance_evaluation_items",
+        "attendance_eligibility_decisions",
+        "attendance_overrides",
+        "attendance_reopenings",
         "certificate_eligibility",
         "access_logs",
         "communication_logs",
@@ -501,6 +517,7 @@ class EventRestoreService:
                 "reservations": counts.get("reservations", 0),
                 "accesses": counts.get("access_logs", 0),
                 "attendance": counts.get("activity_attendance", 0) + counts.get("attendance_records", 0),
+                "attendance_closures": counts.get("attendance_closures", 0),
                 "certificates": counts.get("certificate_eligibility", 0),
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
                 "templates": counts.get("communication_templates", 0),
@@ -561,6 +578,13 @@ class EventRestoreService:
                     "accreditations": {},
                     "reservations": {},
                     "attendance_records": {},
+                    "attendance_rule_sets": {},
+                    "attendance_rule_set_versions": {},
+                    "attendance_closures": {},
+                    "attendance_evaluations": {},
+                    "attendance_eligibility_decisions": {},
+                    "attendance_overrides": {},
+                    "attendance_reopenings": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -770,6 +794,22 @@ class EventRestoreService:
                 row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
             if "attendance_id" in row and row.get("attendance_id") is not None:
                 row["attendance_id"] = maps["attendance_records"].get(int(row["attendance_id"]), row["attendance_id"])
+            if "rule_set_id" in row and row.get("rule_set_id") is not None:
+                row["rule_set_id"] = maps["attendance_rule_sets"].get(int(row["rule_set_id"]), row["rule_set_id"])
+            if "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["attendance_rule_set_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            if "rule_set_version_id" in row and row.get("rule_set_version_id") is not None:
+                row["rule_set_version_id"] = maps["attendance_rule_set_versions"].get(int(row["rule_set_version_id"]), row["rule_set_version_id"])
+            if "closure_id" in row and row.get("closure_id") is not None:
+                row["closure_id"] = maps["attendance_closures"].get(int(row["closure_id"]), row["closure_id"])
+            if "supersedes_closure_id" in row and row.get("supersedes_closure_id") is not None:
+                row["supersedes_closure_id"] = maps["attendance_closures"].get(int(row["supersedes_closure_id"]), row["supersedes_closure_id"])
+            if "evaluation_id" in row and row.get("evaluation_id") is not None:
+                row["evaluation_id"] = maps["attendance_evaluations"].get(int(row["evaluation_id"]), row["evaluation_id"])
+            if "override_id" in row and row.get("override_id") is not None:
+                row["override_id"] = maps["attendance_overrides"].get(int(row["override_id"]), row["override_id"])
+            if "attendance_record_id" in row and row.get("attendance_record_id") is not None:
+                row["attendance_record_id"] = maps["attendance_records"].get(int(row["attendance_record_id"]), row["attendance_record_id"])
             if "reservation_id" in row and row.get("reservation_id") is not None:
                 row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
             if "queue_id" in row and row.get("queue_id") is not None:

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA - Cierre de Asistencia</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { margin: 0; background: #f6f7f9; color: #17202a; font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; }
+    main { max-width: 1120px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    h1 { font-size: 24px; margin: 0; }
+    h2 { font-size: 17px; margin: 0 0 10px; }
+    section { background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+    label { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
+    input, select, textarea { width: 100%; box-sizing: border-box; border: 1px solid #bcc6d4; border-radius: 6px; padding: 9px; font: inherit; background: #fff; }
+    textarea { min-height: 92px; resize: vertical; }
+    button { border: 0; border-radius: 6px; background: #155eef; color: white; padding: 9px 12px; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #42526e; }
+    button.danger { background: #b42318; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #101828; color: #e6edf3; border-radius: 8px; padding: 14px; min-height: 120px; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 14px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Cierre de Asistencia</h1>
+      <a href="/">Volver</a>
+    </header>
+
+    <section>
+      <h2>Contexto</h2>
+      <div class="grid">
+        <label>Evento<input id="eventId" type="number" min="1"></label>
+        <label>Actividad opcional<input id="activityId" type="number" min="1"></label>
+        <label>Participante<input id="participantId" type="number" min="1"></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Reglas</h2>
+      <div class="grid">
+        <label>Nombre<input id="ruleName" value="Regla asistencia"></label>
+        <label>Alcance<select id="scopeType"><option>EVENT</option><option>ACTIVITY</option></select></label>
+        <label>Version publicada<input id="versionId" type="number" min="1"></label>
+      </div>
+      <label>Configuracion JSON<textarea id="ruleConfig">{"minimum_attendance_percentage":"80","minimum_attended_activities":0,"mandatory_activity_ids":[],"allow_partial_attendance":false,"require_event_presence":true,"require_all_mandatory_activities":true,"eligibility_mode":"ALL","allow_manual_override":true}</textarea></label>
+      <div class="actions">
+        <button onclick="createRuleSet()">Crear regla</button>
+        <button onclick="createVersion()">Crear version</button>
+        <button onclick="publishVersion()">Publicar</button>
+        <button class="secondary" onclick="listRules()">Listar reglas</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Cierre</h2>
+      <div class="grid">
+        <label>Rule set<input id="ruleSetId" type="number" min="1"></label>
+        <label>Cierre<input id="closureId" type="number" min="1"></label>
+        <label>Idempotencia<input id="idem" value="v42-ui-key"></label>
+      </div>
+      <div class="actions">
+        <button onclick="closeAttendance()">Cerrar</button>
+        <button class="secondary" onclick="listClosures()">Listar cierres</button>
+        <button class="secondary" onclick="listEvaluations()">Ver evaluaciones</button>
+        <button class="danger" onclick="reopenClosure()">Reabrir</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Elegibilidad</h2>
+      <div class="grid">
+        <label>Resultado manual<select id="manualResult"><option>MANUALLY_APPROVED</option><option>MANUALLY_REJECTED</option></select></label>
+        <label>Motivo<input id="overrideReason" value="Override QA controlado"></label>
+        <label>Key override<input id="overrideKey" value="v42-ui-override"></label>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="getEligibility()">Consultar</button>
+        <button class="danger" onclick="overrideEligibility()">Override</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Resultado</h2>
+      <pre id="output">{}</pre>
+    </section>
+  </main>
+
+  <script>
+    const out = document.getElementById("output");
+    const value = (id) => document.getElementById(id).value.trim();
+    const numeric = (id) => Number(value(id) || 0);
+    function show(data) { out.textContent = JSON.stringify(data, null, 2); }
+    async function api(path, options = {}) {
+      const res = await fetch(path, { headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
+      const data = await res.json().catch(() => ({}));
+      show(data);
+      return data;
+    }
+    function body(extra = {}) { return JSON.stringify({ actor: "Admin", ...extra }); }
+    async function listRules() { await api(`/api/events/${numeric("eventId")}/attendance-rule-sets`); }
+    async function createRuleSet() {
+      const data = await api(`/api/events/${numeric("eventId")}/attendance-rule-sets`, { method: "POST", body: body({ name: value("ruleName"), scope_type: value("scopeType"), activity_id: numeric("activityId") || null }) });
+      if (data.item) document.getElementById("ruleSetId").value = data.item.id;
+    }
+    async function createVersion() {
+      const data = await api(`/api/events/${numeric("eventId")}/attendance-rule-sets/${numeric("ruleSetId")}/versions`, { method: "POST", body: body({ configuration: JSON.parse(value("ruleConfig")) }) });
+      if (data.item) document.getElementById("versionId").value = data.item.id;
+    }
+    async function publishVersion() {
+      await api(`/api/events/${numeric("eventId")}/attendance-rule-sets/${numeric("ruleSetId")}/versions/${numeric("versionId")}/publish`, { method: "POST", body: body({ idempotency_key: `${value("idem")}-publish` }) });
+    }
+    async function closeAttendance() {
+      const data = await api(`/api/events/${numeric("eventId")}/attendance-closures`, { method: "POST", body: body({ rule_set_version_id: numeric("versionId"), scope_type: value("scopeType"), activity_id: numeric("activityId") || null, idempotency_key: `${value("idem")}-close` }) });
+      if (data.item) document.getElementById("closureId").value = data.item.id;
+    }
+    async function listClosures() { await api(`/api/events/${numeric("eventId")}/attendance-closures`); }
+    async function listEvaluations() { await api(`/api/events/${numeric("eventId")}/attendance-closures/${numeric("closureId")}/evaluations`); }
+    async function reopenClosure() {
+      await api(`/api/events/${numeric("eventId")}/attendance-closures/${numeric("closureId")}/reopen`, { method: "POST", body: body({ reason: "Reapertura QA controlada", idempotency_key: `${value("idem")}-reopen` }) });
+    }
+    async function getEligibility() { await api(`/api/events/${numeric("eventId")}/participants/${numeric("participantId")}/eligibility`); }
+    async function overrideEligibility() {
+      await api(`/api/events/${numeric("eventId")}/participants/${numeric("participantId")}/eligibility/override`, { method: "POST", body: body({ closure_id: numeric("closureId"), manual_result: value("manualResult"), reason: value("overrideReason"), idempotency_key: value("overrideKey") }) });
+    }
+  </script>
+</body>
+</html>

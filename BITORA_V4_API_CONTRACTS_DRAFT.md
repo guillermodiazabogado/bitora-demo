@@ -12,7 +12,10 @@ Rutas legacy se conservan. Nuevas APIs deben declarar recurso, comando, consulta
 - Command: correccion manual.
 - Command: cerrar/reabrir asistencia.
 - Query: asistencia por evento, actividad y participante.
-- Permisos: `attendance.view`, `attendance.record`, `attendance.correct`, `attendance.close`.
+- Command: crear/publicar reglas de cierre.
+- Query: cierres, snapshots, evaluaciones y elegibilidad.
+- Command: override manual de elegibilidad.
+- Permisos: `attendance.read`, `attendance.record`, `attendance.correct`, `attendance.closure.execute`, `attendance.closure.reopen`, `attendance.eligibility.override`.
 - Idempotencia: clave por actividad, acreditacion, tipo de marca y ventana.
 
 ## Certificados

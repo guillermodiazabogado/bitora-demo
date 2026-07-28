@@ -13,6 +13,7 @@ Estado: IMPLEMENTED / TESTED / PENDING CERTIFICATION.
 Objetivo: cierres, reaperturas y elegibilidad.
 Dependencia: V4.1.
 Gates: seguridad, auditoria, jobs si aplica.
+Estado: IMPLEMENTED / TESTED / PENDING REVIEW.
 
 ## Sprint V4.3 - Certificates
 
