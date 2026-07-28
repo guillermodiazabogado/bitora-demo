@@ -2,14 +2,14 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-28T16:41:25",
+    "started_at": "2026-07-28T18:31:23",
     "python": "3.12.13",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
     "branch": "",
     "commit": "",
     "dirty_files": [],
     "max_migration": "015_role_permissions.sql",
-    "code_checksum": "6d0a468e1a539cb59ecbc0bf8d9b6b147623c4574df8cafa09a87f3b32c87c04",
+    "code_checksum": "0d80d010ae5fe8bf46ed238bb504f11306d2cec8fe782018a16eea9dd357fd5c",
     "critical_env": {
       "APP_ENV": "staging",
       "BASE_URL": "http***8788",
@@ -26,8 +26,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-28T16:41:25",
-  "finished_at": "2026-07-28T16:42:19",
+  "started_at": "2026-07-28T18:31:23",
+  "finished_at": "2026-07-28T18:33:26",
   "findings": [
     {
       "severity": "medium",
@@ -194,6 +194,13 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
+      "detail": "seed_dataset ocupa mas de 120 lineas",
+      "file": "tools/backup_restore_live_dataset.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
       "detail": "_simulate_peak_operations ocupa mas de 120 lineas",
       "file": "backend/services/demo_real.py"
     },
@@ -229,7 +236,7 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: verificar_multievent_isolation_20_events.py:17, server.py:10401, verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42",
+      "detail": "main: verificar_restore_multitenant_live.py:14, verificar_multievent_isolation_20_events.py:17, server.py:10401, verificar_backup_multitenant_live.py:14, verificar_recuperacion.py:20, verificar_v4_2.py:43",
       "file": ""
     },
     {
@@ -327,6 +334,34 @@
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
+      "detail": "return int(db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE {where}\", params).fetchone()[\"c\"] or 0)",
+      "file": "tools/backup_restore_live_dataset.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "return int(db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE {column} IN ({placeholders})\", tuple(ids)).fetchone()[\"c\"] or 0)",
+      "file": "tools/backup_restore_live_dataset.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "rows = db.execute(f\"SELECT * FROM {table} WHERE {where} ORDER BY id\", params).fetchall()",
+      "file": "tools/backup_restore_live_dataset.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "rows = db.execute(f\"SELECT * FROM {table} WHERE {column} IN ({placeholders}) ORDER BY id\", tuple(ids)).fetchall()",
+      "file": "tools/backup_restore_live_dataset.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
       "detail": "\"tables\": {table: [dict(row) for row in db.execute(f'SELECT * FROM \"{table}\" ORDER BY 1').fetchall()] for table in tables},",
       "file": "backend/services/backup.py"
     },
@@ -373,17 +408,17 @@
       "file": "backend/services/capacity_buckets.py"
     },
     {
-      "severity": "medium",
-      "category": "database",
-      "title": "Prefijo de migracion duplicado",
-      "detail": "Prefijo 015 aparece mas de una vez",
-      "file": ""
-    },
-    {
       "severity": "low",
       "category": "database",
       "title": "Prefijo de migracion duplicado conocido",
       "detail": "Prefijo 007 aparece mas de una vez",
+      "file": ""
+    },
+    {
+      "severity": "medium",
+      "category": "database",
+      "title": "Prefijo de migracion duplicado",
+      "detail": "Prefijo 015 aparece mas de una vez",
       "file": ""
     },
     {
@@ -404,7 +439,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.05,
+      "duration_seconds": 4.99,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -418,7 +453,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.16,
+      "duration_seconds": 4.97,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -432,7 +467,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.71,
+      "duration_seconds": 0.79,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -446,7 +481,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.71,
+      "duration_seconds": 0.76,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -460,7 +495,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.53,
+      "duration_seconds": 0.61,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -474,7 +509,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.51,
+      "duration_seconds": 0.52,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -488,7 +523,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.85,
+      "duration_seconds": 0.89,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -502,7 +537,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.45,
+      "duration_seconds": 0.47,
       "stdout_tail": "OK postgres live migrations=[]\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -516,7 +551,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.42,
+      "duration_seconds": 0.45,
       "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -530,8 +565,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.88,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 272, \"event_b\": 273}\n",
+      "duration_seconds": 2.93,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 436, \"event_b\": 437}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -544,8 +579,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.78,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 274, \"team_members\": 3}\n",
+      "duration_seconds": 2.66,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 438, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -558,7 +593,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.05,
+      "duration_seconds": 4.54,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -572,7 +607,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.47,
+      "duration_seconds": 3.21,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -586,7 +621,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.62,
+      "duration_seconds": 3.29,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -600,7 +635,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 6.14,
+      "duration_seconds": 7.05,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -614,7 +649,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 6.4,
+      "duration_seconds": 6.85,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -628,7 +663,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.71,
+      "duration_seconds": 0.72,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -642,7 +677,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.54,
+      "duration_seconds": 0.55,
       "stdout_tail": "{\"name\": \"google_oauth_contract\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"authorization_url\": true, \"offline_access\": true, \"prompt_consent\": true, \"scopes_minimos\": [\"openid\", \"email\", \"profile\"], \"secret_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -656,7 +691,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.7,
+      "duration_seconds": 0.71,
       "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -670,7 +705,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.7,
+      "duration_seconds": 0.73,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -684,7 +719,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.55,
+      "duration_seconds": 0.56,
       "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -698,7 +733,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.71,
+      "duration_seconds": 0.72,
       "stdout_tail": "{\"name\": \"google_oauth_backup_restore\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"encrypted_backup_safe\": true, \"metadata_sanitized\": true, \"restore_requires_safe_reconnect_policy\": true, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -712,7 +747,7 @@
       ],
       "required": false,
       "status": "failed",
-      "duration_seconds": 2.56,
+      "duration_seconds": 3.25,
       "stdout_tail": "",
       "stderr_tail": "Traceback (most recent call last):\n  File \"/app/backend/services/google_oauth.py\", line 163, in _open_json\n    with self._opener(request, timeout=self.config.timeout) as response:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 215, in urlopen\n    return opener.open(url, data, timeout)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 521, in open\n    response = meth(req, response)\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 630, in http_response\n    response = self.parent.error(\n               ^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 559, in error\n    return self._call_chain(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 639, in http_error_default\n    raise HTTPError(req.full_url, code, msg, hdrs, fp)\nurllib.error.HTTPError: HTTP Error 401: Unauthorized\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 156, in <module>\n    main()\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 150, in main\n    result = _contract_result(mode, missing) if mode != \"live\" or missing else _live_result()\n                                                                               ^^^^^^^^^^^^^^\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 95, in _live_result\n    account = client.userinfo(access_token)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 146, in userinfo\n    return self._open_json(request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 175, in _open_json\n    raise GoogleOAuthError(f\"Google HTTP {exc.code}: {message}\", \"google_http_error\") from exc\nbackend.services.google_oauth.GoogleOAuthError: Google HTTP 401: Invalid Credentials\n",
       "exit_code": 1
@@ -726,8 +761,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 3.07,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"129c67***906cd7\", \"job_id\": 129, \"queue_id\": 299, \"organization_id\": 1, \"integration_id\": 66, \"event_id\": 301, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 3.25,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"974fd1***129da5\", \"job_id\": 269, \"queue_id\": 453, \"organization_id\": 1, \"integration_id\": 98, \"event_id\": 465, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -739,11 +774,11 @@
         "verificar_whatsapp_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
-      "duration_seconds": 3.59,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***wRAA=\", \"job_id\": 130, \"queue_id\": 300, \"organization_id\": 1, \"integration_id\": 68, \"event_id\": 303, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"manual_operator_confirmation\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
+      "status": "failed",
+      "duration_seconds": 64.21,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"failed\", \"missing_env\": [], \"checks\": {}, \"error\": \"WhatsApp debe quedar enviado, estado=pendiente, error=Meta Cloud API HTTP 401: {\\\"error\\\":{\\\"message\\\":\\\"Authentication Error\\\",\\\"code\\\":190,\\\"type\\\":\\\"OAuthException\\\",\\\"fbtrace_id\\\":\\\"A_Xd1uQ1rLZVnmdhNiqrKP9\\\"}}\"}\n",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": 1
     },
     {
       "name": "webhooks_multitenant_live",
@@ -754,7 +789,7 @@
       ],
       "required": false,
       "status": "failed",
-      "duration_seconds": 0.53,
+      "duration_seconds": 0.56,
       "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_WEBHOOK_PUBLIC_URL\"], \"checks\": {}}\n",
       "stderr_tail": "",
       "exit_code": 1
@@ -768,8 +803,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.74,
-      "stdout_tail": "{\"name\": \"backup_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"organizations_present\": 2, \"events_with_organization\": 2, \"plain_secrets\": 0}}\n",
+      "duration_seconds": 0.55,
+      "stdout_tail": "{\"checks\": {\"backup_consistency\": true, \"database_backup\": true, \"secrets_exposed\": 0, \"storage_backup\": true}, \"mode\": \"live\", \"name\": \"backup_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260728-182640\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -782,8 +817,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.71,
-      "stdout_tail": "{\"name\": \"restore_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"external_jobs_emitted_after_restore\": 0, \"cross_organization_after_restore\": 0, \"secrets_exposed\": 0, \"safe_mode_after_restore\": true}}\n",
+      "duration_seconds": 0.54,
+      "stdout_tail": "{\"checks\": {\"cross_event_access\": 0, \"cross_organization_access\": 0, \"duplicate_sends\": 0, \"external_effects_post_restore\": 0, \"isolated_restore\": true, \"manifest_comparison\": true}, \"mode\": \"live\", \"name\": \"restore_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260728-182640\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -796,7 +831,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.73,
+      "duration_seconds": 0.74,
       "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -916,22 +951,22 @@
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "passed",
+      "status": "failed",
       "duration_seconds": 0,
-      "stdout_tail": "Evidencia live aprobada.",
+      "stdout_tail": "Modo live; estado failed.",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": null
     },
     {
       "name": "webhook_tenant_resolution_live",
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "passed",
+      "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Evidencia live aprobada.",
+      "stdout_tail": "Modo live; estado omitted. Faltan variables: WHATSAPP_WEBHOOK_PUBLIC_URL",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": null
     },
     {
       "name": "communications_tenant_isolation",

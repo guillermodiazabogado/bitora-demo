@@ -1,33 +1,50 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 
-from live_integrations_utils import assert_true, classify, close_context, contract_result, synthetic_multitenant_db, write_report
+from live_integrations_utils import classify, write_report
 
 
 NAME = "backup_multitenant_live"
+EVIDENCE = Path(__file__).resolve().parent / "output" / "live_integrations" / f"{NAME}.json"
 
 
 def main() -> None:
     mode, missing = classify(["APP_ENV", "QR_POSTGRES_DSN", "BITORA_STORAGE_PATH"])
-    context = synthetic_multitenant_db()
-    checks = {}
-    try:
-        db = context["db"]
-        orgs = db.execute("SELECT COUNT(*) AS c FROM organizations").fetchone()["c"]
-        events = db.execute("SELECT COUNT(*) AS c FROM events WHERE organization_id IS NOT NULL").fetchone()["c"]
-        encrypted = context["encrypted"]
-        assert_true(orgs >= 2, "Debe existir mas de una organizacion")
-        assert_true(events >= 2, "Debe existir mas de un evento multi-tenant")
-        assert_true("secret-value" not in encrypted, "Backup no debe partir de secretos planos")
-        checks = {
-            "organizations_present": int(orgs),
-            "events_with_organization": int(events),
-            "plain_secrets": 0,
+    if missing:
+        result = {
+            "name": NAME,
+            "mode": mode,
+            "status": "omitted",
+            "missing_env": missing,
+            "checks": {"reason": "Faltan variables live para backup multitenant."},
         }
-    finally:
-        close_context(context)
-    result = contract_result(NAME, mode, missing, checks)
+        write_report(NAME, result)
+        print(json.dumps(result, ensure_ascii=False))
+        return
+    if not EVIDENCE.exists():
+        result = {
+            "name": NAME,
+            "mode": "live" if os.environ.get("APP_ENV") == "staging" else mode,
+            "status": "omitted",
+            "missing_env": [],
+            "checks": {"reason": "Falta ejecutar python deployment/scripts/certify_backup_restore_live.py"},
+        }
+        write_report(NAME, result)
+        print(json.dumps(result, ensure_ascii=False))
+        return
+    result = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    if result.get("mode") != "live" or result.get("status") != "passed":
+        raise AssertionError(f"Evidencia live invalida para {NAME}: {result.get('status')}")
+    checks = result.get("checks", {})
+    if not checks.get("database_backup"):
+        raise AssertionError("Backup de base no validado")
+    if not checks.get("storage_backup"):
+        raise AssertionError("Backup de storage no validado")
+    if checks.get("secrets_exposed") != 0:
+        raise AssertionError("Se detectaron secretos expuestos")
     write_report(NAME, result)
     print(json.dumps(result, ensure_ascii=False))
 
