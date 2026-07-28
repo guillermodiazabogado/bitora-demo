@@ -6,19 +6,23 @@ PASSED
 
 ## Decision
 
-GO PARA MERGE A develop/v4
+GO MERGED
 
 ## Identidad Git
 
 - Fecha de cierre: 2026-07-28T19:23:39-03:00
 - Rama feature inicial: `feature/v4.3-certificates-foundation`
-- SHA inicial/final de feature revisado: `ce6117fc33e3d086d0b0a9f585f2a43c120aed11`
+- SHA inicial de feature revisado: `ce6117fc33e3d086d0b0a9f585f2a43c120aed11`
+- SHA final de feature revisado: `116e53978997cd9cd8de817e6bc33404cb884c0c`
 - Rama base: `develop/v4`
 - SHA base inicial: `d8d1127c9176107104088cea5304c6db7102bfc2`
+- SHA final de `develop/v4` post-merge: `e9bc5eb7d47930b04f6947fcbef9014577e63f98`
 - PR: `#3 BITORA V4.3 certificates foundation`
 - Estado PR pre-merge: `OPEN / CLEAN`
+- Estado PR final: `MERGED`
 - Checks remotos configurados: ninguno reportado por GitHub
 - Working tree pre-review: limpio
+- Working tree post-merge: limpio
 
 ## Inventario funcional
 
@@ -74,6 +78,23 @@ Durante el desarrollo previo de V4.3 se corrigieron restricciones de restore e i
 | BDF smoke-test | PASSED |
 | Secret scan | PASSED, 0 secretos detectados |
 
+## Validaciones post-merge sobre develop/v4
+
+| Validacion | Resultado |
+| --- | --- |
+| V4.3 certificados | PASSED |
+| V4.2 cierre/elegibilidad | PASSED |
+| V4.1 asistencia | PASSED |
+| Seguridad basica | PASSED |
+| Aislamiento 20 eventos / 1000 participantes | PASSED |
+| Restore de evento | PASSED |
+| Integridad BITORA | PASSED |
+| Convivencia de modulos | PASSED |
+| BDF migrate | PASSED |
+| BDF health | PASSED |
+| BDF smoke-test | PASSED |
+| Secret scan | PASSED, 0 secretos detectados |
+
 ## Alcance confirmado
 
 V4.3 incluye foundation de certificados: tipos, plantillas, versionado, publicacion, preview, emision individual, emision masiva, PDF, hash, storage por evento, verificacion publica limitada, revocacion, reemision, auditoria, RBAC, feature flag y compatibilidad con backup/restore de evento.
@@ -82,6 +103,6 @@ V4.3 incluye foundation de certificados: tipos, plantillas, versionado, publicac
 
 No se implemento ni modifico: release candidate, release estable, Endurance 24h, email, WhatsApp, encuestas, firma remota, blockchain ni V4.4.
 
-## Estado recomendado final pre-merge
+## Estado recomendado final
 
-BITORA V4.3 READY FOR MERGE TO develop/v4 - READY FOR POST-MERGE VALIDATION
+BITORA V4.3 MERGED TO develop/v4 - READY FOR NEXT VERSION PLANNING
