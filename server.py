@@ -3452,6 +3452,7 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
     changes = []
     incoming = []
     provider = create_whatsapp_provider()
+    state_rank = {"pendiente": 0, "enviado": 1, "entregado": 2, "leido": 3, "error": 4}
     for event in provider.normalize_webhook(payload):
         external_event_id = str(event.get("external_event_id") or "")
         if external_event_id:
@@ -3468,6 +3469,7 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
         if event["kind"] == "status":
             message_id = str(event.get("message_id") or "")
             status = str(event.get("status") or "pendiente")
+            phone_number_id = str(event.get("phone_number_id") or "")
             row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone()
             event_id = int(row["event_id"]) if row else 0
             queue_id = int(row["id"]) if row else None
@@ -3480,10 +3482,14 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                 (event_id, queue_id, provider.name, message_id, external_event_id, str(event.get("raw_status") or status), str(event.get("phone") or ""), json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
             )
             if row:
-                delivered_at = now_iso() if status == "entregado" else row["delivered_at"]
+                current_status = str(row["status"] or "pendiente")
+                next_status = status
+                if state_rank.get(status, 0) < state_rank.get(current_status, 0):
+                    next_status = current_status
+                delivered_at = now_iso() if status == "entregado" and not row["delivered_at"] else row["delivered_at"]
                 read_at = now_iso() if status == "leido" else row["read_at"] if "read_at" in row.keys() else None
                 failed_at = now_iso() if status == "error" else row["failed_at"] if "failed_at" in row.keys() else None
-                error = json.dumps(event.get("errors") or [], ensure_ascii=False) if status == "error" else ""
+                error = json.dumps(event.get("errors") or [], ensure_ascii=False) if status == "error" else row["last_error"]
                 if status == "error" and event.get("phone"):
                     suppress_whatsapp(db, event_id, str(event.get("phone")), "provider_failed", "webhook", "event")
                 db.execute(
@@ -3493,11 +3499,22 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                         failed_at = COALESCE(?, failed_at), last_error = ?, processed_at = ?
                     WHERE id = ?
                     """,
-                    (status, delivered_at, read_at, failed_at, error, now_iso(), queue_id),
+                    (next_status, delivered_at, read_at, failed_at, error, now_iso(), queue_id),
                 )
-                communication_log(db, event_id, int(row["person_id"]), int(row["accreditation_id"]) if row["accreditation_id"] else None, "whatsapp", row["template_code"] or "webhook", row["subject"], f"Estado proveedor: {status}", status)
-                audit(db, "webhook", "communications.whatsapp_status", "communication_queue", queue_id, {"message_id": message_id, "status": status, "provider": provider.name})
-            changes.append({"message_id": message_id, "status": status, "queue_id": queue_id})
+                communication_log(db, event_id, int(row["person_id"]), int(row["accreditation_id"]) if row["accreditation_id"] else None, "whatsapp", row["template_code"] or "webhook", row["subject"], f"Estado proveedor: {status}", next_status)
+                audit(db, "webhook", "communications.whatsapp_status", "communication_queue", queue_id, {
+                    "event_id": event_id,
+                    "organization_id": row["organization_id"],
+                    "integration_id": row["integration_id"],
+                    "message_id": message_id,
+                    "phone_number_id": phone_number_id,
+                    "status": status,
+                    "stored_status": next_status,
+                    "provider": provider.name,
+                })
+            else:
+                audit(db, "webhook", "communications.whatsapp_unresolved", "communication_queue", None, {"message_id": message_id, "phone_number_id": phone_number_id, "status": status, "provider": provider.name})
+            changes.append({"message_id": message_id, "status": status, "stored_status": next_status if row else "unresolved", "queue_id": queue_id})
         elif event["kind"] == "message":
             phone = str(event.get("phone") or "")
             text = str(event.get("text") or "")

@@ -4,7 +4,7 @@ Fecha: 2026-07-28
 
 ## Objetivo
 
-Registrar el estado de certificacion despues de ejecutar WhatsApp Cloud API Live desde BITORA.
+Registrar el estado de certificacion despues de ejecutar WhatsApp Cloud API Live y Meta WhatsApp Webhooks Live desde BITORA.
 
 ## Estado actual
 
@@ -13,6 +13,7 @@ Release global: NO APROBADA
 Motivo: quedan gates live externos y pruebas prolongadas pendientes.
 Google OAuth Live: PASSED
 WhatsApp Live: PASSED
+WhatsApp Webhook Live: PASSED
 ```
 
 ## Entorno BDF local
@@ -84,9 +85,42 @@ weighted_average: 70.1
 WhatsApp dentro de BSTF:
 
 ```text
-whatsapp_organization_live: passed
-stdout_tail: Evidencia live aprobada.
-exit_code: 0
+whatsapp_organization_live: omitted en esta corrida por falta de evidencia local `whatsapp_multitenant_live`
+webhook_tenant_resolution_live: passed
+webhooks_multitenant_live: passed
+```
+
+## WhatsApp Webhooks Live
+
+La etapa Meta WhatsApp Webhooks Live fue ejecutada contra Meta usando una URL publica temporal de Cloudflare Tunnel apuntando solo al endpoint webhook de BITORA.
+
+Resultado:
+
+```text
+webhook_tenant_resolution_live: PASSED
+Meta challenge: PASSED
+Meta POST real: PASSED
+Firma X-Hub-Signature-256: PASSED
+Evento recibido: delivered
+Tenant resolution: PASSED
+Estado actualizado: PASSED
+Auditoria: PASSED
+Idempotencia: PASSED
+Cruces multi-tenant: 0
+Firmas invalidas aceptadas: 0
+Secretos expuestos: 0
+```
+
+Evidencia sanitizada:
+
+```text
+message_id: wamid***DNAA=
+job_id: 23
+queue_id: 165
+organization_id: 1
+event_id: 147
+integration_id: 30
+evidence_file: output/live_integrations/webhooks_multitenant_live.json
 ```
 
 ## Gates aun pendientes
@@ -96,7 +130,6 @@ Estos gates siguen pendientes y explican por que la Release global no se declara
 ```text
 email_organization_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
 google_oauth_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
-webhook_tenant_resolution_live: omitted
 disaster_recovery_live: omitted
 endurance_24h: omitted
 upgrade_from_previous_version: omitted
@@ -136,13 +169,7 @@ integration_id: 24
 receipt_source: manual_operator_confirmation
 ```
 
-Webhook endpoint preparado:
-
-```text
-webhook_tenant_resolution_live: OMITTED
-```
-
-Motivo: no se recibio webhook live `delivered/read` en una URL publica de BITORA durante esta etapa.
+Nota: en la corrida BSTF posterior a webhooks, `whatsapp_organization_live` figura omitido porque el runner espera evidencia en un archivo distinto al generado durante la certificacion manual anterior. La certificacion live original de WhatsApp se mantiene documentada arriba, pero debe persistirse o reejecutarse para una Release final completamente limpia.
 
 ## Seguridad
 
@@ -152,13 +179,13 @@ Tokens OAuth expuestos: 0
 Authorization code en logs nuevos: redacted
 Tokens WhatsApp expuestos: 0
 Datos personales en reportes: enmascarados
+Webhook payloads completos en reportes: 0
 ```
 
 ## Riesgos pendientes
 
 - Rotar el Client Secret de Google antes de uso prolongado o productivo.
 - Reejecutar Email Live en el mismo entorno de certificacion final.
-- Certificar webhooks tenant-aware live.
 - Ejecutar Disaster Recovery live.
 - Ejecutar Endurance 24 horas.
 - Ejecutar upgrade desde version anterior.
@@ -168,5 +195,6 @@ Datos personales en reportes: enmascarados
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
 WHATSAPP LIVE CERTIFICADO
+WHATSAPP WEBHOOK LIVE CERTIFICADO
 RELEASE GLOBAL NO CERTIFICADA TODAVIA
 ```
