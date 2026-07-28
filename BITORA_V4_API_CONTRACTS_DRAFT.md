@@ -20,10 +20,15 @@ Rutas legacy se conservan. Nuevas APIs deben declarar recurso, comando, consulta
 
 ## Certificados
 
-- Command: calcular elegibilidad.
-- Command: emitir/revocar/reemitir.
-- Query: certificados por evento/persona.
-- Permisos: `certificates.view`, `certificates.issue`, `certificates.revoke`.
+- Command: crear tipo.
+- Command: crear plantilla y version.
+- Command: publicar version.
+- Command: emitir individual o lote.
+- Command: revocar/reemitir.
+- Query: tipos, plantillas, emisiones y descarga.
+- Query publica: verificar token opaco.
+- Permisos: `certificates.types.manage`, `certificates.templates.publish`, `certificates.issue`, `certificates.batch.issue`, `certificates.revoke`, `certificates.reissue`, `certificates.download`.
+- Idempotencia: publicar, emitir, lote y reemitir.
 
 ## Encuestas
 

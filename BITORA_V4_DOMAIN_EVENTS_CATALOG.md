@@ -16,6 +16,10 @@
 | AttendanceEligibilityOverridden | Asistencia | Certificados futuros, auditoria | closure, participant, override | override id | Ninguno externo |
 | CertificateEligible | Certificados | Comunicaciones | event, person, rule | eligibility id | Preparar emision |
 | CertificateIssued | Certificados | Portal, comunicaciones | certificate id | certificate code | Notificar si autorizado |
+| CertificateTemplatePublished | Certificados | Emision | org, event, template version | template version id | Habilitar emision |
+| CertificateBatchCompleted | Certificados | Auditoria | org, event, batch | batch id | Ninguno externo |
+| CertificateRevoked | Certificados | Verificacion publica | issuance id | issuance id | Invalidar verificacion |
+| CertificateReissued | Certificados | Verificacion publica | previous issuance, new issuance | new issuance id | Ninguno externo |
 | SurveyPublished | Encuestas | Portal, comunicaciones | survey version | survey version | Mostrar encuesta |
 | SurveyCompleted | Encuestas | Certificados, analytics | survey response | response id | Recalcular condicion |
 | SpeakerAccepted | Disertantes | Agenda | speaker, event | invitation id | Cambiar estado |

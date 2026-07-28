@@ -44,6 +44,7 @@ from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
+from backend.services.certificates import CertificateDomainError, CertificateService
 from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
@@ -184,18 +185,34 @@ ATTENDANCE_PERMISSION_CODES = [
     "attendance.eligibility.override",
     "attendance.snapshot.read",
 ]
+CERTIFICATE_PERMISSION_CODES = [
+    "certificates.types.read",
+    "certificates.types.manage",
+    "certificates.templates.read",
+    "certificates.templates.manage",
+    "certificates.templates.publish",
+    "certificates.preview",
+    "certificates.issue",
+    "certificates.batch.issue",
+    "certificates.read",
+    "certificates.download",
+    "certificates.revoke",
+    "certificates.reissue",
+    "certificates.verify",
+    "certificates.audit.read",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -206,8 +223,8 @@ PERMISSION_MATRIX = {
         "actions": ["scan_qr", "attendance.record"],
     },
     "Visualizador": {
-        "modules": ["dashboard", "agenda", "reports"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read"],
+        "modules": ["dashboard", "agenda", "reports", "certificates"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -247,6 +264,10 @@ def access_validation_service() -> AccessValidationService:
 
 def attendance_service() -> AttendanceService:
     return AttendanceService(audit_service=audit_service(), now=now_iso)
+
+
+def certificate_service() -> CertificateService:
+    return CertificateService(audit_service=audit_service(), storage=STORAGE, now=now_iso)
 
 
 def qr_service() -> QRService:
@@ -1293,6 +1314,7 @@ def init_db() -> None:
         ensure_event_v3_columns(db)
         ensure_v4_1_columns(db)
         ensure_v4_2_columns(db)
+        ensure_v4_3_columns(db)
         ensure_v4_4_columns(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
@@ -1618,6 +1640,189 @@ def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
     certificate_columns = [row["name"] for row in db.execute("PRAGMA table_info(certificate_eligibility)").fetchall()]
     if "certificate_generated_at" not in certificate_columns:
         db.execute("ALTER TABLE certificate_eligibility ADD COLUMN certificate_generated_at TEXT")
+
+
+def ensure_v4_3_columns(db: sqlite3.Connection) -> None:
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS certificate_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            requires_eligibility INTEGER NOT NULL DEFAULT 1,
+            requires_closure INTEGER NOT NULL DEFAULT 1,
+            allow_override INTEGER NOT NULL DEFAULT 1,
+            allow_batch INTEGER NOT NULL DEFAULT 1,
+            allow_reissue INTEGER NOT NULL DEFAULT 1,
+            requires_numbering INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            current_version_id INTEGER,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_template_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL REFERENCES certificate_templates(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            content_schema TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            renderer_version TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            published_at TEXT,
+            published_by TEXT,
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            request_hash TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(template_id, version_number),
+            UNIQUE(template_id, content_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_number_sequences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            scope_key TEXT NOT NULL,
+            next_value INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, scope_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            template_version_id INTEGER NOT NULL REFERENCES certificate_template_versions(id) ON DELETE RESTRICT,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            total_count INTEGER NOT NULL DEFAULT 0,
+            success_count INTEGER NOT NULL DEFAULT 0,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_issuances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            template_version_id INTEGER NOT NULL REFERENCES certificate_template_versions(id) ON DELETE RESTRICT,
+            eligibility_decision_id INTEGER REFERENCES attendance_eligibility_decisions(id) ON DELETE RESTRICT,
+            attendance_closure_id INTEGER REFERENCES attendance_closures(id) ON DELETE RESTRICT,
+            evaluation_id INTEGER REFERENCES attendance_evaluations(id) ON DELETE RESTRICT,
+            batch_id INTEGER REFERENCES certificate_batches(id) ON DELETE SET NULL,
+            certificate_number TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            issued_at TEXT,
+            issued_by TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            supersedes_issuance_id INTEGER REFERENCES certificate_issuances(id) ON DELETE SET NULL,
+            logical_hash TEXT NOT NULL DEFAULT '',
+            failure_code TEXT NOT NULL DEFAULT '',
+            failure_message TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, certificate_number),
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            storage_key TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            sha256_hash TEXT NOT NULL,
+            logical_hash TEXT NOT NULL DEFAULT '',
+            renderer_version TEXT NOT NULL,
+            generated_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_verification_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash),
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_revocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            reason TEXT NOT NULL,
+            revoked_at TEXT NOT NULL,
+            revoked_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_reissuances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            previous_issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            new_issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            reason TEXT NOT NULL DEFAULT '',
+            reissued_by TEXT NOT NULL,
+            reissued_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(previous_issuance_id, new_issuance_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_certificate_types_scope ON certificate_types(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_templates_scope ON certificate_templates(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_template_versions_template ON certificate_template_versions(template_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_certificate_batches_event_status ON certificate_batches(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_issuances_event_participant ON certificate_issuances(organization_id, event_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_issuances_batch ON certificate_issuances(batch_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_documents_issuance ON certificate_documents(issuance_id);
+        CREATE INDEX IF NOT EXISTS idx_certificate_verification_token_hash ON certificate_verification_tokens(token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_revocations_issuance ON certificate_revocations(issuance_id);
+        """
+    )
 
 
 def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
@@ -2243,7 +2448,20 @@ def attendance_closure_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool
     return attendance_v4_enabled(db, event_id) and feature_flag_enabled(db, "attendance_closure_eligibility_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def certificates_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "certificates_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def certificates_v4_dependencies_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    return certificates_v4_enabled(db, event_id) and attendance_closure_v4_enabled(db, event_id)
+
+
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def certificate_error_payload(exc: CertificateDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -5808,6 +6026,8 @@ def public_static_path(path: str) -> bool:
 
 
 def public_api_get(path: str) -> bool:
+    if path.startswith("/api/public/certificates/verify/"):
+        return True
     return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
 
 
@@ -6117,6 +6337,99 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (org_id,),
                     ).fetchall()
                 self.send_json({"items": [dict(row) for row in rows], "available": [sanitize_integration(row) for row in available], "organization_id": org_id})
+                return
+
+            certificate_public_verify_match = re.fullmatch(r"/api/public/certificates/verify/([A-Za-z0-9_.~:-]+)", path)
+            if certificate_public_verify_match:
+                token = certificate_public_verify_match.group(1)
+                with connect() as db:
+                    result = certificate_service().verify_public(db, token=token)
+                    audit(db, "public", "certificates.verification_checked", "certificate", None, {"valid": bool(result.get("valid")), "token_hint": token[:8]})
+                self.send_json(result)
+                return
+
+            if path == "/api/certificate-types":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.types.read", "certificates.types.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_types(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/certificate-templates":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.templates.read", "certificates.templates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_templates(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            certificate_issuances_match = re.fullmatch(r"/api/events/(\d+)/certificates", path)
+            certificate_issuance_detail_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)", path)
+            certificate_issuance_download_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/download", path)
+            if certificate_issuances_match:
+                event_id = int(certificate_issuances_match.group(1))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.read", "certificates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_issuances(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if certificate_issuance_detail_match:
+                event_id = int(certificate_issuance_detail_match.group(1))
+                issuance_id = int(certificate_issuance_detail_match.group(2))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.read", "certificates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = certificate_service().get_issuance_detail(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if certificate_issuance_download_match:
+                event_id = int(certificate_issuance_download_match.group(1))
+                issuance_id = int(certificate_issuance_download_match.group(2))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "certificates.download", "certificates.download")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item, body = certificate_service().document_bytes(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, (session or {}).get("name", "system"), "certificates.downloaded", "certificate_issuance", issuance_id, {"organization_id": org_id, "event_id": event_id})
+                send_download(self, f"{item['certificate_number']}.pdf", "application/pdf", body)
                 return
 
             attendance_list_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
@@ -8560,6 +8873,240 @@ class AppHandler(SimpleHTTPRequestHandler):
             attendance_closure_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
             attendance_closure_reopen_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/reopen", path)
             attendance_eligibility_override_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility/override", path)
+            certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
+            certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
+            certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
+            certificate_template_version_publish_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions/(\d+)/publish", path)
+            certificate_template_preview_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions/(\d+)/preview", path)
+            certificate_issue_match = re.fullmatch(r"/api/events/(\d+)/certificates/issue", path)
+            certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
+            certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
+            certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            if certificate_type_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.types.manage", "certificates.types.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_certificate_type(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""), kind=str(data.get("kind") or "ATTENDANCE"), requires_eligibility=truthy(data.get("requires_eligibility", True)), requires_closure=truthy(data.get("requires_closure", True)), allow_override=truthy(data.get("allow_override", True)), allow_batch=truthy(data.get("allow_batch", True)), allow_reissue=truthy(data.get("allow_reissue", True)), requires_numbering=truthy(data.get("requires_numbering", True)))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.manage", "certificates.templates.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_template(db, organization_id=org_id, event_id=event_id, actor=actor, certificate_type_id=int(data.get("certificate_type_id") or 0), name=str(data.get("name") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_version_create_match:
+                template_id = int(certificate_template_version_create_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.manage", "certificates.templates.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_template_version(db, organization_id=org_id, template_id=template_id, actor=actor, content_schema=data.get("content_schema") if isinstance(data.get("content_schema"), dict) else {})
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_version_publish_match:
+                template_id = int(certificate_template_version_publish_match.group(1))
+                version_id = int(certificate_template_version_publish_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.publish", "certificates.templates.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().publish_template_version(db, organization_id=org_id, template_id=template_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if certificate_template_preview_match:
+                template_id = int(certificate_template_preview_match.group(1))
+                version_id = int(certificate_template_preview_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.preview", "certificates.preview")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().preview_template_version(db, organization_id=org_id, template_id=template_id, version_id=version_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if certificate_issue_match:
+                event_id = int(certificate_issue_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.issue", "certificates.issue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().issue_certificate(db, organization_id=org_id, event_id=event_id, actor=actor, participant_id=int(data.get("participant_id") or 0), certificate_type_id=int(data.get("certificate_type_id") or 0), template_version_id=int(data.get("template_version_id") or 0), eligibility_decision_id=int(data.get("eligibility_decision_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if certificate_batch_match:
+                event_id = int(certificate_batch_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.batch.issue", "certificates.batch.issue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_batch(db, organization_id=org_id, event_id=event_id, actor=actor, certificate_type_id=int(data.get("certificate_type_id") or 0), template_version_id=int(data.get("template_version_id") or 0), participant_ids=data.get("participant_ids") if isinstance(data.get("participant_ids"), list) else [], idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_revoke_match:
+                event_id = int(certificate_revoke_match.group(1))
+                issuance_id = int(certificate_revoke_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.revoke", "certificates.revoke", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().revoke_certificate(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id, actor=actor, reason=str(data.get("reason") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if certificate_reissue_match:
+                event_id = int(certificate_reissue_match.group(1))
+                issuance_id = int(certificate_reissue_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.reissue", "certificates.reissue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().reissue_certificate(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id, actor=actor, reason=str(data.get("reason") or ""), idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
             if attendance_rule_set_create_match:
                 event_id = int(attendance_rule_set_create_match.group(1))
                 actor_override = str(data.get("actor") or "").strip() or None

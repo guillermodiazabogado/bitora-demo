@@ -273,6 +273,16 @@ class EventBackupService:
         ("attendance_overrides", "SELECT * FROM attendance_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("attendance_reopenings", "SELECT * FROM attendance_reopenings WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("certificate_eligibility", "SELECT * FROM certificate_eligibility WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_types", "SELECT * FROM certificate_types WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_templates", "SELECT * FROM certificate_templates WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_template_versions", "SELECT * FROM certificate_template_versions WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_number_sequences", "SELECT * FROM certificate_number_sequences WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_batches", "SELECT * FROM certificate_batches WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_issuances", "SELECT * FROM certificate_issuances WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_documents", "SELECT * FROM certificate_documents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_verification_tokens", "SELECT * FROM certificate_verification_tokens WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_revocations", "SELECT * FROM certificate_revocations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_reissuances", "SELECT * FROM certificate_reissuances WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("simulator_state", "SELECT * FROM simulator_state WHERE event_id = ?", lambda event_id: (event_id,)),
@@ -438,6 +448,16 @@ class EventRestoreService:
         "attendance_overrides",
         "attendance_reopenings",
         "certificate_eligibility",
+        "certificate_types",
+        "certificate_templates",
+        "certificate_template_versions",
+        "certificate_number_sequences",
+        "certificate_batches",
+        "certificate_issuances",
+        "certificate_documents",
+        "certificate_verification_tokens",
+        "certificate_revocations",
+        "certificate_reissuances",
         "access_logs",
         "communication_logs",
         "communication_queue",
@@ -518,7 +538,7 @@ class EventRestoreService:
                 "accesses": counts.get("access_logs", 0),
                 "attendance": counts.get("activity_attendance", 0) + counts.get("attendance_records", 0),
                 "attendance_closures": counts.get("attendance_closures", 0),
-                "certificates": counts.get("certificate_eligibility", 0),
+                "certificates": counts.get("certificate_eligibility", 0) + counts.get("certificate_issuances", 0),
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
                 "templates": counts.get("communication_templates", 0),
                 "users_assigned": counts.get("event_users", 0),
@@ -585,6 +605,16 @@ class EventRestoreService:
                     "attendance_eligibility_decisions": {},
                     "attendance_overrides": {},
                     "attendance_reopenings": {},
+                    "certificate_types": {},
+                    "certificate_templates": {},
+                    "certificate_template_versions": {},
+                    "certificate_number_sequences": {},
+                    "certificate_batches": {},
+                    "certificate_issuances": {},
+                    "certificate_documents": {},
+                    "certificate_verification_tokens": {},
+                    "certificate_revocations": {},
+                    "certificate_reissuances": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -599,6 +629,7 @@ class EventRestoreService:
                     elif table not in {"people", "event_users"}:
                         self._restore_generic(db, table, payload, maps, token_map, actor)
 
+                self._repair_certificate_template_versions(db, payload, maps)
                 self._validate_restored(db, payload, new_event_id)
                 files_restored = self._restore_storage_files(raw, manifest, int(payload.get("event_id") or 0), new_event_id)
                 duration_ms = int((datetime.now() - started).total_seconds() * 1000)
@@ -796,7 +827,9 @@ class EventRestoreService:
                 row["attendance_id"] = maps["attendance_records"].get(int(row["attendance_id"]), row["attendance_id"])
             if "rule_set_id" in row and row.get("rule_set_id") is not None:
                 row["rule_set_id"] = maps["attendance_rule_sets"].get(int(row["rule_set_id"]), row["rule_set_id"])
-            if "current_version_id" in row and row.get("current_version_id") is not None:
+            if table == "certificate_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["certificate_template_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            elif "current_version_id" in row and row.get("current_version_id") is not None:
                 row["current_version_id"] = maps["attendance_rule_set_versions"].get(int(row["current_version_id"]), row["current_version_id"])
             if "rule_set_version_id" in row and row.get("rule_set_version_id") is not None:
                 row["rule_set_version_id"] = maps["attendance_rule_set_versions"].get(int(row["rule_set_version_id"]), row["rule_set_version_id"])
@@ -814,6 +847,42 @@ class EventRestoreService:
                 row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
             if "queue_id" in row and row.get("queue_id") is not None:
                 row["queue_id"] = maps["communication_queue"].get(int(row["queue_id"]), row["queue_id"])
+            if "certificate_type_id" in row and row.get("certificate_type_id") is not None:
+                row["certificate_type_id"] = maps["certificate_types"].get(int(row["certificate_type_id"]), row["certificate_type_id"])
+            if "template_id" in row and row.get("template_id") is not None:
+                row["template_id"] = maps["certificate_templates"].get(int(row["template_id"]), row["template_id"])
+            if "template_version_id" in row and row.get("template_version_id") is not None:
+                row["template_version_id"] = maps["certificate_template_versions"].get(int(row["template_version_id"]), row["template_version_id"])
+            if "eligibility_decision_id" in row and row.get("eligibility_decision_id") is not None:
+                row["eligibility_decision_id"] = maps["attendance_eligibility_decisions"].get(int(row["eligibility_decision_id"]), row["eligibility_decision_id"])
+            if "attendance_closure_id" in row and row.get("attendance_closure_id") is not None:
+                row["attendance_closure_id"] = maps["attendance_closures"].get(int(row["attendance_closure_id"]), row["attendance_closure_id"])
+            if "batch_id" in row and row.get("batch_id") is not None:
+                row["batch_id"] = maps["certificate_batches"].get(int(row["batch_id"]), row["batch_id"])
+            if "issuance_id" in row and row.get("issuance_id") is not None:
+                row["issuance_id"] = maps["certificate_issuances"].get(int(row["issuance_id"]), row["issuance_id"])
+            if "supersedes_issuance_id" in row and row.get("supersedes_issuance_id") is not None:
+                row["supersedes_issuance_id"] = maps["certificate_issuances"].get(int(row["supersedes_issuance_id"]), row["supersedes_issuance_id"])
+            if "previous_issuance_id" in row and row.get("previous_issuance_id") is not None:
+                row["previous_issuance_id"] = maps["certificate_issuances"].get(int(row["previous_issuance_id"]), row["previous_issuance_id"])
+            if "new_issuance_id" in row and row.get("new_issuance_id") is not None:
+                row["new_issuance_id"] = maps["certificate_issuances"].get(int(row["new_issuance_id"]), row["new_issuance_id"])
+            if table == "certificate_number_sequences" and row.get("scope_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["scope_key"] = str(row["scope_key"]).replace(f"EVT-{source_event_id}-", f"EVT-{target_event_id}-", 1)
+            if table in {"attendance_records", "attendance_rule_set_versions", "attendance_closures", "attendance_overrides", "attendance_reopenings"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table in {"certificate_batches", "certificate_issuances"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "certificate_verification_tokens":
+                regenerated = self.token_factory()
+                row["token_hash"] = hashlib.sha256(regenerated.encode("utf-8")).hexdigest()
+                row["token_hint"] = regenerated[:8]
+            if table == "certificate_documents" and row.get("storage_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["storage_key"] = str(row["storage_key"]).replace(f"events/{source_event_id}/", f"events/{target_event_id}/", 1)
             if table == "accreditations":
                 original = str(source_row.get("token") or "")
                 row["token"] = self._unique_token(db)
@@ -856,6 +925,15 @@ class EventRestoreService:
             new_id = self._insert_row(db, table, row)
             if table in maps and old_id:
                 maps[table][old_id] = new_id
+
+    def _repair_certificate_template_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("certificate_templates", []):
+            old_template_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_template_id = maps.get("certificate_templates", {}).get(old_template_id)
+            new_version_id = maps.get("certificate_template_versions", {}).get(old_version_id)
+            if new_template_id and new_version_id:
+                db.execute("UPDATE certificate_templates SET current_version_id = ? WHERE id = ?", (new_version_id, new_template_id))
 
     def _delete_event_scope(self, db, event_id: int) -> None:
         db.execute("DELETE FROM user_event_roles WHERE event_id = ?", (event_id,))

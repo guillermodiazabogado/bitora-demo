@@ -20,6 +20,7 @@ Estado: IMPLEMENTED / TESTED / PENDING REVIEW.
 Objetivo: certificados verificables y revocables.
 Dependencia: V4.2, storage.
 Gates: storage, backup, restore, comunicaciones si hay envio.
+Estado: IMPLEMENTED / TESTED / PENDING REVIEW.
 
 ## Sprint V4.4 - Surveys
 
