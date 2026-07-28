@@ -1,74 +1,79 @@
 # BITORA WhatsApp Live Certification Report
 
-Fecha: 2026-07-22
+Fecha: 2026-07-28
 
 ## Estado
 
 ```text
-WHATSAPP LIVE NO CERTIFICADO
-whatsapp_organization_live: OMITTED
+WHATSAPP LIVE CERTIFICADO
+whatsapp_organization_live: PASSED
 webhook_tenant_resolution_live: OMITTED
 ```
 
-## Motivo
-
-La arquitectura de envio real esta implementada, pero en esta etapa no se ejecutó un envio real contra Meta Cloud API ni se confirmó recepción en un telefono autorizado.
-
-Faltan credenciales y datos externos:
+## Evidencia live
 
 ```text
-WHATSAPP_ACCESS_TOKEN
-WHATSAPP_PHONE_NUMBER_ID
-WHATSAPP_BUSINESS_ACCOUNT_ID
-WHATSAPP_APP_SECRET
-Telefono autorizado
-Plantilla aprobada, si aplica
-Recepcion real
+Proveedor: Meta Cloud API
+Modo: live
+Envio iniciado desde BITORA: PASSED
+Cola communication_queue: PASSED
+Worker whatsapp.send: PASSED
+Meta devolvio message_id: PASSED
+Recepcion real en telefono autorizado: PASSED
+Fuente recepcion: confirmacion manual del operador
+Safe Mode: PASSED
+Destinatario forzado: PASSED
+Auditoria: PASSED
+Cruces multi-tenant: 0
+Destinatarios no autorizados: 0
+Tokens expuestos: 0
+Duplicados atribuibles a BITORA: 0
 ```
 
-## Validado localmente
+## Identificadores sanitizados
 
 ```text
-Cliente Meta Cloud API: IMPLEMENTADO
-Envio texto: CONTRACT PASSED
-Envio plantilla: CONTRACT PASSED
-Envio media/QR: CONTRACT PASSED
-Cola WhatsApp: CONTRACT PASSED
-Worker whatsapp.send: IMPLEMENTADO
-Webhook normalizado: CONTRACT PASSED
-Firma webhook: CONTRACT PASSED
-Idempotencia: CONTRACT PASSED
-Safe Mode: IMPLEMENTADO
-Aislamiento multi-tenant: IMPLEMENTADO
-Secretos expuestos: 0
-Cruces multi-tenant detectados: 0
+message_id: wamid***1QwA=
+job_id: 12
+queue_id: 147
+organization_id: 1
+event_id: 124
+integration_id: 24
 ```
 
-## Cambios realizados en esta etapa
+## Validaciones realizadas
 
 ```text
-Verificador live endurecido.
-No se permite certificar sin envio iniciado desde BITORA.
-No se permite certificar sin worker completado.
-No se permite certificar sin message_id de Meta.
-No se permite certificar sin recepcion real o webhook delivered/read.
-Variables de staging documentadas.
-Errores de Meta sanitizados.
+Credenciales Meta: PASSED
+Phone Number ID: PASSED
+WABA ID: PASSED
+Numero destinatario autorizado: PASSED
+Token nuevo generado desde Meta: PASSED
+Envio directo diagnostico desde proveedor BITORA: PASSED
+Envio real desde cola/worker BITORA: PASSED
+Recepcion confirmada en WhatsApp: PASSED
 ```
 
-## Proxima accion para certificar
-
-1. Configurar Meta App/WABA de staging.
-2. Cargar variables reales en `deployment/staging/.env.staging`.
-3. Mantener `WHATSAPP_SAFE_MODE=true`.
-4. Usar un telefono autorizado como `WHATSAPP_FORCE_RECIPIENT`.
-5. Ejecutar el envio desde BITORA.
-6. Confirmar recepción en el telefono.
-7. Ejecutar `verificar_whatsapp_multitenant_live.py`.
-8. Ejecutar BSTF Release.
-
-## Resultado final permitido
+## Seguridad
 
 ```text
-WHATSAPP LIVE NO CERTIFICADO
+WHATSAPP_ACCESS_TOKEN no fue versionado.
+WHATSAPP_APP_SECRET no fue versionado.
+WHATSAPP_VERIFY_TOKEN no fue versionado.
+deployment/staging/.env.staging permanece fuera de Git.
+Los reportes solo guardan identificadores enmascarados.
+```
+
+## Webhooks
+
+```text
+webhook_tenant_resolution_live: OMITTED
+```
+
+Motivo: la recepcion fue confirmada manualmente. No se recibio un webhook real `delivered/read` en una URL publica de BITORA durante esta etapa. El endpoint y el mapeo tenant-aware quedan preparados para la siguiente certificacion live.
+
+## Resultado final
+
+```text
+WHATSAPP LIVE CERTIFICADO
 ```

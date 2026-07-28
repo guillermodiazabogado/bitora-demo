@@ -1,10 +1,10 @@
 # BITORA Release Certification Report
 
-Fecha: 2026-07-22
+Fecha: 2026-07-28
 
 ## Objetivo
 
-Registrar el estado de certificacion despues de auditar y endurecer la etapa WhatsApp Cloud API Live.
+Registrar el estado de certificacion despues de ejecutar WhatsApp Cloud API Live desde BITORA.
 
 ## Estado actual
 
@@ -12,7 +12,7 @@ Registrar el estado de certificacion despues de auditar y endurecer la etapa Wha
 Release global: NO APROBADA
 Motivo: quedan gates live externos y pruebas prolongadas pendientes.
 Google OAuth Live: PASSED
-WhatsApp Live: NO CERTIFICADO
+WhatsApp Live: PASSED
 ```
 
 ## Entorno BDF local
@@ -81,16 +81,12 @@ approved: false
 weighted_average: 70.1
 ```
 
-Google dentro de BSTF:
+WhatsApp dentro de BSTF:
 
 ```text
-google_oauth_http_flow: passed
-google_oauth_state_security: passed
-google_oauth_multitenant_isolation: passed
-google_oauth_refresh_contract: passed
-google_oauth_backup_restore: passed
-google_oauth_multitenant_live: passed
-google_oauth_live: passed
+whatsapp_organization_live: passed
+stdout_tail: Evidencia live aprobada.
+exit_code: 0
 ```
 
 ## Gates aun pendientes
@@ -99,18 +95,18 @@ Estos gates siguen pendientes y explican por que la Release global no se declara
 
 ```text
 email_organization_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
-whatsapp_organization_live: omitted
+google_oauth_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
 webhook_tenant_resolution_live: omitted
 disaster_recovery_live: omitted
 endurance_24h: omitted
 upgrade_from_previous_version: omitted
 ```
 
-Nota: Email Live ya fue certificado en una etapa anterior, pero la corrida actual dentro del contenedor no tenia la evidencia `email_multitenant_live` disponible en `output/live_integrations`. Debe reejecutarse o persistirse esa evidencia antes de una Release final completa.
+Nota: Email Live y Google OAuth Live fueron certificados en etapas anteriores, pero la corrida actual dentro del contenedor no tenia esas evidencias disponibles en `output/live_integrations`. Deben reejecutarse o persistirse antes de una Release final completa.
 
 ## WhatsApp Cloud API
 
-La auditoria de WhatsApp confirma que el flujo tecnico base ya existe:
+La etapa WhatsApp Cloud API Live fue ejecutada contra Meta desde el flujo real de BITORA.
 
 ```text
 Proveedor Meta desacoplado: PASSED
@@ -118,29 +114,35 @@ Cola communication_queue: PASSED
 Worker whatsapp.send: PASSED
 Safe Mode WhatsApp: PASSED
 Asignacion por organization_id/event_id/integration_id: PASSED
-Webhook endpoint preparado: PASSED contract
+Meta message_id: PASSED
+Recepcion real en telefono autorizado: PASSED
+Auditoria: PASSED
+Cruces multi-tenant: 0
+Destinatarios no autorizados: 0
+Tokens expuestos: 0
+Duplicados atribuibles a BITORA: 0
 ```
 
-La certificacion live sigue pendiente porque no se ejecuto todavia un envio real contra Meta ni se confirmo recepcion en telefono autorizado.
-
-Se incorporo una correccion de certificacion:
+Evidencia sanitizada:
 
 ```text
-verificar_whatsapp_multitenant_live.py ahora exige:
-- envio iniciado desde BITORA;
-- job procesado por worker;
-- message_id devuelto por Meta;
-- Safe Mode activo;
-- recepcion real confirmada o webhook delivered/read.
+whatsapp_organization_live: PASSED
+message_id: wamid***1QwA=
+job_id: 12
+queue_id: 147
+organization_id: 1
+event_id: 124
+integration_id: 24
+receipt_source: manual_operator_confirmation
 ```
 
-Estado:
+Webhook endpoint preparado:
 
 ```text
-whatsapp_organization_live: OMITTED
 webhook_tenant_resolution_live: OMITTED
-WHATSAPP LIVE NO CERTIFICADO
 ```
+
+Motivo: no se recibio webhook live `delivered/read` en una URL publica de BITORA durante esta etapa.
 
 ## Seguridad
 
@@ -156,7 +158,6 @@ Datos personales en reportes: enmascarados
 
 - Rotar el Client Secret de Google antes de uso prolongado o productivo.
 - Reejecutar Email Live en el mismo entorno de certificacion final.
-- Certificar WhatsApp Live.
 - Certificar webhooks tenant-aware live.
 - Ejecutar Disaster Recovery live.
 - Ejecutar Endurance 24 horas.
@@ -166,5 +167,6 @@ Datos personales en reportes: enmascarados
 
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
+WHATSAPP LIVE CERTIFICADO
 RELEASE GLOBAL NO CERTIFICADA TODAVIA
 ```

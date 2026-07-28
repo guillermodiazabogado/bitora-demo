@@ -2,67 +2,109 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-20T23:18:04",
+    "started_at": "2026-07-28T15:53:41",
     "python": "3.12.13",
-    "platform": "Windows-11-10.0.26200-SP0",
-    "branch": "main",
-    "commit": "3b5aca166b3da733e46011970413e1785a21d52f",
-    "dirty_files": [
-      "M .env.example",
-      " M backend/services/jobs.py",
-      " M deployment/scripts/bdf.py",
-      " M deployment/staging/.env.staging.example",
-      " M tools/supertest/runner.py",
-      "?? BITORA_EMAIL_LIVE_SETUP.md",
-      "?? BITORA_GOOGLE_OAUTH_LIVE_SETUP.md",
-      "?? BITORA_LIVE_INTEGRATIONS_CURRENT_STATE.md",
-      "?? BITORA_LIVE_INTEGRATIONS_FINAL_STATUS.md",
-      "?? BITORA_LIVE_INTEGRATIONS_IMPLEMENTATION_REPORT.md",
-      "?? BITORA_LIVE_INTEGRATIONS_RUNBOOK.md",
-      "?? BITORA_LIVE_INTEGRATIONS_TEST_REPORT.md",
-      "?? BITORA_META_WHATSAPP_LIVE_SETUP.md",
-      "?? BITORA_MULTITENANT_BACKUP_LIVE_REPORT.md",
-      "?? BITORA_MULTITENANT_BACKUP_RESTORE.md",
-      "?? BITORA_MULTITENANT_RESTORE_LIVE_REPORT.md",
-      "?? BITORA_STAGING_LIVE_REPORT.md",
-      "?? BITORA_STAGING_LIVE_SETUP.md",
-      "?? BITORA_WEBHOOKS_MULTITENANT.md",
-      "?? live_integrations_utils.py",
-      "?? verificar_backup_multitenant_live.py",
-      "?? verificar_email_multitenant_live.py",
-      "?? verificar_google_oauth_multitenant_live.py",
-      "?? verificar_integrations_disaster_recovery.py",
-      "?? verificar_restore_multitenant_live.py",
-      "?? verificar_webhooks_multitenant_live.py",
-      "?? verificar_whatsapp_multitenant_live.py"
-    ],
-    "max_migration": "014_multitenant_integrations.sql",
-    "code_checksum": "6be260439a29f194dbb6ba4877cccc6df1b95f40cb7faab11f6765bcd0bc22d1",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "branch": "",
+    "commit": "",
+    "dirty_files": [],
+    "max_migration": "015_role_permissions.sql",
+    "code_checksum": "12b168b9c9d84817e2eee6f84a4153729b30e3a1c34db3ed821889e20d326439",
     "critical_env": {
-      "APP_ENV": "",
-      "BASE_URL": "",
-      "QR_DB_ENGINE": "",
-      "DATABASE_ENGINE": "",
+      "APP_ENV": "staging",
+      "BASE_URL": "http***8788",
+      "QR_DB_ENGINE": "postgres",
+      "DATABASE_ENGINE": "postgres",
       "QR_SQLITE_PATH": "",
-      "QR_POSTGRES_DSN": "",
-      "DATABASE_URL": "",
-      "EMAIL_PROVIDER": "",
-      "EMAIL_ENABLED": "",
-      "WHATSAPP_PROVIDER": "",
-      "WHATSAPP_ENABLED": "",
-      "STORAGE_BACKEND": ""
+      "QR_POSTGRES_DSN": "post***ging",
+      "DATABASE_URL": "post***ging",
+      "EMAIL_PROVIDER": "resend",
+      "EMAIL_ENABLED": "true",
+      "WHATSAPP_PROVIDER": "meta",
+      "WHATSAPP_ENABLED": "true",
+      "STORAGE_BACKEND": "local"
     }
   },
   "profile": "release",
-  "started_at": "2026-07-20T23:18:04",
-  "finished_at": "2026-07-20T23:18:37",
+  "started_at": "2026-07-28T15:53:41",
+  "finished_at": "2026-07-28T15:54:24",
   "findings": [
     {
-      "severity": "info",
-      "category": "environment",
-      "title": "Worktree con cambios",
-      "detail": "Se registra como advertencia, no bloqueante.",
-      "file": ""
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_2.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_demo_live_10.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "_live_result ocupa mas de 120 lineas",
+      "file": "verificar_whatsapp_multitenant_live.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v7_whatsapp_productivo.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_operacion_8_horas.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_demo_10_live.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v6_1_email_real.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_1.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_multitenant_integrations.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_8_templates.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4.py"
     },
     {
       "severity": "medium",
@@ -117,27 +159,6 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_demo_10_live.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_demo_live_10.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_multitenant_integrations.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
       "detail": "run_checks ocupa mas de 120 lineas",
       "file": "verificar_mvp.py"
     },
@@ -145,43 +166,8 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_operacion_8_horas.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v4.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v4_1.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v4_2.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v4_8_templates.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v6_1_email_real.py"
+      "detail": "_live_result ocupa mas de 120 lineas",
+      "file": "verificar_email_multitenant_live.py"
     },
     {
       "severity": "medium",
@@ -194,13 +180,6 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
-      "detail": "main ocupa mas de 120 lineas",
-      "file": "verificar_v7_whatsapp_productivo.py"
-    },
-    {
-      "severity": "medium",
-      "category": "code",
-      "title": "Funcion muy extensa",
       "detail": "_simulate_peak_operations ocupa mas de 120 lineas",
       "file": "backend/services/demo_real.py"
     },
@@ -208,64 +187,64 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "assert_true: live_integrations_utils.py:35, verificar_convivencia_modulos.py:32, verificar_demo_1000.py:34, verificar_demo_real.py:38, verificar_integridad_bitora.py:32, verificar_landing_config.py:52",
+      "detail": "assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_9_visual_reports.py:37, verificar_reorganizacion_inscribir_recepcion.py:12",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "connect: server.py:454, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_persistencia_backups.py:61, verificar_storage_event_backup_restore.py:87, verificar_v6_1_email_productivo.py:18",
+      "detail": "connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:466",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "do_POST: server.py:5527, verificar_demo_10_live.py:22, verificar_v5_email.py:20, verificar_v6_1_email_real.py:23, verificar_v7_whatsapp_real.py:21",
+      "detail": "do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:5685",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: migrar_sqlite_a_postgres.py:117, robustness_suite.py:398, server.py:9976, soak_test_8h.py:11, verificar_activity_access_window.py:114, verificar_auth_red.py:43",
+      "detail": "log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:5556",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "ready: backend/storage.py:33, backend/services/email.py:27, backend/services/email.py:85, backend/services/email.py:124, backend/services/whatsapp.py:29, backend/services/whatsapp.py:60",
+      "detail": "main: verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31, verificar_persistencia_backups.py:55",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "req: verificar_activity_access_window.py:27, verificar_busqueda_recepcion.py:16, verificar_convivencia_modulos.py:14, verificar_demo_1000.py:15, verificar_demo_real.py:15, verificar_integridad_bitora.py:14",
+      "detail": "ready: backend/storage.py:33, backend/services/whatsapp.py:46, backend/services/whatsapp.py:77, backend/services/whatsapp.py:122, backend/services/email.py:27, backend/services/email.py:85",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "request: qa2_utils.py:63, robustness_suite.py:64, station_stress_test.py:24, stress_test.py:23, verificar_auth_red.py:18, verificar_limpieza_panel.py:21",
+      "detail": "req: verificar_v4_2.py:15, verificar_v4_9_1_control_room.py:14, verificar_landing_config.py:21, verificar_activity_access_window.py:27, verificar_v5_email.py:31, verificar_v4_9_visual_reports.py:14",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "validate_configuration: backend/services/email.py:66, backend/services/email.py:127, backend/services/whatsapp.py:48, backend/services/whatsapp.py:78, backend/services/whatsapp.py:169",
+      "detail": "request: verificar_limpieza_panel.py:21, stress_test.py:23, qa2_utils.py:63, robustness_suite.py:64, verificar_mvp.py:19, verificar_auth_red.py:18",
       "file": ""
     },
     {
-      "severity": "medium",
-      "category": "security",
-      "title": "SQL string formatting",
-      "detail": "rows = [dict(row) for row in source.execute(f'SELECT * FROM \"{table}\" ORDER BY 1').fetchall()] if exists else []",
-      "file": "migrar_sqlite_a_postgres.py"
+      "severity": "low",
+      "category": "code",
+      "title": "Funcion repetida por nombre",
+      "detail": "validate_configuration: backend/services/whatsapp.py:65, backend/services/whatsapp.py:95, backend/services/whatsapp.py:186, backend/services/email.py:66, backend/services/email.py:127, backend/services/google_oauth.py:76",
+      "file": ""
     },
     {
       "severity": "medium",
@@ -320,6 +299,13 @@
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
+      "detail": "rows = [dict(row) for row in source.execute(f'SELECT * FROM \"{table}\" ORDER BY 1').fetchall()] if exists else []",
+      "file": "migrar_sqlite_a_postgres.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
       "detail": "visible = db.execute(f\"SELECT COUNT(*) AS c FROM events e WHERE {where}\", params).fetchone()[\"c\"]",
       "file": "verificar_v9_usuarios_eventos.py"
     },
@@ -362,15 +348,22 @@
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
-      "detail": "activities = db.execute(f\"SELECT * FROM activities WHERE {where}\", params).fetchall()",
-      "file": "backend/services/capacity_buckets.py"
+      "detail": "db.execute(f\"DELETE FROM {table}\")",
+      "file": "backend/services/demo_real.py"
     },
     {
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
-      "detail": "db.execute(f\"DELETE FROM {table}\")",
-      "file": "backend/services/demo_real.py"
+      "detail": "activities = db.execute(f\"SELECT * FROM activities WHERE {where}\", params).fetchall()",
+      "file": "backend/services/capacity_buckets.py"
+    },
+    {
+      "severity": "medium",
+      "category": "database",
+      "title": "Prefijo de migracion duplicado",
+      "detail": "Prefijo 015 aparece mas de una vez",
+      "file": ""
     },
     {
       "severity": "low",
@@ -383,7 +376,7 @@
       "severity": "medium",
       "category": "architecture",
       "title": "Controlador principal muy grande",
-      "detail": "server.py tiene 10028 lineas",
+      "detail": "server.py tiene 10428 lineas",
       "file": ""
     }
   ],
@@ -392,12 +385,12 @@
       "name": "integridad",
       "category": "functional",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_integridad_bitora.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.0,
+      "duration_seconds": 3.64,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -406,12 +399,12 @@
       "name": "convivencia",
       "category": "functional",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_convivencia_modulos.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 2.16,
+      "duration_seconds": 3.59,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -420,12 +413,12 @@
       "name": "email_productivo",
       "category": "communications",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_v6_1_email_productivo.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.79,
+      "duration_seconds": 0.84,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -434,12 +427,12 @@
       "name": "whatsapp_productivo",
       "category": "communications",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_v7_whatsapp_productivo.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.97,
+      "duration_seconds": 0.78,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -448,12 +441,12 @@
       "name": "event_restore",
       "category": "backup_restore",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_event_restore.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.34,
+      "duration_seconds": 0.68,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -462,12 +455,12 @@
       "name": "storage_event_backup_restore",
       "category": "backup_restore",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_storage_event_backup_restore.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.34,
+      "duration_seconds": 0.59,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -476,12 +469,12 @@
       "name": "demo_live_10",
       "category": "events",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_demo_live_10.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.97,
+      "duration_seconds": 0.94,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -490,13 +483,13 @@
       "name": "postgres_static",
       "category": "database",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_postgres.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.26,
-      "stdout_tail": "OK postgres static; live=SKIP (QR_POSTGRES_DSN no configurado)\n",
+      "duration_seconds": 0.45,
+      "stdout_tail": "OK postgres live migrations=[]\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -504,13 +497,13 @@
       "name": "production_postgres",
       "category": "database",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_production_postgres.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.07,
-      "stdout_tail": "OK: preparacion PostgreSQL validada; prueba real pendiente de QR_POSTGRES_DSN\n",
+      "duration_seconds": 0.43,
+      "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -518,13 +511,13 @@
       "name": "comunicaciones_permisos",
       "category": "permissions",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_comunicaciones_permisos.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.84,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 1, \"event_b\": 2}\n",
+      "duration_seconds": 1.39,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 134, \"event_b\": 135}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -532,13 +525,13 @@
       "name": "usuarios_eventos",
       "category": "permissions",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_v9_usuarios_eventos.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.84,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 1, \"team_members\": 3}\n",
+      "duration_seconds": 1.31,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 136, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -546,26 +539,26 @@
       "name": "seguridad_basica",
       "category": "security",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_seguridad_basica.py"
       ],
       "required": true,
-      "status": "passed",
-      "duration_seconds": 1.5,
-      "stdout_tail": "OK: seguridad basica y permisos\n",
-      "stderr_tail": "",
-      "exit_code": 0
+      "status": "failed",
+      "duration_seconds": 2.24,
+      "stdout_tail": "",
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/verificar_seguridad_basica.py\", line 71, in <module>\n    main()\n  File \"/app/verificar_seguridad_basica.py\", line 36, in main\n    must_forbid(request(h.base, \"POST\", \"/api/accreditations/update\", {\"actor\": \"Visualizador\", \"id\": acc_id, \"first_name\": \"No\"}), \"Visualizador edita\")\n  File \"/app/verificar_seguridad_basica.py\", line 17, in must_forbid\n    raise QA2Error(f\"{label}: no fue bloqueado, status={result[0]} body={result[1]}\")\nqa2_utils.QA2Error: Visualizador edita: no fue bloqueado, status=409 body={'error': 'Dato duplicado o invalido', 'detail': 'duplicate key value violates unique constraint \"people_email_key\"\\nDETAIL:  Key (email)=() already exists.'}\n",
+      "exit_code": 1
     },
     {
       "name": "datos_basura",
       "category": "negative",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_datos_basura.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.46,
+      "duration_seconds": 2.01,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -574,12 +567,12 @@
       "name": "errores_humanos",
       "category": "negative",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_errores_humanos.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.64,
+      "duration_seconds": 2.06,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -588,12 +581,12 @@
       "name": "concurrencia_critica",
       "category": "concurrency",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_concurrencia_critica.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.33,
+      "duration_seconds": 5.69,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -602,27 +595,97 @@
       "name": "multievent_isolation_20_events",
       "category": "security",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_multievent_isolation_20_events.py"
       ],
       "required": true,
-      "status": "passed",
-      "duration_seconds": 3.49,
-      "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
-      "stderr_tail": "",
-      "exit_code": 0
+      "status": "failed",
+      "duration_seconds": 1.32,
+      "stdout_tail": "",
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/verificar_multievent_isolation_20_events.py\", line 137, in <module>\n    main()\n  File \"/app/verificar_multievent_isolation_20_events.py\", line 29, in main\n    user_id = db.execute(\n              ^^^^^^^^^^^\n  File \"/app/backend/database.py\", line 240, in execute\n    cursor = self.raw.execute(translated, tuple(params or ()))\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/psycopg/connection.py\", line 300, in execute\n    raise ex.with_traceback(None)\npsycopg.errors.UniqueViolation: duplicate key value violates unique constraint \"users_name_key\"\nDETAIL:  Key (name)=(Usuario QA 0) already exists.\n",
+      "exit_code": 1
     },
     {
       "name": "multitenant_integrations",
       "category": "security",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_multitenant_integrations.py"
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.8,
+      "duration_seconds": 0.79,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_http_flow",
+      "category": "integrations",
+      "command": [
+        "/usr/local/bin/python",
+        "verificar_google_oauth_contract.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.6,
+      "stdout_tail": "{\"name\": \"google_oauth_contract\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"authorization_url\": true, \"offline_access\": true, \"prompt_consent\": true, \"scopes_minimos\": [\"openid\", \"email\", \"profile\"], \"secret_exposed\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_state_security",
+      "category": "security",
+      "command": [
+        "/usr/local/bin/python",
+        "verificar_google_oauth_security.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.77,
+      "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_multitenant_isolation",
+      "category": "security",
+      "command": [
+        "/usr/local/bin/python",
+        "verificar_google_oauth_multitenant.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.78,
+      "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_refresh_contract",
+      "category": "integrations",
+      "command": [
+        "/usr/local/bin/python",
+        "verificar_google_oauth_refresh.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.61,
+      "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
+      "stderr_tail": "",
+      "exit_code": 0
+    },
+    {
+      "name": "google_oauth_backup_restore",
+      "category": "backup_restore",
+      "command": [
+        "/usr/local/bin/python",
+        "verificar_google_oauth_backup_restore.py"
+      ],
+      "required": true,
+      "status": "passed",
+      "duration_seconds": 0.78,
+      "stdout_tail": "{\"name\": \"google_oauth_backup_restore\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"encrypted_backup_safe\": true, \"metadata_sanitized\": true, \"restore_requires_safe_reconnect_policy\": true, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -630,27 +693,27 @@
       "name": "google_oauth_multitenant_live",
       "category": "integrations",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_google_oauth_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
-      "duration_seconds": 0.8,
-      "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"GOOGLE_OAUTH_CLIENT_ID\", \"GOOGLE_OAUTH_CLIENT_SECRET\", \"GOOGLE_OAUTH_REDIRECT_URI\"], \"checks\": {\"state_single_use_contract\": true, \"token_encryption\": true, \"cross_organization_callback_blocked_by_model\": true, \"tokens_exposed\": 0, \"callbacks_misassigned\": 0}}\n",
-      "stderr_tail": "",
-      "exit_code": 0
+      "status": "failed",
+      "duration_seconds": 1.6,
+      "stdout_tail": "",
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/app/backend/services/google_oauth.py\", line 163, in _open_json\n    with self._opener(request, timeout=self.config.timeout) as response:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 215, in urlopen\n    return opener.open(url, data, timeout)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 521, in open\n    response = meth(req, response)\n               ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 630, in http_response\n    response = self.parent.error(\n               ^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 559, in error\n    return self._call_chain(*args)\n           ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/urllib/request.py\", line 639, in http_error_default\n    raise HTTPError(req.full_url, code, msg, hdrs, fp)\nurllib.error.HTTPError: HTTP Error 401: Unauthorized\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 156, in <module>\n    main()\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 150, in main\n    result = _contract_result(mode, missing) if mode != \"live\" or missing else _live_result()\n                                                                               ^^^^^^^^^^^^^^\n  File \"/app/verificar_google_oauth_multitenant_live.py\", line 95, in _live_result\n    account = client.userinfo(access_token)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 146, in userinfo\n    return self._open_json(request)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/backend/services/google_oauth.py\", line 175, in _open_json\n    raise GoogleOAuthError(f\"Google HTTP {exc.code}: {message}\", \"google_http_error\") from exc\nbackend.services.google_oauth.GoogleOAuthError: Google HTTP 401: Invalid Credentials\n",
+      "exit_code": 1
     },
     {
       "name": "email_multitenant_live",
       "category": "integrations",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_email_multitenant_live.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.79,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"EMAIL_PROVIDER\", \"EMAIL_FORCE_RECIPIENT\", \"EMAIL_SAFE_MODE\"], \"checks\": {\"queue_has_organization\": true, \"queue_has_integration\": true, \"safe_mode_required\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 2.0,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"563181***296cfc\", \"job_id\": 21, \"queue_id\": 163, \"organization_id\": 1, \"integration_id\": 26, \"event_id\": 143, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -658,13 +721,13 @@
       "name": "whatsapp_multitenant_live",
       "category": "integrations",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_whatsapp_multitenant_live.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.82,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_ACCESS_TOKEN\", \"WHATSAPP_PHONE_NUMBER_ID\", \"WHATSAPP_BUSINESS_ACCOUNT_ID\", \"WHATSAPP_FORCE_RECIPIENT\", \"WHATSAPP_SAFE_MODE\"], \"checks\": {\"whatsapp_integration_assignment\": true, \"safe_mode_required\": true, \"cross_messages\": 0, \"misassigned_webhooks\": 0, \"tokens_exposed\": 0}}\n",
+      "duration_seconds": 2.65,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***ENgA=\", \"job_id\": 22, \"queue_id\": 164, \"organization_id\": 1, \"integration_id\": 28, \"event_id\": 145, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"manual_operator_confirmation\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -672,13 +735,13 @@
       "name": "webhooks_multitenant_live",
       "category": "integrations",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_webhooks_multitenant_live.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.8,
-      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"EMAIL_WEBHOOK_SECRET\", \"WHATSAPP_VERIFY_TOKEN\", \"WHATSAPP_APP_SECRET\"], \"checks\": {\"email_webhook_resolves_queue\": true, \"duplicate_idempotent\": true, \"cross_webhooks_processed\": 0, \"invalid_signatures_accepted\": 0}}\n",
+      "duration_seconds": 0.78,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"email_webhook_resolves_queue\": true, \"duplicate_idempotent\": true, \"cross_webhooks_processed\": 0, \"invalid_signatures_accepted\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -686,13 +749,13 @@
       "name": "backup_multitenant_live",
       "category": "backup_restore",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_backup_multitenant_live.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.81,
-      "stdout_tail": "{\"name\": \"backup_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BITORA_STORAGE_PATH\"], \"checks\": {\"organizations_present\": 2, \"events_with_organization\": 2, \"plain_secrets\": 0}}\n",
+      "duration_seconds": 0.78,
+      "stdout_tail": "{\"name\": \"backup_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"organizations_present\": 2, \"events_with_organization\": 2, \"plain_secrets\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -700,13 +763,13 @@
       "name": "restore_multitenant_live",
       "category": "backup_restore",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_restore_multitenant_live.py"
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.8,
-      "stdout_tail": "{\"name\": \"restore_multitenant_live\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BITORA_STORAGE_PATH\"], \"checks\": {\"external_jobs_emitted_after_restore\": 0, \"cross_organization_after_restore\": 0, \"secrets_exposed\": 0, \"safe_mode_after_restore\": true}}\n",
+      "duration_seconds": 0.78,
+      "stdout_tail": "{\"name\": \"restore_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"external_jobs_emitted_after_restore\": 0, \"cross_organization_after_restore\": 0, \"secrets_exposed\": 0, \"safe_mode_after_restore\": true}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -714,13 +777,13 @@
       "name": "integrations_disaster_recovery",
       "category": "disaster",
       "command": [
-        "C:\\Users\\Noxie-PC\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+        "/usr/local/bin/python",
         "verificar_integrations_disaster_recovery.py"
       ],
       "required": false,
       "status": "passed",
       "duration_seconds": 0.79,
-      "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"contract\", \"status\": \"omitted\", \"missing_env\": [\"APP_ENV\", \"QR_POSTGRES_DSN\", \"BDF_WORKER_LIVE\"], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
+      "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -729,55 +792,55 @@
       "category": "environment",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
       "stdout_tail": "APP_ENV=staging requerido para release final.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "postgres_live",
       "category": "database",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
       "stdout_tail": "Requiere QR_POSTGRES_DSN o DATABASE_URL real de staging.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "storage_persistent",
       "category": "backup_restore",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Storage persistente de staging requerido. Ruta evaluada: C:\\Users\\Noxie-PC\\Documents\\qr white label\\storage",
+      "stdout_tail": "Storage persistente de staging requerido. Ruta evaluada: /bitora/storage",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "workers_live",
       "category": "jobs",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
       "stdout_tail": "Requiere levantar worker separado y validar recuperacion tras reinicio.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "communications_safe_mode",
       "category": "communications",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
       "stdout_tail": "Safe mode requiere destinatarios forzados de email y WhatsApp.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "multitenant_organization_isolation",
@@ -819,7 +882,7 @@
       "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI",
+      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar google_oauth_multitenant_live.",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -830,7 +893,7 @@
       "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: EMAIL_PROVIDER, EMAIL_FORCE_RECIPIENT, EMAIL_SAFE_MODE",
+      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar email_multitenant_live.",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -839,11 +902,11 @@
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_BUSINESS_ACCOUNT_ID, WHATSAPP_FORCE_RECIPIENT, WHATSAPP_SAFE_MODE",
+      "stdout_tail": "Evidencia live aprobada.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "webhook_tenant_resolution_live",
@@ -852,7 +915,7 @@
       "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: EMAIL_WEBHOOK_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET",
+      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar webhooks_multitenant_live.",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -874,7 +937,7 @@
       "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH",
+      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar backup_multitenant_live.",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -885,7 +948,7 @@
       "required": true,
       "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Modo contract; estado omitted. Faltan variables: APP_ENV, QR_POSTGRES_DSN, BITORA_STORAGE_PATH",
+      "stdout_tail": "Sin evidencia live/contract. Falta ejecutar restore_multitenant_live.",
       "stderr_tail": "",
       "exit_code": null
     },
@@ -928,21 +991,21 @@
       "architecture": 88,
       "security": 0,
       "code": 0,
-      "database": 46,
-      "communications": 50,
+      "database": 84,
+      "communications": 100,
       "backup_restore": 0,
       "events": 100,
       "permissions": 100,
       "functional": 100,
       "concurrency": 100,
       "stress": 100,
-      "jobs": 50,
+      "jobs": 100,
       "disaster": 50,
       "endurance": 50,
       "upgrade": 50,
-      "environment": 50
+      "environment": 100
     },
-    "weighted_average": 58.4
+    "weighted_average": 70.1
   },
   "approved": false
 }

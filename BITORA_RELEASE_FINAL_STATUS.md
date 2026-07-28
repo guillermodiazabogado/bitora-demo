@@ -1,6 +1,6 @@
 # BITORA Release Final Status
 
-Fecha: 2026-07-22
+Fecha: 2026-07-28
 
 Decision:
 
@@ -24,6 +24,7 @@ http://localhost:8788
 
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
+WHATSAPP LIVE CERTIFICADO
 ```
 
 Detalle:
@@ -58,12 +59,12 @@ Backup local
 Restore local
 Email live certificado en etapa anterior
 Google OAuth live certificado en esta etapa
+WhatsApp live certificado en esta etapa
 ```
 
 ## Restricciones pendientes para Release final completa
 
 ```text
-WhatsApp live por organizacion
 Webhooks tenant-aware live
 Disaster recovery live extendido
 Endurance 24 horas
@@ -74,40 +75,50 @@ Reejecucion/persistencia de evidencia Email Live dentro del mismo entorno final
 ## Estado WhatsApp
 
 ```text
-WHATSAPP LIVE NO CERTIFICADO
+WHATSAPP LIVE CERTIFICADO
+whatsapp_organization_live: PASSED
 ```
 
-La arquitectura de envio a Meta esta implementada y fue auditada. El gate fue endurecido para no aprobarse sin envio real desde BITORA, procesamiento por worker, `message_id` de Meta y recepcion real en telefono autorizado.
+La certificacion se ejecuto desde BITORA usando cola y worker contra Meta Cloud API. Meta devolvio `message_id` y el operador confirmo recepcion real en el telefono autorizado.
 
-Falta cargar credenciales Meta de staging y ejecutar la prueba real.
+```text
+message_id: wamid***1QwA=
+job_id: 12
+queue_id: 147
+Safe Mode: PASSED
+Cruces multi-tenant: 0
+Tokens expuestos: 0
+```
 
 ## Resultado BSTF Release
 
-La corrida release dentro del contenedor staging confirma:
+La corrida release actual dentro del contenedor staging confirma:
 
 ```text
-google_oauth_live: PASSED
+whatsapp_organization_live: PASSED
 ```
 
 Pero no aprueba la Release global porque quedan gates requeridos omitidos:
 
 ```text
-whatsapp_organization_live
+email_organization_live
+google_oauth_live
 webhook_tenant_resolution_live
 disaster_recovery_live
 endurance_24h
 upgrade_from_previous_version
 ```
 
+Nota: Email Live y Google OAuth Live fueron certificados en etapas anteriores, pero esta corrida no tenia esas evidencias live persistidas dentro del contenedor.
+
 ## Proximo paso recomendado
 
 ```text
 1. Rotar Client Secret de Google.
 2. Persistir o reejecutar Email Live en el mismo staging final.
-3. Activar WhatsApp Live.
-4. Certificar webhooks tenant-aware.
-5. Ejecutar Disaster Recovery.
-6. Ejecutar Endurance 24h.
+3. Certificar webhooks tenant-aware.
+4. Ejecutar Disaster Recovery.
+5. Ejecutar Endurance 24h.
 ```
 
 No se debe declarar BITORA apta para evento real hasta completar esos gates.
