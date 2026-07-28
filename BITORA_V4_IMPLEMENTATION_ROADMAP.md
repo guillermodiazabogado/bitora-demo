@@ -27,6 +27,7 @@ Estado: IMPLEMENTED / TESTED / PENDING REVIEW.
 Objetivo: encuestas versionadas.
 Dependencia: participantes, portal.
 Gates: privacidad, exportaciones, multitenant.
+Estado: IMPLEMENTED / TESTED / PENDING REVIEW.
 
 ## Sprint V4.5 - Speakers
 

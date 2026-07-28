@@ -20,8 +20,14 @@
 | CertificateBatchCompleted | Certificados | Auditoria | org, event, batch | batch id | Ninguno externo |
 | CertificateRevoked | Certificados | Verificacion publica | issuance id | issuance id | Invalidar verificacion |
 | CertificateReissued | Certificados | Verificacion publica | previous issuance, new issuance | new issuance id | Ninguno externo |
-| SurveyPublished | Encuestas | Portal, comunicaciones | survey version | survey version | Mostrar encuesta |
-| SurveyCompleted | Encuestas | Certificados, analytics | survey response | response id | Recalcular condicion |
+| SurveyTypeCreated | Encuestas | Auditoria | org, event, survey type | type id | Ninguno externo |
+| SurveyCreated | Encuestas | Auditoria | org, event, survey | survey id | Ninguno externo |
+| SurveyVersionCreated | Encuestas | Auditoria | survey, version | version id | Ninguno externo |
+| SurveyPublished | Encuestas | Portal | survey version | version id | Mostrar encuesta si esta asignada |
+| SurveyAssigned | Encuestas | Portal | survey, assignment | assignment id | Habilitar respuesta controlada |
+| SurveyClosed | Encuestas | Portal, reportes | assignment | assignment id | Bloquear nuevas respuestas |
+| SurveyCompleted | Encuestas | Analytics | survey response | response session id | Actualizar resultados internos |
+| SurveyArchived | Encuestas | Portal | survey | survey id | Ocultar/bloquear respuestas |
 | SpeakerAccepted | Disertantes | Agenda | speaker, event | invitation id | Cambiar estado |
 | ZoneAccessDenied | Acceso | Incidencias, auditoria | zone, accreditation | scan id | Crear alerta opcional |
 | IncidentCreated | Incidencias | Centro operativo | incident id | incident id | Notificar responsable |
