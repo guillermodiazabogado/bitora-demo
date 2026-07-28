@@ -5,7 +5,7 @@ Fecha: 2026-07-28
 Decision:
 
 ```text
-RELEASE CERTIFICADA CON RESTRICCIONES
+RELEASE NO CERTIFICADA TODAVIA
 ```
 
 ## Estado operativo
@@ -24,6 +24,7 @@ http://localhost:8788
 
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
+EMAIL LIVE CERTIFICADO
 WHATSAPP LIVE CERTIFICADO
 WHATSAPP WEBHOOK LIVE CERTIFICADO
 ```
@@ -59,9 +60,13 @@ Health checks
 Backup local
 Restore local
 Email live certificado en etapa anterior
+Email live revalidado en staging final
 Google OAuth live certificado en esta etapa
+Google OAuth live revalidado en staging final
 WhatsApp live certificado en esta etapa
+WhatsApp live revalidado en staging final
 WhatsApp webhook tenant-aware certificado en esta etapa
+WhatsApp webhook tenant-aware revalidado en staging final
 ```
 
 ## Restricciones pendientes para Release final completa
@@ -70,7 +75,29 @@ WhatsApp webhook tenant-aware certificado en esta etapa
 Disaster recovery live extendido
 Endurance 24 horas
 Upgrade desde version anterior
-Reejecucion/persistencia de evidencia Email Live dentro del mismo entorno final
+Correccion de seguridad_basica
+Correccion de multievent_isolation_20_events
+Backup/restore multitenant live
+```
+
+## Revalidacion Final De Integraciones
+
+Identificador:
+
+```text
+FINAL-STAGING-REVALIDATION-20260728-1328
+```
+
+Resultado:
+
+```text
+email_organization_live: PASSED
+google_oauth_live: PASSED
+whatsapp_organization_live: PASSED
+webhook_tenant_resolution_live: PASSED
+Secretos expuestos: 0
+Cruces multi-tenant: 0
+Duplicados atribuibles a BITORA: 0
 ```
 
 ## Estado WhatsApp
@@ -116,29 +143,34 @@ Secretos expuestos: 0
 La corrida release actual dentro del contenedor staging confirma:
 
 ```text
+email_organization_live: PASSED
+google_oauth_live: PASSED
 whatsapp_organization_live: PASSED
+webhook_tenant_resolution_live: PASSED
 ```
 
-Pero no aprueba la Release global porque quedan gates requeridos omitidos:
+Pero no aprueba la Release global porque quedan gates requeridos fallidos u omitidos:
 
 ```text
-email_organization_live
-google_oauth_live
+seguridad_basica
+multievent_isolation_20_events
+backup_multitenant_live
+restore_multitenant_live
 disaster_recovery_live
 endurance_24h
 upgrade_from_previous_version
 ```
 
-Nota: Email Live y Google OAuth Live fueron certificados en etapas anteriores, pero esta corrida no tenia esas evidencias live persistidas dentro del contenedor.
+Nota: Email Live, Google OAuth Live, WhatsApp Live y WhatsApp Webhook Live ya quedaron revalidados en el mismo staging final.
 
 ## Proximo paso recomendado
 
 ```text
 1. Rotar Client Secret de Google.
-2. Persistir o reejecutar Email Live en el mismo staging final.
-3. Ejecutar Disaster Recovery.
-4. Ejecutar Endurance 24h.
-5. Preparar URL publica estable para webhooks de produccion.
+2. Corregir seguridad_basica y multievent_isolation_20_events.
+3. Ejecutar backup/restore multitenant live.
+4. Ejecutar Disaster Recovery.
+5. Ejecutar Endurance 24h.
 ```
 
 No se debe declarar BITORA apta para evento real hasta completar esos gates.

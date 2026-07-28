@@ -10,10 +10,42 @@ Registrar el estado de certificacion despues de ejecutar WhatsApp Cloud API Live
 
 ```text
 Release global: NO APROBADA
-Motivo: quedan gates live externos y pruebas prolongadas pendientes.
+Motivo: quedan fallas/omisiones fuera de integraciones finales.
 Google OAuth Live: PASSED
+Email Live: PASSED
 WhatsApp Live: PASSED
 WhatsApp Webhook Live: PASSED
+```
+
+## Revalidacion Final De Integraciones
+
+Identificador:
+
+```text
+FINAL-STAGING-REVALIDATION-20260728-1328
+```
+
+Resultado:
+
+```text
+Email Live final staging: PASSED
+Google OAuth final staging: PASSED
+WhatsApp Live final staging: PASSED
+WhatsApp Webhook final staging: PASSED
+Safe Mode: PASSED
+Audit: PASSED
+Multi-tenant isolation: PASSED
+Secrets exposed: 0
+Duplicate effects: 0
+```
+
+BSTF Release confirmo:
+
+```text
+email_organization_live: PASSED
+google_oauth_live: PASSED
+whatsapp_organization_live: PASSED
+webhook_tenant_resolution_live: PASSED
 ```
 
 ## Entorno BDF local
@@ -85,8 +117,13 @@ weighted_average: 70.1
 WhatsApp dentro de BSTF:
 
 ```text
-whatsapp_organization_live: omitted en esta corrida por falta de evidencia local `whatsapp_multitenant_live`
+email_organization_live: passed
+google_oauth_live: passed
+whatsapp_organization_live: passed
 webhook_tenant_resolution_live: passed
+email_multitenant_live: passed
+google_oauth_multitenant_live: passed
+whatsapp_multitenant_live: passed
 webhooks_multitenant_live: passed
 ```
 
@@ -123,19 +160,21 @@ integration_id: 30
 evidence_file: output/live_integrations/webhooks_multitenant_live.json
 ```
 
-## Gates aun pendientes
+## Gates aun pendientes o fallidos
 
-Estos gates siguen pendientes y explican por que la Release global no se declara certificada:
+Estos gates explican por que la Release global no se declara certificada:
 
 ```text
-email_organization_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
-google_oauth_live: omitted en esta corrida de contenedor por falta de evidencia local en ese entorno
+seguridad_basica: failed
+multievent_isolation_20_events: failed
+backup_multitenant_live: omitted
+restore_multitenant_live: omitted
 disaster_recovery_live: omitted
 endurance_24h: omitted
 upgrade_from_previous_version: omitted
 ```
 
-Nota: Email Live y Google OAuth Live fueron certificados en etapas anteriores, pero la corrida actual dentro del contenedor no tenia esas evidencias disponibles en `output/live_integrations`. Deben reejecutarse o persistirse antes de una Release final completa.
+Nota: los cuatro gates live de integraciones externas ya fueron revalidados en el mismo staging final. Los pendientes corresponden a seguridad/regresion multi-evento, backup/restore live, disaster, endurance y upgrade.
 
 ## WhatsApp Cloud API
 
@@ -169,7 +208,7 @@ integration_id: 24
 receipt_source: manual_operator_confirmation
 ```
 
-Nota: en la corrida BSTF posterior a webhooks, `whatsapp_organization_live` figura omitido porque el runner espera evidencia en un archivo distinto al generado durante la certificacion manual anterior. La certificacion live original de WhatsApp se mantiene documentada arriba, pero debe persistirse o reejecutarse para una Release final completamente limpia.
+Nota: en la revalidacion final, las evidencias live de Email, Google, WhatsApp y Webhooks quedaron presentes dentro del mismo staging y fueron tomadas por BSTF.
 
 ## Seguridad
 
@@ -185,7 +224,9 @@ Webhook payloads completos en reportes: 0
 ## Riesgos pendientes
 
 - Rotar el Client Secret de Google antes de uso prolongado o productivo.
-- Reejecutar Email Live en el mismo entorno de certificacion final.
+- Corregir `seguridad_basica`.
+- Corregir `multievent_isolation_20_events`.
+- Revalidar backup/restore multitenant live.
 - Ejecutar Disaster Recovery live.
 - Ejecutar Endurance 24 horas.
 - Ejecutar upgrade desde version anterior.
@@ -194,6 +235,7 @@ Webhook payloads completos en reportes: 0
 
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
+EMAIL LIVE CERTIFICADO
 WHATSAPP LIVE CERTIFICADO
 WHATSAPP WEBHOOK LIVE CERTIFICADO
 RELEASE GLOBAL NO CERTIFICADA TODAVIA

@@ -173,3 +173,31 @@ El Client Secret utilizado para staging debe rotarse antes de cualquier uso prol
 ```text
 GOOGLE OAUTH LIVE CERTIFICADO
 ```
+
+## Revalidacion Final Staging
+
+Fecha: 2026-07-28
+
+Identificador:
+
+```text
+FINAL-STAGING-REVALIDATION-20260728-1328
+```
+
+Resultado:
+
+```text
+google_oauth_multitenant_live: PASSED
+google_oauth_live: PASSED en BSTF
+organization_id: 3
+integration_id: 5
+account_email_masked: gui***@gmail.com
+userinfo_live: PASSED
+refresh_live: PASSED
+refresh_before_userinfo: PASSED
+token_encryption: PASSED
+tokens_exposed: 0
+cross_event_assignments: 0
+```
+
+La revalidacion renovo el access token vencido usando refresh token cifrado y luego ejecuto userinfo real contra Google.

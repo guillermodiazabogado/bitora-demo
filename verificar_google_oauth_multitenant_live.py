@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import server
+from backend.services.google_oauth import GoogleOAuthError
 from live_integrations_utils import assert_true, classify, close_context, synthetic_multitenant_db, write_report
 
 
@@ -92,7 +93,15 @@ def _live_result() -> dict:
         assert_true(refresh_token not in encrypted, "Refresh token no debe quedar en texto plano")
 
         client = server.google_oauth_client()
-        account = client.userinfo(access_token)
+        refreshed_before_userinfo = False
+        try:
+            account = client.userinfo(access_token)
+        except GoogleOAuthError:
+            tokens = client.refresh_access_token(refresh_token)
+            access_token = str(tokens.get("access_token") or "")
+            assert_true(bool(access_token), "Google refresh debe recuperar access_token antes de userinfo")
+            refreshed_before_userinfo = True
+            account = client.userinfo(access_token)
         account_email = str(account.get("email") or "")
         assert_true(bool(account_email), "Google userinfo debe devolver email")
         assert_true(account_email == str(metadata.get("account_email") or payload.get("account_email") or account_email), "La cuenta Google debe coincidir con metadata")
@@ -121,6 +130,7 @@ def _live_result() -> dict:
             "integration_id": integration_id,
             "userinfo_live": True,
             "refresh_live": True,
+            "refresh_before_userinfo": refreshed_before_userinfo,
             "token_encryption": True,
             "tokens_exposed": 0,
             "cross_event_assignments": cross_assignments,

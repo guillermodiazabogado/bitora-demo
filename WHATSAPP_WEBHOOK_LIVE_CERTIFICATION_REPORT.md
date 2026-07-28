@@ -70,3 +70,34 @@ La URL publica utilizada es temporal y no debe considerarse apta para produccion
 ```text
 WHATSAPP WEBHOOK LIVE CERTIFICADO
 ```
+
+## Revalidacion Final Staging
+
+Fecha: 2026-07-28
+
+Identificador:
+
+```text
+FINAL-STAGING-REVALIDATION-20260728-1328
+```
+
+Resultado:
+
+```text
+webhooks_multitenant_live: PASSED
+webhook_tenant_resolution_live: PASSED en BSTF
+Meta challenge: PASSED
+Meta POST real: PASSED
+Evento recibido: delivered
+job_id: 37
+queue_id: 186
+organization_id: 1
+event_id: 174
+integration_id: 40
+message_id: wamid***3MwA=
+Firma X-Hub-Signature-256: PASSED
+Tenant resolution: PASSED
+Idempotencia: PASSED
+Cruces multi-tenant: 0
+Secretos expuestos: 0
+```
