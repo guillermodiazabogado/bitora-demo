@@ -45,6 +45,7 @@ from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.certificates import CertificateDomainError, CertificateService
+from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
@@ -201,18 +202,33 @@ CERTIFICATE_PERMISSION_CODES = [
     "certificates.verify",
     "certificates.audit.read",
 ]
+SURVEY_PERMISSION_CODES = [
+    "surveys.types.read",
+    "surveys.types.manage",
+    "surveys.read",
+    "surveys.create",
+    "surveys.edit",
+    "surveys.publish",
+    "surveys.assign",
+    "surveys.open",
+    "surveys.close",
+    "surveys.results.view",
+    "surveys.export",
+    "surveys.archive",
+    "surveys.audit.view",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -223,8 +239,8 @@ PERMISSION_MATRIX = {
         "actions": ["scan_qr", "attendance.record"],
     },
     "Visualizador": {
-        "modules": ["dashboard", "agenda", "reports", "certificates"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read"],
+        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -268,6 +284,10 @@ def attendance_service() -> AttendanceService:
 
 def certificate_service() -> CertificateService:
     return CertificateService(audit_service=audit_service(), storage=STORAGE, now=now_iso)
+
+
+def survey_service() -> SurveyService:
+    return SurveyService(audit_service=audit_service(), now=now_iso, secret=os.environ.get("BITORA_SURVEY_SECRET", "bitora-surveys-local-secret"))
 
 
 def qr_service() -> QRService:
@@ -1850,6 +1870,195 @@ def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
     if "device_type" not in acc_columns:
         db.execute("ALTER TABLE accreditations ADD COLUMN device_type TEXT NOT NULL DEFAULT ''")
 
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS survey_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS surveys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            survey_type_id INTEGER NOT NULL REFERENCES survey_types(id) ON DELETE RESTRICT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            response_mode TEXT NOT NULL DEFAULT 'IDENTIFIED',
+            access_policy TEXT NOT NULL DEFAULT 'EVENT_PARTICIPANTS',
+            duplicate_policy TEXT NOT NULL DEFAULT 'ONE_PER_PARTICIPANT',
+            current_version_id INTEGER,
+            opens_at TEXT,
+            closes_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            archived_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            instructions TEXT NOT NULL DEFAULT '',
+            content_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            published_at TEXT,
+            published_by TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(survey_id, version_number),
+            UNIQUE(survey_id, content_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            question_key TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            question_type TEXT NOT NULL,
+            required INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            config_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            UNIQUE(version_id, question_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_question_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            option_key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            value TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            UNIQUE(question_id, option_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            access_mode TEXT NOT NULL DEFAULT 'EVENT_PARTICIPANTS',
+            opens_at TEXT,
+            closes_at TEXT,
+            closed_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_access_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            participant_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            anonymous_subject_hash TEXT NOT NULL,
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            expires_at TEXT,
+            used_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_response_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            response_mode TEXT NOT NULL,
+            participant_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            anonymous_subject_hash TEXT NOT NULL DEFAULT '',
+            token_hash TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+            started_at TEXT NOT NULL,
+            submitted_at TEXT,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES survey_response_sessions(id) ON DELETE CASCADE,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            answer_text TEXT,
+            answer_number REAL,
+            answer_bool INTEGER,
+            created_at TEXT NOT NULL,
+            UNIQUE(session_id, question_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_answer_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            answer_id INTEGER NOT NULL REFERENCES survey_answers(id) ON DELETE CASCADE,
+            session_id INTEGER NOT NULL REFERENCES survey_response_sessions(id) ON DELETE CASCADE,
+            option_id INTEGER NOT NULL REFERENCES survey_question_options(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            UNIQUE(answer_id, option_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_survey_types_scope ON survey_types(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_surveys_scope ON surveys(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_versions_survey ON survey_versions(survey_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_survey_questions_version ON survey_questions(version_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_survey_options_question ON survey_question_options(question_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_survey_assignments_event ON survey_assignments(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_access_tokens_hash ON survey_access_tokens(token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_sessions_event ON survey_response_sessions(organization_id, event_id, survey_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_sessions_participant ON survey_response_sessions(assignment_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_answers_session ON survey_answers(session_id, question_id);
+        CREATE INDEX IF NOT EXISTS idx_survey_answer_options_session ON survey_answer_options(session_id, option_id);
+        """
+    )
+
 
 def ensure_landing_config_columns(db: sqlite3.Connection) -> None:
     event_columns = [row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()]
@@ -2457,11 +2666,20 @@ def certificates_v4_dependencies_enabled(db: sqlite3.Connection, event_id: int) 
     return certificates_v4_enabled(db, event_id) and attendance_closure_v4_enabled(db, event_id)
 
 
+def surveys_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "surveys_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def certificate_error_payload(exc: CertificateDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def survey_error_payload(exc: SurveyDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -6028,10 +6246,14 @@ def public_static_path(path: str) -> bool:
 def public_api_get(path: str) -> bool:
     if path.startswith("/api/public/certificates/verify/"):
         return True
+    if path.startswith("/api/public/surveys/access/"):
+        return True
     return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
 
 
 def public_api_post(path: str) -> bool:
+    if path.startswith("/api/public/surveys/access/") or path.startswith("/api/public/surveys/sessions/"):
+        return True
     return path in {
         "/api/register",
         "/api/captation/event",
@@ -6346,6 +6568,107 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = certificate_service().verify_public(db, token=token)
                     audit(db, "public", "certificates.verification_checked", "certificate", None, {"valid": bool(result.get("valid")), "token_hint": token[:8]})
                 self.send_json(result)
+                return
+
+            survey_public_access_match = re.fullmatch(r"/api/public/surveys/access/([A-Za-z0-9_.~:-]+)", path)
+            if survey_public_access_match:
+                token = survey_public_access_match.group(1)
+                with connect() as db:
+                    try:
+                        result = survey_service().public_access(db, token=token)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/survey-types":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.types.read", "surveys.types.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = survey_service().list_types(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/surveys":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.read", "surveys.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = survey_service().list_surveys(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            survey_detail_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)", path)
+            survey_results_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/results", path)
+            survey_export_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/export.csv", path)
+            if survey_detail_match:
+                event_id = int(survey_detail_match.group(1))
+                survey_id = int(survey_detail_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.read", "surveys.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().get_survey_detail(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if survey_results_match:
+                event_id = int(survey_results_match.group(1))
+                survey_id = int(survey_results_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.results.view", "surveys.results.view")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().results(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if survey_export_match:
+                event_id = int(survey_export_match.group(1))
+                survey_id = int(survey_export_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "surveys.export", "surveys.export")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        csv_body = survey_service().export_csv(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, (session or {}).get("name", "system"), "surveys.exported", "survey", survey_id, {"organization_id": org_id, "event_id": event_id})
+                send_download(self, f"encuesta-{survey_id}.csv", "text/csv; charset=utf-8", csv_body.encode("utf-8"))
                 return
 
             if path == "/api/certificate-types":
@@ -8873,6 +9196,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             attendance_closure_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
             attendance_closure_reopen_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/reopen", path)
             attendance_eligibility_override_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility/override", path)
+            survey_public_start_match = re.fullmatch(r"/api/public/surveys/access/([A-Za-z0-9_.~:-]+)/start", path)
+            survey_public_submit_match = re.fullmatch(r"/api/public/surveys/sessions/(\d+)/submit", path)
+            survey_type_create_match = re.fullmatch(r"/api/survey-types", path)
+            survey_create_match = re.fullmatch(r"/api/surveys", path)
+            survey_version_create_match = re.fullmatch(r"/api/surveys/(\d+)/versions", path)
+            survey_version_publish_match = re.fullmatch(r"/api/surveys/(\d+)/versions/(\d+)/publish", path)
+            survey_assign_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assign", path)
+            survey_close_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assignments/(\d+)/close", path)
+            survey_archive_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/archive", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -8882,6 +9214,217 @@ class AppHandler(SimpleHTTPRequestHandler):
             certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
             certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
             certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            if survey_public_start_match:
+                token = survey_public_start_match.group(1)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    try:
+                        access = survey_service().public_access(db, token=token)
+                        if not access.get("valid"):
+                            raise SurveyDomainError("SURVEY_TOKEN_INVALID", "Token invalido", 403)
+                        token_row = db.execute("SELECT organization_id, event_id, assignment_id FROM survey_access_tokens WHERE token_hash = ?", (survey_service()._token_hash(token),)).fetchone()
+                        result = survey_service().start_response(db, organization_id=int(token_row["organization_id"]), event_id=int(token_row["event_id"]), assignment_id=int(token_row["assignment_id"]), token=token, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_public_submit_match:
+                session_id = int(survey_public_submit_match.group(1))
+                token = str(data.get("token") or "")
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    token_row = db.execute("SELECT organization_id, event_id FROM survey_access_tokens WHERE token_hash = ?", (survey_service()._token_hash(token),)).fetchone()
+                    if not token_row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_TOKEN_INVALID", "error": "Token invalido"}, 403)
+                        return
+                    try:
+                        result = survey_service().submit_response(db, organization_id=int(token_row["organization_id"]), event_id=int(token_row["event_id"]), session_id=session_id, answers=data.get("answers") if isinstance(data.get("answers"), list) else [], token=token)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if survey_type_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.types.manage", "surveys.types.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_type(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.create", "surveys.create", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_survey(db, organization_id=org_id, event_id=event_id, actor=actor, survey_type_id=int(data.get("survey_type_id") or 0), name=str(data.get("name") or ""), description=str(data.get("description") or ""), response_mode=str(data.get("response_mode") or "IDENTIFIED"), access_policy=str(data.get("access_policy") or "EVENT_PARTICIPANTS"), duplicate_policy=str(data.get("duplicate_policy") or "ONE_PER_PARTICIPANT"), opens_at=str(data.get("opens_at") or ""), closes_at=str(data.get("closes_at") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_version_create_match:
+                survey_id = int(survey_version_create_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.edit", "surveys.edit", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_version(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor, title=str(data.get("title") or ""), description=str(data.get("description") or ""), instructions=str(data.get("instructions") or ""), questions=data.get("questions") if isinstance(data.get("questions"), list) else [])
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_version_publish_match:
+                survey_id = int(survey_version_publish_match.group(1))
+                version_id = int(survey_version_publish_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.publish", "surveys.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().publish_version(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if survey_assign_match:
+                event_id = int(survey_assign_match.group(1))
+                survey_id = int(survey_assign_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.assign", "surveys.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().assign_survey(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor, version_id=int(data.get("version_id") or 0) or None, activity_id=int(data.get("activity_id") or 0) or None, opens_at=str(data.get("opens_at") or ""), closes_at=str(data.get("closes_at") or ""), access_mode=str(data.get("access_mode") or "EVENT_PARTICIPANTS"))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_close_match:
+                event_id = int(survey_close_match.group(1))
+                assignment_id = int(survey_close_match.group(3))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.close", "surveys.close", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().close_assignment(db, organization_id=org_id, event_id=event_id, assignment_id=assignment_id, actor=actor)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if survey_archive_match:
+                event_id = int(survey_archive_match.group(1))
+                survey_id = int(survey_archive_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.archive", "surveys.archive", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().archive_survey(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
             if certificate_type_create_match:
                 event_id = int(data.get("event_id") or 0)
                 actor_override = str(data.get("actor") or "").strip() or None
