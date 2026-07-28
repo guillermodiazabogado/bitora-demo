@@ -375,9 +375,56 @@ class SurveyService:
 
     def results(self, db, *, organization_id: int, event_id: int, survey_id: int) -> dict:
         survey = self._get_survey(db, survey_id, organization_id, event_id)
-        version_id = int(survey["current_version_id"] or 0)
+        versions = db.execute("SELECT * FROM survey_versions WHERE survey_id = ? ORDER BY version_number, id", (survey_id,)).fetchall()
+        version_results = [self._results_for_version(db, survey_id=survey_id, version=version) for version in versions]
+        total = sum(int(item["total_responses"]) for item in version_results)
+        current_version_id = int(survey["current_version_id"] or 0)
+        current = next((item for item in version_results if int(item["version_id"]) == current_version_id), None)
+        return {
+            "ok": True,
+            "total_responses": total,
+            "items": current["items"] if current else [],
+            "versions": version_results,
+        }
+
+    def export_csv(self, db, *, organization_id: int, event_id: int, survey_id: int) -> str:
+        survey = self._get_survey(db, survey_id, organization_id, event_id)
+        versions = db.execute("SELECT * FROM survey_versions WHERE survey_id = ? ORDER BY version_number, id", (survey_id,)).fetchall()
+        questions_by_version = {
+            int(version["id"]): db.execute("SELECT * FROM survey_questions WHERE survey_id = ? AND version_id = ? ORDER BY sort_order, id", (survey_id, version["id"])).fetchall()
+            for version in versions
+        }
+        version_numbers = {int(version["id"]): int(version["version_number"]) for version in versions}
+        multi_version = len(versions) > 1
+        sessions = db.execute("SELECT * FROM survey_response_sessions WHERE survey_id = ? AND status = 'SUBMITTED' ORDER BY id", (survey_id,)).fetchall()
+        output = StringIO()
+        headers = ["session_id", "submitted_at", "mode", "version"]
+        if str(survey["response_mode"]) != "ANONYMOUS":
+            headers.append("participant_id")
+        for version in versions:
+            prefix = f"v{int(version['version_number'])}." if multi_version else ""
+            headers.extend([f"{prefix}{str(q['question_key'])}" for q in questions_by_version[int(version["id"])]])
+        writer = csv.DictWriter(output, fieldnames=headers)
+        writer.writeheader()
+        for session in sessions:
+            session_version_id = int(session["version_id"])
+            row = {"session_id": session["id"], "submitted_at": session["submitted_at"], "mode": session["response_mode"], "version": version_numbers.get(session_version_id)}
+            if str(survey["response_mode"]) != "ANONYMOUS":
+                row["participant_id"] = session["participant_id"]
+            answers = self._answers_for_session(db, int(session["id"]))
+            for version in versions:
+                version_id = int(version["id"])
+                prefix = f"v{int(version['version_number'])}." if multi_version else ""
+                for question in questions_by_version[version_id]:
+                    header = f"{prefix}{str(question['question_key'])}"
+                    row[header] = self._csv_safe(answers.get(int(question["id"]), "")) if version_id == session_version_id else ""
+            writer.writerow(row)
+        return output.getvalue()
+
+    def _results_for_version(self, db, *, survey_id: int, version) -> dict:
+        version_id = int(version["id"])
         questions = db.execute("SELECT * FROM survey_questions WHERE survey_id = ? AND version_id = ? ORDER BY sort_order, id", (survey_id, version_id)).fetchall()
-        total = int(db.execute("SELECT COUNT(*) AS c FROM survey_response_sessions WHERE survey_id = ? AND status = 'SUBMITTED'", (survey_id,)).fetchone()["c"] or 0)
+        total = int(db.execute("SELECT COUNT(*) AS c FROM survey_response_sessions WHERE survey_id = ? AND version_id = ? AND status = 'SUBMITTED'", (survey_id, version_id)).fetchone()["c"] or 0)
         items = []
         for question in questions:
             qtype = str(question["question_type"])
@@ -388,12 +435,12 @@ class SurveyService:
                     SELECT sqo.option_key, sqo.label, COUNT(sao.id) AS c
                     FROM survey_question_options sqo
                     LEFT JOIN survey_answer_options sao ON sao.option_id = sqo.id
-                    LEFT JOIN survey_response_sessions srs ON srs.id = sao.session_id AND srs.status = 'SUBMITTED'
+                    LEFT JOIN survey_response_sessions srs ON srs.id = sao.session_id AND srs.status = 'SUBMITTED' AND srs.version_id = ?
                     WHERE sqo.question_id = ?
                     GROUP BY sqo.id
                     ORDER BY sqo.sort_order, sqo.id
                     """,
-                    (question["id"],),
+                    (version_id, question["id"]),
                 ).fetchall()
                 dist = []
                 response_count = 0
@@ -404,38 +451,44 @@ class SurveyService:
                 base["responses"] = response_count
                 base["distribution"] = dist
             elif qtype == "SCALE":
-                row = db.execute("SELECT COUNT(*) AS c, AVG(answer_number) AS avg_value, MIN(answer_number) AS min_value, MAX(answer_number) AS max_value FROM survey_answers sa JOIN survey_response_sessions srs ON srs.id = sa.session_id WHERE sa.question_id = ? AND srs.status = 'SUBMITTED'", (question["id"],)).fetchone()
+                row = db.execute(
+                    """
+                    SELECT COUNT(*) AS c, AVG(answer_number) AS avg_value, MIN(answer_number) AS min_value, MAX(answer_number) AS max_value
+                    FROM survey_answers sa
+                    JOIN survey_response_sessions srs ON srs.id = sa.session_id
+                    WHERE sa.question_id = ? AND srs.version_id = ? AND srs.status = 'SUBMITTED'
+                    """,
+                    (question["id"], version_id),
+                ).fetchone()
                 base.update({"responses": int(row["c"] or 0), "average": float(row["avg_value"] or 0), "min": row["min_value"], "max": row["max_value"]})
             elif qtype == "YES_NO":
-                rows = db.execute("SELECT answer_bool, COUNT(*) AS c FROM survey_answers sa JOIN survey_response_sessions srs ON srs.id = sa.session_id WHERE sa.question_id = ? AND srs.status = 'SUBMITTED' GROUP BY answer_bool", (question["id"],)).fetchall()
+                rows = db.execute(
+                    """
+                    SELECT answer_bool, COUNT(*) AS c
+                    FROM survey_answers sa
+                    JOIN survey_response_sessions srs ON srs.id = sa.session_id
+                    WHERE sa.question_id = ? AND srs.version_id = ? AND srs.status = 'SUBMITTED'
+                    GROUP BY answer_bool
+                    """,
+                    (question["id"], version_id),
+                ).fetchall()
                 counts = {str(bool(row["answer_bool"])): int(row["c"] or 0) for row in rows}
                 base.update({"responses": sum(counts.values()), "yes": counts.get("True", 0), "no": counts.get("False", 0)})
             else:
-                rows = db.execute("SELECT answer_text FROM survey_answers sa JOIN survey_response_sessions srs ON srs.id = sa.session_id WHERE sa.question_id = ? AND srs.status = 'SUBMITTED' ORDER BY sa.id LIMIT 50", (question["id"],)).fetchall()
+                rows = db.execute(
+                    """
+                    SELECT answer_text
+                    FROM survey_answers sa
+                    JOIN survey_response_sessions srs ON srs.id = sa.session_id
+                    WHERE sa.question_id = ? AND srs.version_id = ? AND srs.status = 'SUBMITTED'
+                    ORDER BY sa.id
+                    LIMIT 50
+                    """,
+                    (question["id"], version_id),
+                ).fetchall()
                 base.update({"responses": len(rows), "items": [row["answer_text"] for row in rows]})
             items.append(base)
-        return {"ok": True, "total_responses": total, "items": items}
-
-    def export_csv(self, db, *, organization_id: int, event_id: int, survey_id: int) -> str:
-        survey = self._get_survey(db, survey_id, organization_id, event_id)
-        questions = db.execute("SELECT * FROM survey_questions WHERE survey_id = ? AND version_id = ? ORDER BY sort_order, id", (survey_id, survey["current_version_id"])).fetchall()
-        sessions = db.execute("SELECT * FROM survey_response_sessions WHERE survey_id = ? AND status = 'SUBMITTED' ORDER BY id", (survey_id,)).fetchall()
-        output = StringIO()
-        headers = ["session_id", "submitted_at", "mode"]
-        if str(survey["response_mode"]) != "ANONYMOUS":
-            headers.append("participant_id")
-        headers.extend([str(q["question_key"]) for q in questions])
-        writer = csv.DictWriter(output, fieldnames=headers)
-        writer.writeheader()
-        for session in sessions:
-            row = {"session_id": session["id"], "submitted_at": session["submitted_at"], "mode": session["response_mode"]}
-            if str(survey["response_mode"]) != "ANONYMOUS":
-                row["participant_id"] = session["participant_id"]
-            answers = self._answers_for_session(db, int(session["id"]))
-            for question in questions:
-                row[str(question["question_key"])] = self._csv_safe(answers.get(int(question["id"]), ""))
-            writer.writerow(row)
-        return output.getvalue()
+        return {"version_id": version_id, "version_number": int(version["version_number"]), "status": version["status"], "total_responses": total, "items": items}
 
     def _normalize_questions(self, questions: list[dict]) -> list[dict]:
         if not questions or len(questions) > 80:

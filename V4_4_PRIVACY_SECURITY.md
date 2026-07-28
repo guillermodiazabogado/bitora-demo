@@ -18,6 +18,12 @@ Todas las operaciones administrativas filtran por `organization_id` y `event_id`
 
 La exportacion CSV neutraliza valores potencialmente ejecutables para reducir CSV injection.
 
+Cuando una encuesta tiene multiples versiones publicadas, la exportacion agrega la columna `version` y separa las respuestas por columnas prefijadas con `vN.`. Esto evita interpretar respuestas historicas bajo preguntas de una version posterior.
+
+## Resultados
+
+Los resultados se agregan por `version_id`. La respuesta mantiene `total_responses` global para compatibilidad y agrega `versions` con conteos e items por version. El campo `items` representa la version vigente para las pantallas actuales.
+
 ## Auditoria
 
 Se auditan operaciones administrativas: creacion, versionado, publicacion, asignacion, cierre, archivo y exportacion. No se copian respuestas sensibles completas al log administrativo.

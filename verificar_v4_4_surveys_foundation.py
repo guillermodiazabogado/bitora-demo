@@ -183,6 +183,47 @@ def main():
         assert_true(results["total_responses"] == 1, "conteo de resultados incorrecto")
         csv_body = service.export_csv(db, organization_id=org_id, event_id=event_id, survey_id=identified_survey["id"])
         assert_true("'=cmd|bad" in csv_body, "CSV injection no fue neutralizada")
+        version_two = service.create_version(
+            db,
+            organization_id=org_id,
+            event_id=event_id,
+            survey_id=identified_survey["id"],
+            actor="Admin",
+            title="Version identificada 2",
+            questions=[{"key": "FOLLOWUP", "prompt": "Seguimiento posterior", "type": "SHORT_TEXT", "required": True}],
+        )["item"]
+        published_two = service.publish_version(
+            db,
+            organization_id=org_id,
+            event_id=event_id,
+            survey_id=identified_survey["id"],
+            version_id=version_two["id"],
+            actor="Admin",
+            idempotency_key="publish-identified-v2",
+        )["item"]
+        assignment_two = service.assign_survey(db, organization_id=org_id, event_id=event_id, survey_id=identified_survey["id"], actor="Admin", version_id=published_two["id"])["item"]
+        second_session = service.start_response(
+            db,
+            organization_id=org_id,
+            event_id=event_id,
+            assignment_id=assignment_two["id"],
+            participant_id=data["people"][event_id][1],
+            idempotency_key="identified-v2-start",
+        )["item"]
+        service.submit_response(
+            db,
+            organization_id=org_id,
+            event_id=event_id,
+            session_id=second_session["id"],
+            answers=[{"question_id": published_two["questions"][0]["id"], "value": "Revision versionada"}],
+        )
+        versioned_results = service.results(db, organization_id=org_id, event_id=event_id, survey_id=identified_survey["id"])
+        assert_true(versioned_results["total_responses"] == 2, "conteo versionado total incorrecto")
+        assert_true(len(versioned_results["versions"]) == 2, "resultados no separan versiones")
+        assert_true([item["total_responses"] for item in versioned_results["versions"]] == [1, 1], "respuestas mezcladas entre versiones")
+        assert_true(versioned_results["items"][0]["key"] == "FOLLOWUP", "resultados actuales no usan la version vigente")
+        versioned_csv = service.export_csv(db, organization_id=org_id, event_id=event_id, survey_id=identified_survey["id"])
+        assert_true("v1.SAT" in versioned_csv.splitlines()[0] and "v2.FOLLOWUP" in versioned_csv.splitlines()[0], "CSV no separa columnas por version")
         anonymous_csv = service.export_csv(db, organization_id=org_id, event_id=event_id, survey_id=anonymous_survey["id"])
         assert_true("participant_id" not in anonymous_csv.splitlines()[0], "CSV anonimo expone participante")
         service.close_assignment(db, organization_id=org_id, event_id=event_id, assignment_id=identified_assignment["id"], actor="Admin")
