@@ -297,6 +297,7 @@ class EventBackupService:
         ("zone_access_assignments", "SELECT * FROM zone_access_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("zone_access_validations", "SELECT * FROM zone_access_validations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("zone_access_overrides", "SELECT * FROM zone_access_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("duplicate_resolution_decisions", "SELECT * FROM duplicate_resolution_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "speaker_profiles",
             """
@@ -533,6 +534,7 @@ class EventRestoreService:
         "zone_access_assignments",
         "zone_access_validations",
         "zone_access_overrides",
+        "duplicate_resolution_decisions",
         "speaker_profiles",
         "speaker_private_details",
         "speaker_profile_versions",
@@ -711,6 +713,7 @@ class EventRestoreService:
                     "zone_access_assignments": {},
                     "zone_access_validations": {},
                     "zone_access_overrides": {},
+                    "duplicate_resolution_decisions": {},
                     "speaker_profiles": {},
                     "speaker_private_details": {},
                     "speaker_profile_versions": {},
@@ -926,6 +929,8 @@ class EventRestoreService:
                 row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
             if "participant_id" in row and row.get("participant_id") is not None:
                 row["participant_id"] = maps["people"].get(int(row["participant_id"]), row["participant_id"])
+            if "candidate_person_id" in row and row.get("candidate_person_id") is not None:
+                row["candidate_person_id"] = maps["people"].get(int(row["candidate_person_id"]), row["candidate_person_id"])
             if "accreditation_id" in row and row.get("accreditation_id") is not None:
                 row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
             if "attendance_id" in row and row.get("attendance_id") is not None:

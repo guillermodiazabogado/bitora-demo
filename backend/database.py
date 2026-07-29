@@ -148,6 +148,7 @@ _ID_TABLES = {
     "communication_templates",
     "communication_tickets",
     "conversation_sources",
+    "duplicate_resolution_decisions",
     "email_delivery_events",
     "email_suppressions",
     "event_zones",

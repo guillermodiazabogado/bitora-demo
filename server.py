@@ -62,6 +62,7 @@ from backend.services.google_oauth import (
     sanitize_google_error,
     token_expires_at,
 )
+from backend.services.history_autocomplete import HistoryAutocompleteError, HistoryAutocompleteService
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -239,18 +240,27 @@ ZONE_PERMISSION_CODES = [
     "zones.access_log.read",
     "zones.audit.read",
 ]
+HISTORY_AUTOCOMPLETE_PERMISSION_CODES = [
+    "history.read",
+    "history.sensitive.read",
+    "autocomplete.use",
+    "autocomplete.private.use",
+    "duplicates.read",
+    "duplicates.resolve",
+    "history.audit.read",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -261,8 +271,8 @@ PERMISSION_MATRIX = {
         "actions": ["scan_qr", "attendance.record", "zones.validate"],
     },
     "Visualizador": {
-        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read"],
+        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers", "history"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -314,6 +324,10 @@ def speaker_service() -> SpeakerService:
 
 def zone_permission_service() -> ZonePermissionService:
     return ZonePermissionService(audit_service=audit_service(), now=now_iso)
+
+
+def history_autocomplete_service() -> HistoryAutocompleteService:
+    return HistoryAutocompleteService(audit_service=audit_service(), now=now_iso)
 
 
 def survey_service() -> SurveyService:
@@ -1673,6 +1687,24 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         """
     )
 
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS duplicate_resolution_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+            candidate_person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            decision TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_duplicate_decisions_scope ON duplicate_resolution_decisions(organization_id, event_id, candidate_person_id);
+        CREATE INDEX IF NOT EXISTS idx_duplicate_decisions_created ON duplicate_resolution_decisions(created_at);
+        """
+    )
+
 
 def ensure_multitenant_schema(db: sqlite3.Connection) -> None:
     event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
@@ -2924,6 +2956,11 @@ def zone_permissions_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "zone_permissions_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def history_autocomplete_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "history_autocomplete_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
@@ -2937,6 +2974,10 @@ def speaker_error_payload(exc: SpeakerDomainError) -> dict:
 
 
 def zone_error_payload(exc: ZoneDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def history_autocomplete_error_payload(exc: HistoryAutocompleteError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -6947,6 +6988,128 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result)
                 return
 
+            history_event_match = re.fullmatch(r"/api/events/(\d+)/history", path)
+            if history_event_match:
+                event_id = int(history_event_match.group(1))
+                include_sensitive = str(query.get("include_sensitive", ["0"])[0]).lower() in {"1", "true", "yes"}
+                limit = int(query.get("limit", ["100"])[0] or 100)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "history.sensitive.read" if include_sensitive else "history.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().event_history(db, organization_id=org_id, event_id=event_id, include_sensitive=include_sensitive, limit=limit)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            history_entity_match = re.fullmatch(r"/api/history/entities/([a-zA-Z_]+)/(\d+)", path)
+            if history_entity_match:
+                entity_type = history_entity_match.group(1)
+                entity_id = int(history_entity_match.group(2))
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_sensitive = str(query.get("include_sensitive", ["0"])[0]).lower() in {"1", "true", "yes"}
+                limit = int(query.get("limit", ["100"])[0] or 100)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "history.sensitive.read" if include_sensitive else "history.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().entity_history(db, organization_id=org_id, event_id=event_id, entity_type=entity_type, entity_id=entity_id, include_sensitive=include_sensitive, limit=limit)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/autocomplete/participants":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                search = str(query.get("q", [""])[0] or "")
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "autocomplete.private.use" if include_private else "autocomplete.use"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().autocomplete_participants(db, organization_id=org_id, event_id=event_id, query=search, include_private=include_private)
+                self.send_json(result)
+                return
+
+            if path == "/api/autocomplete/speakers":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                search = str(query.get("q", [""])[0] or "")
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "autocomplete.private.use" if include_private else "autocomplete.use"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().autocomplete_speakers(db, organization_id=org_id, query=search, include_private=include_private)
+                self.send_json(result)
+                return
+
+            autocomplete_value_match = re.fullmatch(r"/api/autocomplete/(organizations|cities|roles)", path)
+            if autocomplete_value_match:
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                search = str(query.get("q", [""])[0] or "")
+                field = autocomplete_value_match.group(1)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "autocomplete.use", "autocomplete.use")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().autocomplete_values(db, organization_id=org_id, field=field, query=search)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/duplicate-candidates":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "duplicates.read", "duplicates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().duplicate_candidates(
+                        db,
+                        organization_id=org_id,
+                        first_name=str(query.get("first_name", [""])[0] or ""),
+                        last_name=str(query.get("last_name", [""])[0] or ""),
+                        email=str(query.get("email", [""])[0] or ""),
+                        document=str(query.get("document", [""])[0] or ""),
+                    )
+                self.send_json(result)
+                return
+
             if path == "/api/survey-types":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -9583,6 +9746,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             zone_assignment_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/assignments", path)
             zone_validate_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/validate", path)
             zone_override_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/overrides", path)
+            duplicate_decision_match = re.fullmatch(r"/api/duplicate-candidates/(\d+)/(confirm|dismiss)", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -9824,6 +9988,34 @@ class AppHandler(SimpleHTTPRequestHandler):
                             self.send_json(speaker_error_payload(exc), exc.status_code)
                         else:
                             self.send_json({"ok": False, "code": "SPEAKER_DOCUMENT_INVALID", "error": str(exc)}, 400)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if duplicate_decision_match:
+                candidate_person_id = int(duplicate_decision_match.group(1))
+                action = duplicate_decision_match.group(2)
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                decision = "CONFIRMED_MATCH" if action == "confirm" else "DISMISSED"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "duplicates.resolve", "duplicates.resolve", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "duplicates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().record_duplicate_decision(db, organization_id=org_id, event_id=event_id, actor=actor, candidate_person_id=candidate_person_id, decision=decision, reason=str(data.get("reason") or ""))
+                    except HistoryAutocompleteError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
                         return
                     db.execute("COMMIT")
                 self.send_json(result, 201)
