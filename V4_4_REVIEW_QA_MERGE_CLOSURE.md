@@ -2,11 +2,11 @@
 
 ## Estado general
 
-PRE-MERGE REVIEW AND QA PASSED
+PASSED
 
 ## Decision
 
-GO PARA MERGE, condicionado a que PR #4 permanezca limpio al momento de merge.
+GO MERGED
 
 ## Identidad Git
 
@@ -15,10 +15,14 @@ GO PARA MERGE, condicionado a que PR #4 permanezca limpio al momento de merge.
 - SHA inicial de feature revisado: `a08e61d98c40d6b6de5f6bbe58820866d5771c3f`
 - Rama base: `develop/v4`
 - SHA base inicial: `6844156645aac01cefb26a8f526da5f915cb8403`
+- SHA final de feature revisado: `296c8c8a2a487615aa508c25e3f37c25bb62265a`
+- SHA final de `develop/v4` post-merge: `7ae787a880b32499033d809de96e62764a708bfb`
 - PR: `#4 BITORA V4.4 surveys foundation`
 - Estado PR pre-review: `OPEN / CLEAN`
+- Estado PR final: `MERGED`
 - Checks remotos configurados: ninguno reportado por GitHub
 - Working tree pre-review: limpio
+- Working tree post-merge: limpio
 
 ## Inventario funcional
 
@@ -76,7 +80,22 @@ No quedaron hallazgos criticos, altos ni medios abiertos.
 
 ## Validaciones post-merge sobre develop/v4
 
-Pendiente hasta completar el merge seguro.
+| Validacion | Resultado |
+| --- | --- |
+| Sintaxis Python | PASSED |
+| V4.4 Surveys Foundation | PASSED |
+| V4.3 certificados | PASSED |
+| V4.2 cierre/elegibilidad | PASSED |
+| V4.1 asistencia | PASSED |
+| Seguridad basica | PASSED |
+| Aislamiento 20 eventos / 1000 participantes | PASSED |
+| Restore de evento | PASSED |
+| Integridad BITORA | PASSED |
+| Convivencia de modulos | PASSED |
+| BDF migrate | PASSED |
+| BDF health | PASSED |
+| BDF smoke-test | PASSED |
+| Secret scan | PASSED, 0 secretos detectados |
 
 ## Alcance confirmado
 
@@ -88,4 +107,4 @@ No se implemento ni modifico: V4.5, release candidate, release estable, Enduranc
 
 ## Estado recomendado
 
-BITORA V4.4 PRE-MERGE REVIEW AND QA PASSED - READY FOR SAFE MERGE
+BITORA V4.4 MERGED TO develop/v4 - READY FOR NEXT VERSION PLANNING
