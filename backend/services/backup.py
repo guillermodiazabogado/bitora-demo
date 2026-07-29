@@ -257,6 +257,21 @@ class EventBackupService:
         ("communication_assistant_history", "SELECT * FROM communication_assistant_history WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_tickets", "SELECT * FROM communication_tickets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_templates", "SELECT * FROM communication_templates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_templates", "SELECT * FROM communication_v4_templates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_template_versions", "SELECT * FROM communication_v4_template_versions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_segments", "SELECT * FROM communication_v4_segments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_campaigns", "SELECT * FROM communication_v4_campaigns WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_campaign_recipients", "SELECT * FROM communication_v4_campaign_recipients WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_messages", "SELECT * FROM communication_v4_messages WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_deliveries", "SELECT * FROM communication_v4_deliveries WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_attempts", "SELECT * FROM communication_v4_attempts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_consents", "SELECT * FROM communication_v4_consents WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_suppressions", "SELECT * FROM communication_v4_suppressions WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_unsubscribes", "SELECT * FROM communication_v4_unsubscribes WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_automations", "SELECT * FROM communication_v4_automations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_automation_runs", "SELECT * FROM communication_v4_automation_runs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_provider_events", "SELECT * FROM communication_v4_provider_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_approvals", "SELECT * FROM communication_v4_approvals WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("participant_announcements", "SELECT * FROM participant_announcements WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("captation_events", "SELECT * FROM captation_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("conversation_sources", "SELECT * FROM conversation_sources WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -500,6 +515,21 @@ class EventRestoreService:
         "participant_communication_preferences",
         "accreditations",
         "reservations",
+        "communication_v4_templates",
+        "communication_v4_template_versions",
+        "communication_v4_segments",
+        "communication_v4_campaigns",
+        "communication_v4_campaign_recipients",
+        "communication_v4_messages",
+        "communication_v4_deliveries",
+        "communication_v4_attempts",
+        "communication_v4_consents",
+        "communication_v4_suppressions",
+        "communication_v4_unsubscribes",
+        "communication_v4_automations",
+        "communication_v4_automation_runs",
+        "communication_v4_provider_events",
+        "communication_v4_approvals",
         "activity_attendance",
         "attendance_records",
         "attendance_events",
@@ -727,6 +757,21 @@ class EventRestoreService:
                     "speaker_activity_assignments": {},
                     "speaker_documents": {},
                     "speaker_access_tokens": {},
+                    "communication_v4_templates": {},
+                    "communication_v4_template_versions": {},
+                    "communication_v4_segments": {},
+                    "communication_v4_campaigns": {},
+                    "communication_v4_campaign_recipients": {},
+                    "communication_v4_messages": {},
+                    "communication_v4_deliveries": {},
+                    "communication_v4_attempts": {},
+                    "communication_v4_consents": {},
+                    "communication_v4_suppressions": {},
+                    "communication_v4_unsubscribes": {},
+                    "communication_v4_automations": {},
+                    "communication_v4_automation_runs": {},
+                    "communication_v4_provider_events": {},
+                    "communication_v4_approvals": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -744,6 +789,7 @@ class EventRestoreService:
                 self._repair_certificate_template_versions(db, payload, maps)
                 self._repair_survey_versions(db, payload, maps)
                 self._repair_speaker_versions(db, payload, maps)
+                self._repair_communication_v4_versions(db, payload, maps)
                 self._validate_restored(db, payload, new_event_id)
                 files_restored = self._restore_storage_files(raw, manifest, int(payload.get("event_id") or 0), new_event_id)
                 duration_ms = int((datetime.now() - started).total_seconds() * 1000)
@@ -943,7 +989,9 @@ class EventRestoreService:
                 row["attendance_id"] = maps["attendance_records"].get(int(row["attendance_id"]), row["attendance_id"])
             if "rule_set_id" in row and row.get("rule_set_id") is not None:
                 row["rule_set_id"] = maps["attendance_rule_sets"].get(int(row["rule_set_id"]), row["rule_set_id"])
-            if table == "certificate_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
+            if table == "communication_v4_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["communication_v4_template_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            elif table == "certificate_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
                 row["current_version_id"] = maps["certificate_template_versions"].get(int(row["current_version_id"]), row["current_version_id"])
             elif table == "surveys" and "current_version_id" in row and row.get("current_version_id") is not None:
                 row["current_version_id"] = maps["survey_versions"].get(int(row["current_version_id"]), row["current_version_id"])
@@ -965,11 +1013,28 @@ class EventRestoreService:
                 row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
             if "queue_id" in row and row.get("queue_id") is not None:
                 row["queue_id"] = maps["communication_queue"].get(int(row["queue_id"]), row["queue_id"])
-            if "certificate_type_id" in row and row.get("certificate_type_id") is not None:
+            if table.startswith("communication_v4_"):
+                if "template_id" in row and row.get("template_id") is not None:
+                    row["template_id"] = maps["communication_v4_templates"].get(int(row["template_id"]), row["template_id"])
+                if "template_version_id" in row and row.get("template_version_id") is not None:
+                    row["template_version_id"] = maps["communication_v4_template_versions"].get(int(row["template_version_id"]), row["template_version_id"])
+                if "segment_id" in row and row.get("segment_id") is not None:
+                    row["segment_id"] = maps["communication_v4_segments"].get(int(row["segment_id"]), row["segment_id"])
+                if "campaign_id" in row and row.get("campaign_id") is not None:
+                    row["campaign_id"] = maps["communication_v4_campaigns"].get(int(row["campaign_id"]), row["campaign_id"])
+                if "campaign_recipient_id" in row and row.get("campaign_recipient_id") is not None:
+                    row["campaign_recipient_id"] = maps["communication_v4_campaign_recipients"].get(int(row["campaign_recipient_id"]), row["campaign_recipient_id"])
+                if "message_id" in row and row.get("message_id") is not None:
+                    row["message_id"] = maps["communication_v4_messages"].get(int(row["message_id"]), row["message_id"])
+                if "delivery_id" in row and row.get("delivery_id") is not None:
+                    row["delivery_id"] = maps["communication_v4_deliveries"].get(int(row["delivery_id"]), row["delivery_id"])
+                if "automation_id" in row and row.get("automation_id") is not None:
+                    row["automation_id"] = maps["communication_v4_automations"].get(int(row["automation_id"]), row["automation_id"])
+            if not table.startswith("communication_v4_") and "certificate_type_id" in row and row.get("certificate_type_id") is not None:
                 row["certificate_type_id"] = maps["certificate_types"].get(int(row["certificate_type_id"]), row["certificate_type_id"])
-            if "template_id" in row and row.get("template_id") is not None:
+            if not table.startswith("communication_v4_") and "template_id" in row and row.get("template_id") is not None:
                 row["template_id"] = maps["certificate_templates"].get(int(row["template_id"]), row["template_id"])
-            if "template_version_id" in row and row.get("template_version_id") is not None:
+            if not table.startswith("communication_v4_") and "template_version_id" in row and row.get("template_version_id") is not None:
                 row["template_version_id"] = maps["certificate_template_versions"].get(int(row["template_version_id"]), row["template_version_id"])
             if "eligibility_decision_id" in row and row.get("eligibility_decision_id") is not None:
                 row["eligibility_decision_id"] = maps["attendance_eligibility_decisions"].get(int(row["eligibility_decision_id"]), row["eligibility_decision_id"])
@@ -1076,6 +1141,20 @@ class EventRestoreService:
                 row["last_error"] = "Restaurado inactivo: requiere revision manual"
                 if "idempotency_key" in row:
                     row["idempotency_key"] = ""
+            if table == "communication_v4_campaigns":
+                row["status"] = "RESTORED_REVIEW"
+                row["live_mode"] = 0
+                row["scheduled_at"] = None
+                row["started_at"] = None
+                row["completed_at"] = None
+                row["updated_at"] = self.now()
+            if table in {"communication_v4_campaign_recipients", "communication_v4_messages", "communication_v4_automation_runs"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "communication_v4_automations":
+                row["status"] = "PAUSED"
+                row["safe_mode"] = 1
+            if table == "communication_v4_provider_events" and row.get("external_event_id"):
+                row["external_event_id"] = f"{row['external_event_id']}:restored:{next(iter(maps['events'].values()))}"
             if table == "participant_communication_preferences" and row.get("person_id") is not None:
                 existing_preference = db.execute(
                     "SELECT id FROM participant_communication_preferences WHERE person_id = ?",
@@ -1127,6 +1206,15 @@ class EventRestoreService:
             new_version_id = maps.get("speaker_profile_versions", {}).get(old_version_id)
             if new_profile_id and new_version_id:
                 db.execute("UPDATE speaker_profiles SET current_version_id = ? WHERE id = ?", (new_version_id, new_profile_id))
+
+    def _repair_communication_v4_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("communication_v4_templates", []):
+            old_template_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_template_id = maps.get("communication_v4_templates", {}).get(old_template_id)
+            new_version_id = maps.get("communication_v4_template_versions", {}).get(old_version_id)
+            if new_template_id and new_version_id:
+                db.execute("UPDATE communication_v4_templates SET current_version_id = ? WHERE id = ?", (new_version_id, new_template_id))
 
     def _delete_event_scope(self, db, event_id: int) -> None:
         db.execute("DELETE FROM user_event_roles WHERE event_id = ?", (event_id,))

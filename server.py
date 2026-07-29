@@ -45,6 +45,7 @@ from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.certificates import CertificateDomainError, CertificateService
+from backend.services.communications_automation import CommunicationsAutomationError, CommunicationsAutomationService
 from backend.services.speakers import SpeakerDomainError, SpeakerService
 from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
@@ -264,18 +265,38 @@ OPERATIONS_CENTER_PERMISSION_CODES = [
     "operations_center.sensitive.read",
     "operations_center.audit.read",
 ]
+COMMUNICATIONS_AUTOMATION_PERMISSION_CODES = [
+    "communications.templates.read",
+    "communications.templates.manage",
+    "communications.templates.approve",
+    "communications.segments.read",
+    "communications.segments.manage",
+    "communications.campaigns.read",
+    "communications.campaigns.manage",
+    "communications.campaigns.approve",
+    "communications.campaigns.execute",
+    "communications.campaigns.cancel",
+    "communications.deliveries.read",
+    "communications.automations.read",
+    "communications.automations.manage",
+    "communications.automations.activate",
+    "communications.suppressions.read",
+    "communications.suppressions.manage",
+    "communications.audit.read",
+    "communications.live_mode.use",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -287,11 +308,11 @@ PERMISSION_MATRIX = {
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers", "history"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
-        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "integrations.google_connect", "integrations.google_disconnect", "integrations.test", "event_integrations.view", "communications.configure", "communications.send_test"],
+        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "integrations.google_connect", "integrations.google_disconnect", "integrations.test", "event_integrations.view", "communications.configure", "communications.send_test", "communications.templates.read", "communications.templates.manage", "communications.segments.read", "communications.segments.manage", "communications.campaigns.read", "communications.campaigns.manage", "communications.campaigns.execute", "communications.deliveries.read", "communications.automations.read", "communications.automations.manage", "communications.suppressions.read", "communications.suppressions.manage"],
     },
     "Soporte tecnico": {
         "modules": ["dashboard", "audit", "diagnostics"],
@@ -347,6 +368,17 @@ def history_autocomplete_service() -> HistoryAutocompleteService:
 
 def operations_center_service() -> OperationsCenterService:
     return OperationsCenterService(audit_service=audit_service(), now=now_iso)
+
+
+def communications_automation_service() -> CommunicationsAutomationService:
+    live_mode = os.environ.get("BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED", "").lower() in {"1", "true", "yes", "si"}
+    return CommunicationsAutomationService(
+        audit_service=audit_service(),
+        now=now_iso,
+        live_mode=live_mode,
+        force_email=os.environ.get("EMAIL_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_EMAIL_RECIPIENT", ""),
+        force_phone=os.environ.get("WHATSAPP_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_WHATSAPP_RECIPIENT", ""),
+    )
 
 
 def survey_service() -> SurveyService:
@@ -1399,6 +1431,7 @@ def init_db() -> None:
         ensure_v4_2_columns(db)
         ensure_v4_3_columns(db)
         ensure_v4_4_columns(db)
+        ensure_v4_9_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -1916,6 +1949,14 @@ def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
             ON whatsapp_suppressions(normalized_phone, active, scope, event_id);
         """
     )
+
+
+def ensure_v4_9_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "024_v4_9_communications_automation.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -3045,7 +3086,16 @@ def operations_center_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "operations_center_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def communications_automation_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "communications_v4_enabled", organization_id=organization_id, event_id=event_id) and feature_flag_enabled(db, "communications_automation_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def operations_center_error_payload(exc: OperationsCenterError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def communications_automation_error_payload(exc: CommunicationsAutomationError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -5573,6 +5623,26 @@ def handle_export_job(payload: dict) -> dict:
     return {"file": path.name, "rows": len(rows)}
 
 
+def handle_communications_campaign_job(payload: dict) -> dict:
+    event_id = int(payload.get("event_id") or 0)
+    organization_id = int(payload.get("organization_id") or 0) or None
+    campaign_id = int(payload.get("campaign_id") or 0)
+    actor = str(payload.get("actor") or "worker")
+    with DB_LOCK, connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        organization_id = organization_id or event_organization_id(db, event_id)
+        result = communications_automation_service().execute_campaign(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            campaign_id=campaign_id,
+            actor=actor,
+            correlation_id=str(payload.get("correlation_id") or ""),
+        )
+        db.execute("COMMIT")
+        return result
+
+
 def start_job_worker() -> JobWorker:
     global WORKER
     queue = job_queue_service()
@@ -5581,6 +5651,7 @@ def start_job_worker() -> JobWorker:
         {
             "email.send": handle_email_job,
             "whatsapp.send": handle_whatsapp_job,
+            "communications.campaign.execute": handle_communications_campaign_job,
             "backup.create": handle_backup_job,
             "certificate.generate": handle_certificate_job,
             "export.generate": handle_export_job,
@@ -6897,6 +6968,46 @@ class AppHandler(SimpleHTTPRequestHandler):
                     elif view == "alerts": result = {"ok": True, "items": service.alerts(db, organization_id=organization_id, event_id=event_id)}
                     elif view == "incidents": result = {"ok": True, "items": service.incidents(db, organization_id=organization_id, event_id=event_id)}
                     else: result = {"ok": True, "items": service.tasks(db, organization_id=organization_id, event_id=event_id)}
+                self.send_json(result)
+                return
+            communications_v4_match = re.fullmatch(r"/api/events/(\d+)/communications-v4(?:/(templates|segments|campaigns|recipients|messages|deliveries|automations|suppressions))?", path)
+            if communications_v4_match:
+                event_id = int(communications_v4_match.group(1))
+                resource = communications_v4_match.group(2) or "summary"
+                permission = {
+                    "summary": "communications.campaigns.read",
+                    "templates": "communications.templates.read",
+                    "segments": "communications.segments.read",
+                    "campaigns": "communications.campaigns.read",
+                    "recipients": "communications.campaigns.read",
+                    "messages": "communications.deliveries.read",
+                    "deliveries": "communications.deliveries.read",
+                    "automations": "communications.automations.read",
+                    "suppressions": "communications.suppressions.read",
+                }[resource]
+                with connect() as db:
+                    if not communications_automation_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "COMMUNICATIONS_V4_FEATURE_DISABLED", "error": "Communications V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    if resource == "summary":
+                        result = communications_automation_service().summary(db, organization_id=organization_id, event_id=event_id)
+                    else:
+                        table = {
+                            "templates": "communication_v4_templates",
+                            "segments": "communication_v4_segments",
+                            "campaigns": "communication_v4_campaigns",
+                            "recipients": "communication_v4_campaign_recipients",
+                            "messages": "communication_v4_messages",
+                            "deliveries": "communication_v4_deliveries",
+                            "automations": "communication_v4_automations",
+                            "suppressions": "communication_v4_suppressions",
+                        }[resource]
+                        rows = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND event_id = ? ORDER BY id DESC LIMIT 250", (organization_id, event_id)).fetchall()
+                        result = {"ok": True, "items": [dict(row) for row in rows]}
                 self.send_json(result)
                 return
             if self.login_required() and not public_api_get(path) and "event_id" in query:
@@ -9877,6 +9988,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             operations_alert_status_match = re.fullmatch(r"/api/events/(\d+)/operations-center/alerts/(\d+)/(acknowledge|resolve)", path)
             operations_incident_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/incidents/(\d+)", path)
             operations_task_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/tasks/(\d+)", path)
+            comm_template_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/templates", path)
+            comm_template_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/templates/(\d+)/(update|approve|preview)", path)
+            comm_segment_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/segments", path)
+            comm_segment_preview_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/segments/(\d+)/preview", path)
+            comm_campaign_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/campaigns", path)
+            comm_campaign_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/campaigns/(\d+)/(validate|approve|execute|enqueue|pause|cancel)", path)
+            comm_automation_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/automations", path)
+            comm_automation_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/automations/(\d+)/(activate|pause)", path)
+            comm_webhook_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/webhooks/([a-zA-Z0-9_-]+)", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -9886,6 +10006,151 @@ class AppHandler(SimpleHTTPRequestHandler):
             certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
             certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
             certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            if (
+                comm_template_create_match
+                or comm_template_action_match
+                or comm_segment_create_match
+                or comm_segment_preview_match
+                or comm_campaign_create_match
+                or comm_campaign_action_match
+                or comm_automation_create_match
+                or comm_automation_action_match
+                or comm_webhook_match
+            ):
+                match = (
+                    comm_template_create_match
+                    or comm_template_action_match
+                    or comm_segment_create_match
+                    or comm_segment_preview_match
+                    or comm_campaign_create_match
+                    or comm_campaign_action_match
+                    or comm_automation_create_match
+                    or comm_automation_action_match
+                    or comm_webhook_match
+                )
+                event_id = int(match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not communications_automation_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "COMMUNICATIONS_V4_FEATURE_DISABLED", "error": "Communications V4 deshabilitado"}, 404)
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or data.get("actor") or "communications")
+                    service = communications_automation_service()
+                    try:
+                        if comm_template_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.templates.manage", "communications.templates.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_template(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_template_action_match:
+                            template_id = int(comm_template_action_match.group(2))
+                            action = comm_template_action_match.group(3)
+                            permission = "communications.templates.approve" if action == "approve" else ("communications.templates.read" if action == "preview" else "communications.templates.manage")
+                            ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            if action == "approve":
+                                result = service.approve_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, actor=actor)
+                            elif action == "preview":
+                                result = service.preview_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, sample=data.get("sample") if isinstance(data.get("sample"), dict) else {})
+                            else:
+                                result = service.update_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, actor=actor, data=data)
+                            status_code = 200
+                        elif comm_segment_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.segments.manage", "communications.segments.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_segment(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_segment_preview_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.segments.read", "communications.segments.read")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.preview_segment(db, organization_id=organization_id, event_id=event_id, segment_id=int(comm_segment_preview_match.group(2)), channel=str(data.get("channel") or "email"))
+                            status_code = 200
+                        elif comm_campaign_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.campaigns.manage", "communications.campaigns.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_campaign(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_campaign_action_match:
+                            campaign_id = int(comm_campaign_action_match.group(2))
+                            action = comm_campaign_action_match.group(3)
+                            permission = {
+                                "validate": "communications.campaigns.manage",
+                                "approve": "communications.campaigns.approve",
+                                "execute": "communications.campaigns.execute",
+                                "enqueue": "communications.campaigns.execute",
+                                "pause": "communications.campaigns.cancel",
+                                "cancel": "communications.campaigns.cancel",
+                            }[action]
+                            ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            if action == "validate":
+                                result = service.validate_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor)
+                            elif action == "approve":
+                                result = service.approve_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor)
+                            elif action == "execute":
+                                result = service.execute_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor, correlation_id=str(data.get("correlation_id") or ""))
+                            elif action == "enqueue":
+                                payload = {"organization_id": organization_id, "event_id": event_id, "campaign_id": campaign_id, "actor": actor, "correlation_id": str(data.get("correlation_id") or "")}
+                                cur = db.execute(
+                                    """
+                                    INSERT INTO jobs (event_id, organization_id, kind, priority, status, payload, retry_count, max_retries, retry_at, created_by, created_at, updated_at)
+                                    VALUES (?, ?, 'communications.campaign.execute', 'medium', 'pending', ?, 0, 3, NULL, ?, ?, ?)
+                                    """,
+                                    (event_id, organization_id, json.dumps(payload, ensure_ascii=True), actor, now_iso(), now_iso()),
+                                )
+                                job_id = int(cur.lastrowid)
+                                audit(db, actor, "job.created", "job", job_id, {"kind": "communications.campaign.execute", "event_id": event_id, "organization_id": organization_id, "campaign_id": campaign_id})
+                                result = {"ok": True, "job_id": job_id}
+                            else:
+                                new_status = "PAUSED" if action == "pause" else "CANCELLED"
+                                db.execute("UPDATE communication_v4_campaigns SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND event_id = ?", (new_status, now_iso(), campaign_id, organization_id, event_id))
+                                audit(db, actor, f"communications.v4.campaign.{action}", "communication_v4_campaign", campaign_id, {"organization_id": organization_id, "event_id": event_id})
+                                result = {"ok": True, "campaign": dict(db.execute("SELECT * FROM communication_v4_campaigns WHERE id = ?", (campaign_id,)).fetchone())}
+                            status_code = 200
+                        elif comm_automation_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.automations.manage", "communications.automations.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_automation(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_automation_action_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.automations.activate", "communications.automations.activate")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            status = "ACTIVE" if comm_automation_action_match.group(3) == "activate" else "PAUSED"
+                            result = service.set_automation_status(db, organization_id=organization_id, event_id=event_id, automation_id=int(comm_automation_action_match.group(2)), actor=actor, status=status)
+                            status_code = 200
+                        else:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.audit.read", "communications.audit.read")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            raw_body = json.dumps(data, ensure_ascii=True, sort_keys=True).encode("utf-8")
+                            result = service.record_provider_event(db, organization_id=organization_id, event_id=event_id, provider=comm_webhook_match.group(2), raw_body=raw_body, signature=str(data.get("signature") or ""), secret=str(data.get("secret") or ""), data=data)
+                            status_code = 200
+                    except CommunicationsAutomationError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(communications_automation_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, status_code)
+                return
             if operations_create_match:
                 event_id = int(operations_create_match.group(1))
                 resource = operations_create_match.group(2)
