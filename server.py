@@ -63,6 +63,7 @@ from backend.services.google_oauth import (
     token_expires_at,
 )
 from backend.services.history_autocomplete import HistoryAutocompleteError, HistoryAutocompleteService
+from backend.services.operations_center import OperationsCenterError, OperationsCenterService
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -249,18 +250,32 @@ HISTORY_AUTOCOMPLETE_PERMISSION_CODES = [
     "duplicates.resolve",
     "history.audit.read",
 ]
+OPERATIONS_CENTER_PERMISSION_CODES = [
+    "operations_center.read",
+    "operations_center.metrics.read",
+    "operations_center.readiness.read",
+    "operations_center.alerts.read",
+    "operations_center.alerts.manage",
+    "operations_center.incidents.read",
+    "operations_center.incidents.manage",
+    "operations_center.tasks.read",
+    "operations_center.tasks.manage",
+    "operations_center.actions.execute",
+    "operations_center.sensitive.read",
+    "operations_center.audit.read",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -272,7 +287,7 @@ PERMISSION_MATRIX = {
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers", "history"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -328,6 +343,10 @@ def zone_permission_service() -> ZonePermissionService:
 
 def history_autocomplete_service() -> HistoryAutocompleteService:
     return HistoryAutocompleteService(audit_service=audit_service(), now=now_iso)
+
+
+def operations_center_service() -> OperationsCenterService:
+    return OperationsCenterService(audit_service=audit_service(), now=now_iso)
 
 
 def survey_service() -> SurveyService:
@@ -1471,6 +1490,66 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_type, entity_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_activities_event_status_start ON activities(event_id, status, starts_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS operations_center_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            alert_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            source TEXT NOT NULL DEFAULT '',
+            dedupe_key TEXT NOT NULL,
+            message TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT '',
+            entity_id INTEGER,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            acknowledged_at TEXT,
+            resolved_at TEXT,
+            actor TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_operations_alert_open ON operations_center_alerts(organization_id, event_id, dedupe_key, status);
+        CREATE INDEX IF NOT EXISTS idx_operations_alert_scope ON operations_center_alerts(organization_id, event_id, status, created_at);
+        CREATE TABLE IF NOT EXISTS operations_center_incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'GENERAL',
+            severity TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            reporter TEXT NOT NULL DEFAULT '',
+            assignee TEXT NOT NULL DEFAULT '',
+            related_entity TEXT NOT NULL DEFAULT '',
+            resolution TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            resolved_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_operations_incident_scope ON operations_center_incidents(organization_id, event_id, status, created_at);
+        CREATE TABLE IF NOT EXISTS operations_center_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            priority TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            assignee TEXT NOT NULL DEFAULT '',
+            due_at TEXT,
+            alert_id INTEGER REFERENCES operations_center_alerts(id) ON DELETE SET NULL,
+            incident_id INTEGER REFERENCES operations_center_incidents(id) ON DELETE SET NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_operations_task_scope ON operations_center_tasks(organization_id, event_id, status, due_at);
         """
     )
 
@@ -2959,6 +3038,15 @@ def zone_permissions_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
 def history_autocomplete_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     organization_id = event_organization_id(db, event_id)
     return feature_flag_enabled(db, "history_autocomplete_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def operations_center_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "operations_center_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def operations_center_error_payload(exc: OperationsCenterError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
@@ -6750,6 +6838,21 @@ class AppHandler(SimpleHTTPRequestHandler):
         finally:
             RUNTIME_METRICS.finish(started, "POST", parsed.path, getattr(self, "_response_status", 200))
 
+    def do_PATCH(self) -> None:
+        started = RUNTIME_METRICS.begin()
+        self._response_status = 200
+        parsed = urlparse(self.path)
+        try:
+            if should_force_https(self):
+                self.send_json({"error": "HTTPS requerido"}, 426)
+                return
+            if parsed.path.startswith("/api/"):
+                self.handle_api_post(parsed.path)
+                return
+            self.send_error(HTTPStatus.NOT_FOUND)
+        finally:
+            RUNTIME_METRICS.finish(started, "PATCH", parsed.path, getattr(self, "_response_status", 200))
+
     def send_json(self, data: dict | list, status: int = 200) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -6772,6 +6875,29 @@ class AppHandler(SimpleHTTPRequestHandler):
     def handle_api_get(self, path: str, query: dict[str, list[str]]) -> None:
         try:
             if not self.require_api_auth(path, is_post=False):
+                return
+            operations_match = re.fullmatch(r"/api/events/(\d+)/operations-center(?:/(readiness|metrics|alerts|incidents|tasks))?", path)
+            if operations_match:
+                event_id = int(operations_match.group(1))
+                view = operations_match.group(2) or "center"
+                with connect() as db:
+                    if not operations_center_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    permission = {"center": "operations_center.read", "readiness": "operations_center.readiness.read", "metrics": "operations_center.metrics.read", "alerts": "operations_center.alerts.read", "incidents": "operations_center.incidents.read", "tasks": "operations_center.tasks.read"}[view]
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or "operations")
+                    service = operations_center_service()
+                    if view == "center": result = service.center(db, organization_id=organization_id, event_id=event_id, actor=actor)
+                    elif view == "readiness": result = service.readiness(db, organization_id=organization_id, event_id=event_id, actor=actor)
+                    elif view == "metrics": result = {"ok": True, "metrics": service.metrics(db, organization_id=organization_id, event_id=event_id), "updated_at": now_iso()}
+                    elif view == "alerts": result = {"ok": True, "items": service.alerts(db, organization_id=organization_id, event_id=event_id)}
+                    elif view == "incidents": result = {"ok": True, "items": service.incidents(db, organization_id=organization_id, event_id=event_id)}
+                    else: result = {"ok": True, "items": service.tasks(db, organization_id=organization_id, event_id=event_id)}
+                self.send_json(result)
                 return
             if self.login_required() and not public_api_get(path) and "event_id" in query:
                 session = self.effective_user()
@@ -9747,6 +9873,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             zone_validate_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/validate", path)
             zone_override_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/overrides", path)
             duplicate_decision_match = re.fullmatch(r"/api/duplicate-candidates/(\d+)/(confirm|dismiss)", path)
+            operations_create_match = re.fullmatch(r"/api/events/(\d+)/operations-center/(incidents|tasks)", path)
+            operations_alert_status_match = re.fullmatch(r"/api/events/(\d+)/operations-center/alerts/(\d+)/(acknowledge|resolve)", path)
+            operations_incident_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/incidents/(\d+)", path)
+            operations_task_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/tasks/(\d+)", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -9756,6 +9886,82 @@ class AppHandler(SimpleHTTPRequestHandler):
             certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
             certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
             certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            if operations_create_match:
+                event_id = int(operations_create_match.group(1))
+                resource = operations_create_match.group(2)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    permission = "operations_center.incidents.manage" if resource == "incidents" else "operations_center.tasks.manage"
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((session or {}).get("name") or data.get("actor") or "operations")
+                    try:
+                        organization_id = event_organization_id(db, event_id)
+                        result = operations_center_service().create_incident(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data) if resource == "incidents" else operations_center_service().create_task(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if operations_alert_status_match:
+                event_id = int(operations_alert_status_match.group(1))
+                alert_id = int(operations_alert_status_match.group(2))
+                status = "ACKNOWLEDGED" if operations_alert_status_match.group(3) == "acknowledge" else "RESOLVED"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "operations_center.alerts.manage", "operations_center.alerts.manage")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    try:
+                        result = operations_center_service().set_alert_status(db, organization_id=event_organization_id(db, event_id), event_id=event_id, alert_id=alert_id, actor=str((session or {}).get("name") or "operations"), status=status)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if operations_incident_update_match or operations_task_update_match:
+                match = operations_incident_update_match or operations_task_update_match
+                event_id = int(match.group(1))
+                item_id = int(match.group(2))
+                resource = "incident" if operations_incident_update_match else "task"
+                permission = "operations_center.incidents.manage" if resource == "incident" else "operations_center.tasks.manage"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    try:
+                        kwargs = {"organization_id": event_organization_id(db, event_id), "event_id": event_id, "actor": str((session or {}).get("name") or "operations"), "data": data}
+                        result = operations_center_service().update_incident(db, incident_id=item_id, **kwargs) if resource == "incident" else operations_center_service().update_task(db, task_id=item_id, **kwargs)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
             if survey_public_start_match:
                 token = survey_public_start_match.group(1)
                 with DB_LOCK, connect() as db:
