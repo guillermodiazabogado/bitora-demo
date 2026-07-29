@@ -15,7 +15,7 @@ GO MERGED
 - SHA inicial de feature revisado: `a08e61d98c40d6b6de5f6bbe58820866d5771c3f`
 - Rama base: `develop/v4`
 - SHA base inicial: `6844156645aac01cefb26a8f526da5f915cb8403`
-- SHA final de feature revisado: `296c8c8a2a487615aa508c25e3f37c25bb62265a`
+- SHA final de feature revisado: `296c8c8b6e14937b119e5aeb1499590a9a67cb81`
 - SHA final de `develop/v4` post-merge: `7ae787a880b32499033d809de96e62764a708bfb`
 - PR: `#4 BITORA V4.4 surveys foundation`
 - Estado PR pre-review: `OPEN / CLEAN`
