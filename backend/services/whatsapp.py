@@ -66,8 +66,7 @@ class WhatsAppProvider(ABC):
         return {"ok": self.ready, "errors": [] if self.ready else ["Proveedor WhatsApp no configurado"]}
 
     def normalize_webhook(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        del payload
-        return []
+        return normalize_meta_webhook(payload)
 
 
 class DemoWhatsAppProvider(WhatsAppProvider):
@@ -198,47 +197,51 @@ class MetaCloudWhatsAppProvider(WhatsAppProvider):
         return {"ok": not errors, "errors": errors}
 
     def normalize_webhook(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        events: list[dict[str, Any]] = []
-        for entry in payload.get("entry") or []:
-            for change in entry.get("changes") or []:
-                value = change.get("value") or {}
-                metadata = value.get("metadata") or {}
-                for status_item in value.get("statuses") or []:
-                    raw_status = str(status_item.get("status") or "").lower()
-                    events.append(
-                        {
-                            "kind": "status",
-                            "message_id": str(status_item.get("id") or ""),
-                            "external_event_id": webhook_event_id("status", status_item),
-                            "status": {
-                                "sent": "enviado",
-                                "delivered": "entregado",
-                                "read": "leido",
-                                "failed": "error",
-                            }.get(raw_status, "pendiente"),
-                            "raw_status": raw_status,
-                            "phone": normalize_phone(status_item.get("recipient_id") or ""),
-                            "timestamp": str(status_item.get("timestamp") or ""),
-                            "errors": status_item.get("errors") or [],
-                            "phone_number_id": str(metadata.get("phone_number_id") or ""),
-                            "payload": status_item,
-                        }
-                    )
-                for message in value.get("messages") or []:
-                    events.append(
-                        {
-                            "kind": "message",
-                            "message_id": str(message.get("id") or ""),
-                            "external_event_id": webhook_event_id("message", message),
-                            "phone": normalize_phone(message.get("from") or ""),
-                            "timestamp": str(message.get("timestamp") or ""),
-                            "message_type": str(message.get("type") or ""),
-                            "text": str((message.get("text") or {}).get("body") or ""),
-                            "phone_number_id": str(metadata.get("phone_number_id") or ""),
-                            "payload": message,
-                        }
-                    )
-        return events
+        return normalize_meta_webhook(payload)
+
+
+def normalize_meta_webhook(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            metadata = value.get("metadata") or {}
+            for status_item in value.get("statuses") or []:
+                raw_status = str(status_item.get("status") or "").lower()
+                events.append(
+                    {
+                        "kind": "status",
+                        "message_id": str(status_item.get("id") or ""),
+                        "external_event_id": webhook_event_id("status", status_item),
+                        "status": {
+                            "sent": "enviado",
+                            "delivered": "entregado",
+                            "read": "leido",
+                            "failed": "error",
+                        }.get(raw_status, "pendiente"),
+                        "raw_status": raw_status,
+                        "phone": normalize_phone(status_item.get("recipient_id") or ""),
+                        "timestamp": str(status_item.get("timestamp") or ""),
+                        "errors": status_item.get("errors") or [],
+                        "phone_number_id": str(metadata.get("phone_number_id") or ""),
+                        "payload": status_item,
+                    }
+                )
+            for message in value.get("messages") or []:
+                events.append(
+                    {
+                        "kind": "message",
+                        "message_id": str(message.get("id") or ""),
+                        "external_event_id": webhook_event_id("message", message),
+                        "phone": normalize_phone(message.get("from") or ""),
+                        "timestamp": str(message.get("timestamp") or ""),
+                        "message_type": str(message.get("type") or ""),
+                        "text": str((message.get("text") or {}).get("body") or ""),
+                        "phone_number_id": str(metadata.get("phone_number_id") or ""),
+                        "payload": message,
+                    }
+                )
+    return events
 
 
 def normalize_phone(value: str) -> str:
