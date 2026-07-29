@@ -2,7 +2,7 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-28T19:06:34",
+    "started_at": "2026-07-29T23:13:39",
     "python": "3.12.13",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
     "branch": "",
@@ -26,8 +26,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-28T19:06:34",
-  "finished_at": "2026-07-28T19:08:51",
+  "started_at": "2026-07-29T23:13:39",
+  "finished_at": "2026-07-29T23:16:12",
   "findings": [
     {
       "severity": "medium",
@@ -436,17 +436,17 @@
       "file": "backend/services/capacity_buckets.py"
     },
     {
-      "severity": "medium",
-      "category": "database",
-      "title": "Prefijo de migracion duplicado",
-      "detail": "Prefijo 015 aparece mas de una vez",
-      "file": ""
-    },
-    {
       "severity": "low",
       "category": "database",
       "title": "Prefijo de migracion duplicado conocido",
       "detail": "Prefijo 007 aparece mas de una vez",
+      "file": ""
+    },
+    {
+      "severity": "medium",
+      "category": "database",
+      "title": "Prefijo de migracion duplicado",
+      "detail": "Prefijo 015 aparece mas de una vez",
       "file": ""
     },
     {
@@ -467,7 +467,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 6.61,
+      "duration_seconds": 9.09,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -481,7 +481,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 5.81,
+      "duration_seconds": 7.21,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -495,7 +495,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.3,
+      "duration_seconds": 0.84,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -509,7 +509,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.87,
+      "duration_seconds": 0.85,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -523,7 +523,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.95,
+      "duration_seconds": 0.52,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -537,7 +537,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.02,
+      "duration_seconds": 0.54,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -551,7 +551,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.12,
+      "duration_seconds": 0.93,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -565,7 +565,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.53,
+      "duration_seconds": 0.47,
       "stdout_tail": "OK postgres live migrations=[]\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -579,7 +579,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.45,
+      "duration_seconds": 0.47,
       "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -593,8 +593,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.33,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 539, \"event_b\": 540}\n",
+      "duration_seconds": 4.61,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 855, \"event_b\": 856}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -607,8 +607,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.31,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 541, \"team_members\": 3}\n",
+      "duration_seconds": 4.23,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 857, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -621,7 +621,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 5.68,
+      "duration_seconds": 7.33,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -635,7 +635,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.06,
+      "duration_seconds": 4.87,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -649,7 +649,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 3.88,
+      "duration_seconds": 5.15,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -663,7 +663,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 7.64,
+      "duration_seconds": 8.71,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -677,7 +677,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 7.5,
+      "duration_seconds": 9.37,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -691,7 +691,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.91,
+      "duration_seconds": 0.89,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -719,7 +719,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.84,
+      "duration_seconds": 0.92,
       "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -733,7 +733,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.84,
+      "duration_seconds": 0.87,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -747,7 +747,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.63,
+      "duration_seconds": 0.69,
       "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -761,7 +761,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.81,
+      "duration_seconds": 0.85,
       "stdout_tail": "{\"name\": \"google_oauth_backup_restore\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"encrypted_backup_safe\": true, \"metadata_sanitized\": true, \"restore_requires_safe_reconnect_policy\": true, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -775,7 +775,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 4.39,
+      "duration_seconds": 5.94,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"connected_integration\": true, \"provider\": \"google\", \"organization_id\": 3, \"integration_id\": 5, \"userinfo_live\": true, \"refresh_live\": true, \"refresh_before_userinfo\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"cross_event_assignments\": 0, \"audit_connected\": true, \"audit_tested\": true, \"audit_refreshed\": true, \"audit_disconnected\": true, \"account_email_masked\": \"gui***@gmail.com\"}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -789,8 +789,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 4.38,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"eec10a***83175c\", \"job_id\": 349, \"queue_id\": 547, \"organization_id\": 1, \"integration_id\": 118, \"event_id\": 568, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 5.43,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"12594d***f370fe\", \"job_id\": 631, \"queue_id\": 945, \"organization_id\": 1, \"integration_id\": 150, \"event_id\": 884, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -802,12 +802,11 @@
         "verificar_whatsapp_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
-      "duration_seconds": 65.17,
-      "stdout_tail": "Evidencia live aprobada y preservada para RC.\n",
+      "status": "failed",
+      "duration_seconds": 67.39,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"failed\", \"missing_env\": [], \"checks\": {}, \"error\": \"WhatsApp debe quedar enviado, estado=pendiente, error=Meta Cloud API HTTP 401: {\\\"error\\\":{\\\"message\\\":\\\"Authentication Error\\\",\\\"code\\\":190,\\\"type\\\":\\\"OAuthException\\\",\\\"fbtrace_id\\\":\\\"AqPzQjb0lm0eis8HzPYprXr\\\"}}\"}\n",
       "stderr_tail": "",
-      "exit_code": 0,
-      "detail": "Evidencia live aprobada y preservada para Release Candidate."
+      "exit_code": 1
     },
     {
       "name": "webhooks_multitenant_live",
@@ -817,12 +816,11 @@
         "verificar_webhooks_multitenant_live.py"
       ],
       "required": false,
-      "status": "passed",
-      "duration_seconds": 0.69,
-      "stdout_tail": "Evidencia live aprobada y preservada para RC.\n",
+      "status": "failed",
+      "duration_seconds": 0.62,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_WEBHOOK_PUBLIC_URL\"], \"checks\": {}}\n",
       "stderr_tail": "",
-      "exit_code": 0,
-      "detail": "Evidencia live aprobada y preservada para Release Candidate."
+      "exit_code": 1
     },
     {
       "name": "backup_multitenant_live",
@@ -833,8 +831,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.71,
-      "stdout_tail": "{\"checks\": {\"backup_consistency\": true, \"database_backup\": true, \"secrets_exposed\": 0, \"storage_backup\": true}, \"mode\": \"live\", \"name\": \"backup_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260728-182640\", \"status\": \"passed\"}\n",
+      "duration_seconds": 0.64,
+      "stdout_tail": "{\"checks\": {\"backup_consistency\": true, \"database_backup\": true, \"secrets_exposed\": 0, \"storage_backup\": true}, \"mode\": \"live\", \"name\": \"backup_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -847,8 +845,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.64,
-      "stdout_tail": "{\"checks\": {\"cross_event_access\": 0, \"cross_organization_access\": 0, \"duplicate_sends\": 0, \"external_effects_post_restore\": 0, \"isolated_restore\": true, \"manifest_comparison\": true}, \"mode\": \"live\", \"name\": \"restore_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260728-182640\", \"status\": \"passed\"}\n",
+      "duration_seconds": 0.62,
+      "stdout_tail": "{\"checks\": {\"cross_event_access\": 0, \"cross_organization_access\": 0, \"duplicate_sends\": 0, \"external_effects_post_restore\": 0, \"isolated_restore\": true, \"manifest_comparison\": true}, \"mode\": \"live\", \"name\": \"restore_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -861,7 +859,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.84,
+      "duration_seconds": 0.91,
       "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -981,22 +979,22 @@
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "passed",
+      "status": "failed",
       "duration_seconds": 0,
-      "stdout_tail": "Evidencia live aprobada.",
+      "stdout_tail": "Modo live; estado failed.",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": null
     },
     {
       "name": "webhook_tenant_resolution_live",
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "passed",
+      "status": "omitted",
       "duration_seconds": 0,
-      "stdout_tail": "Evidencia live aprobada.",
+      "stdout_tail": "Modo live; estado omitted. Faltan variables: WHATSAPP_WEBHOOK_PUBLIC_URL",
       "stderr_tail": "",
-      "exit_code": 0
+      "exit_code": null
     },
     {
       "name": "communications_tenant_isolation",
@@ -1051,13 +1049,7 @@
       "duration_seconds": 0,
       "stdout_tail": "Pendiente ejecucion real de 24 horas.",
       "stderr_tail": "",
-      "exit_code": null,
-      "detail": "Endurance 24h diferido para la etapa final de certificacion estable.",
-      "deferred": true,
-      "deferred_reason": "Postergado para la etapa final de certificacion",
-      "release_blocking": true,
-      "approved_for_release_candidate": true,
-      "approved_for_stable_release": false
+      "exit_code": null
     },
     {
       "name": "upgrade_from_previous_version",
@@ -1092,15 +1084,5 @@
     },
     "weighted_average": 82.6
   },
-  "approved": false,
-  "release_candidate": {
-    "version": "bitora-v1.0.0-rc.1",
-    "status": "AUTHORIZED",
-    "stable_release": "NOT_CERTIFIED",
-    "runtime_certified_commit": "3e82a6ae0deddf64fd77ba16fb4721b21902b9b2",
-    "endurance_24h": "DEFERRED",
-    "release_blocking_gates_pending": 1,
-    "approved_for_release_candidate": true,
-    "approved_for_stable_release": false
-  }
+  "approved": false
 }

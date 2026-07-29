@@ -1,62 +1,74 @@
-# BITORA Release Certification Report
+# BITORA_RELEASE_CERTIFICATION_REPORT
 
-Fecha: 2026-07-28
+Fecha: 2026-07-29
 
-## Estado Formal
+Rama: `develop/v4`
 
-```text
-BITORA RELEASE CANDIDATE: AUTHORIZED
-BITORA STABLE RELEASE: NOT CERTIFIED
-ENDURANCE 24H: DEFERRED
-RELEASE-BLOCKING GATES PENDING: 1
-```
+HEAD evaluado: `1814c945fc4a1b29149563366c28a7e03a8e0673`
 
-## Commit Runtime Certificado
+## Resultado
 
-```text
-3e82a6ae0deddf64fd77ba16fb4721b21902b9b2
-```
+BITORA V4 queda en estado:
 
-## Gates Aprobados
+`READY FOR FINAL FIXES`
 
-```text
-seguridad_basica: PASSED
-multievent_isolation_20_events: PASSED
-email_organization_live: PASSED
-google_oauth_live: PASSED
-whatsapp_organization_live: PASSED
-webhook_tenant_resolution_live: PASSED
-backup_multitenant_live: PASSED
-restore_multitenant_live: PASSED
-disaster_recovery_live: PASSED
-upgrade_from_previous_version: PASSED
-```
+No se declara release estable y no se crea tag `v4.0.0`.
 
-## Gate Diferido
+## Integracion V4.10
 
-```text
-endurance_24h: DEFERRED
-```
+- PR V4.10: `#10`
+- Estado PR: MERGED
+- Merge commit: `1814c945fc4a1b29149563366c28a7e03a8e0673`
+- Commit V4.10 integrado: `593149a797880799b97b86a7ae5e96586632b749`
 
-Metadata:
+## Validaciones aprobadas
 
-```text
-deferred: true
-deferred_reason: Postergado para la etapa final de certificacion
-release_blocking: true
-approved_for_release_candidate: true
-approved_for_stable_release: false
-```
+- V4.1: PASSED
+- V4.2: PASSED
+- V4.3: PASSED
+- V4.4: PASSED
+- V4.5: PASSED
+- V4.6: PASSED
+- V4.7: PASSED
+- V4.8: PASSED
+- V4.9: PASSED
+- V4.10: PASSED
+- Seguridad basica: PASSED
+- Convivencia de modulos: PASSED
+- Multievent isolation 20 events / 1000 participants: PASSED
+- BDF health: PASSED
+- BDF migrate: PASSED
+- BDF smoke-test: PASSED
+- Backup multitenant live: PASSED
+- Restore multitenant live: PASSED
 
-## Evidencia
+## Bloqueo de release estable
 
-Ver:
+BSTF release ejecutado en staging Docker devolvio:
 
-```text
-RELEASE_CANDIDATE_EVIDENCE_INDEX.md
-RELEASE_CANDIDATE_GATE_MATRIX.md
-```
+- Resultado: RECHAZADO
+- Score: 82.6/100
+- Hallazgos HIGH/CRITICAL: 0
+- `whatsapp_multitenant_live`: FAILED
+- `webhooks_multitenant_live`: FAILED
+- `whatsapp_organization_live`: FAILED
+- `webhook_tenant_resolution_live`: OMITTED
+- `endurance_24h`: OMITTED
 
-## Restriccion
+Por las reglas de cierre, una release estable no puede declararse con gates live fallidos u omitidos.
 
-No se declara `bitora-v1.0.0` ni Release estable hasta aprobar Endurance 24h.
+## Seguridad operacional
+
+- Live Mode: OFF
+- Comunicaciones reales ejecutadas durante este cierre: 0
+- Secretos expuestos en patrones revisados: 0
+- Cross-tenant leaks detectados: 0
+- Cross-event leaks detectados: 0
+
+## Decision
+
+No se crea tag estable.
+
+No se crea GitHub Release.
+
+Siguiente paso recomendado: corregir o reactivar la evidencia live de WhatsApp/Webhooks en staging y reejecutar BSTF release.

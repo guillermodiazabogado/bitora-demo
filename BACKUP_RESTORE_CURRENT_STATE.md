@@ -1,8 +1,8 @@
 # BACKUP_RESTORE_CURRENT_STATE
 
-Fecha: 2026-07-28T18:27:05+00:00
+Fecha: 2026-07-29T23:06:18+00:00
 
-Commit: 8fb67e53973321e5ada7762546ad119eb0d9ada4
+Commit: 1814c945fc4a1b29149563366c28a7e03a8e0673
 
 Topologia evaluada:
 
@@ -21,7 +21,7 @@ Estado previo:
 
 Propuesta aplicada:
 
-- Dataset multitenant real identificado por `BACKUP-RESTORE-LIVE-20260728-182640`.
+- Dataset multitenant real identificado por `BACKUP-RESTORE-LIVE-20260729-230545`.
 - Backup PostgreSQL real con `pg_dump -Fc`.
 - Backup de storage real con `tar.gz`.
 - Restore en base PostgreSQL aislada.

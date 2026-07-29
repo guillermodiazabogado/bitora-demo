@@ -1,44 +1,38 @@
-# BITORA Release Final Status
+# BITORA_RELEASE_FINAL_STATUS
 
-Fecha: 2026-07-28
+Estado: `READY FOR FINAL FIXES`
 
-Decision:
+Fecha: 2026-07-29
 
-```text
-BITORA RELEASE CANDIDATE: AUTHORIZED
-BITORA STABLE RELEASE: NOT CERTIFIED
-```
+Rama: `develop/v4`
 
-Commit runtime certificado:
+HEAD: `1814c945fc4a1b29149563366c28a7e03a8e0673`
 
-```text
-3e82a6ae0deddf64fd77ba16fb4721b21902b9b2
-```
+## Cierre funcional V4
 
-Estado de gates:
+- V4.10 PR: MERGED
+- V4.1 a V4.10: PASSED
+- Seguridad basica: PASSED
+- Aislamiento multievento: PASSED
+- Backup/restore live: PASSED
+- Health/migrate/smoke-test: PASSED
 
-```text
-seguridad_basica: PASSED
-multievent_isolation_20_events: PASSED
-email_organization_live: PASSED
-google_oauth_live: PASSED
-whatsapp_organization_live: PASSED
-webhook_tenant_resolution_live: PASSED
-backup_multitenant_live: PASSED
-restore_multitenant_live: PASSED
-disaster_recovery_live: PASSED
-upgrade_from_previous_version: PASSED
-endurance_24h: DEFERRED
-```
+## Bloqueo
 
-Pendiente para Release estable:
+BSTF release no aprobo en la corrida final de staging:
 
-```text
-endurance_24h
-```
+- `whatsapp_multitenant_live`: FAILED
+- `webhooks_multitenant_live`: FAILED
+- `whatsapp_organization_live`: FAILED
+- `webhook_tenant_resolution_live`: OMITTED
+- `endurance_24h`: OMITTED
 
-Uso autorizado:
+## Decision final admitida
 
-```text
-staging, QA, demostraciones controladas y pilotos supervisados
-```
+`READY FOR FINAL FIXES`
+
+No se declara `BITORA V4.0.0 STABLE RELEASED`.
+
+No se creo tag `v4.0.0`.
+
+No se creo GitHub Release estable.
