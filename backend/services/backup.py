@@ -293,6 +293,10 @@ class EventBackupService:
         ("survey_response_sessions", "SELECT * FROM survey_response_sessions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("survey_answers", "SELECT * FROM survey_answers WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("survey_answer_options", "SELECT * FROM survey_answer_options WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("event_zones", "SELECT * FROM event_zones WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_assignments", "SELECT * FROM zone_access_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_validations", "SELECT * FROM zone_access_validations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_overrides", "SELECT * FROM zone_access_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "speaker_profiles",
             """
@@ -525,6 +529,10 @@ class EventRestoreService:
         "survey_response_sessions",
         "survey_answers",
         "survey_answer_options",
+        "event_zones",
+        "zone_access_assignments",
+        "zone_access_validations",
+        "zone_access_overrides",
         "speaker_profiles",
         "speaker_private_details",
         "speaker_profile_versions",
@@ -699,6 +707,10 @@ class EventRestoreService:
                     "survey_response_sessions": {},
                     "survey_answers": {},
                     "survey_answer_options": {},
+                    "event_zones": {},
+                    "zone_access_assignments": {},
+                    "zone_access_validations": {},
+                    "zone_access_overrides": {},
                     "speaker_profiles": {},
                     "speaker_private_details": {},
                     "speaker_profile_versions": {},
@@ -978,6 +990,10 @@ class EventRestoreService:
                 row["session_id"] = maps["survey_response_sessions"].get(int(row["session_id"]), row["session_id"])
             if "answer_id" in row and row.get("answer_id") is not None:
                 row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
+            if "zone_id" in row and row.get("zone_id") is not None:
+                row["zone_id"] = maps["event_zones"].get(int(row["zone_id"]), row["zone_id"])
+            if "parent_zone_id" in row and row.get("parent_zone_id") is not None:
+                row["parent_zone_id"] = maps["event_zones"].get(int(row["parent_zone_id"]), row["parent_zone_id"])
             if "speaker_profile_id" in row and row.get("speaker_profile_id") is not None:
                 row["speaker_profile_id"] = maps["speaker_profiles"].get(int(row["speaker_profile_id"]), row["speaker_profile_id"])
             if table == "certificate_number_sequences" and row.get("scope_key"):
@@ -1020,6 +1036,8 @@ class EventRestoreService:
                     public_id = f"{base_public_id}-restored-{suffix}"
                 row["public_id"] = public_id
             if table == "survey_response_sessions" and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "zone_access_validations" and row.get("idempotency_key"):
                 row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
             if table == "certificate_documents" and row.get("storage_key"):
                 source_event_id = int(payload.get("event_id") or 0)
@@ -1122,7 +1140,10 @@ class EventRestoreService:
             return 0
         placeholders = ", ".join(["?"] * len(columns))
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-        cur = db.execute(sql, [values[name] for name in columns])
+        try:
+            cur = db.execute(sql, [values[name] for name in columns])
+        except Exception as exc:
+            raise ValueError(f"No se pudo insertar {table}: {exc}") from exc
         return int(getattr(cur, "lastrowid", 0) or 0)
 
     def _columns(self, db, table: str) -> list[str]:
