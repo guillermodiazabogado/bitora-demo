@@ -298,6 +298,9 @@ class EventBackupService:
         ("zone_access_validations", "SELECT * FROM zone_access_validations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("zone_access_overrides", "SELECT * FROM zone_access_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("duplicate_resolution_decisions", "SELECT * FROM duplicate_resolution_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_alerts", "SELECT * FROM operations_center_alerts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_incidents", "SELECT * FROM operations_center_incidents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_tasks", "SELECT * FROM operations_center_tasks WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "speaker_profiles",
             """
@@ -535,6 +538,9 @@ class EventRestoreService:
         "zone_access_validations",
         "zone_access_overrides",
         "duplicate_resolution_decisions",
+        "operations_center_alerts",
+        "operations_center_incidents",
+        "operations_center_tasks",
         "speaker_profiles",
         "speaker_private_details",
         "speaker_profile_versions",
@@ -997,6 +1003,10 @@ class EventRestoreService:
                 row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
             if "zone_id" in row and row.get("zone_id") is not None:
                 row["zone_id"] = maps["event_zones"].get(int(row["zone_id"]), row["zone_id"])
+            if "alert_id" in row and row.get("alert_id") is not None:
+                row["alert_id"] = maps["operations_center_alerts"].get(int(row["alert_id"]), row["alert_id"])
+            if "incident_id" in row and row.get("incident_id") is not None:
+                row["incident_id"] = maps["operations_center_incidents"].get(int(row["incident_id"]), row["incident_id"])
             if "parent_zone_id" in row and row.get("parent_zone_id") is not None:
                 row["parent_zone_id"] = maps["event_zones"].get(int(row["parent_zone_id"]), row["parent_zone_id"])
             if "speaker_profile_id" in row and row.get("speaker_profile_id") is not None:
