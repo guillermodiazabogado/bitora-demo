@@ -40,6 +40,7 @@ from reportlab.platypus import (
 from backend.database import connect_database, integrity_error_types, load_database_config, run_postgres_migrations
 from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
+from backend.services.analytics_closure import AnalyticsClosureError, AnalyticsClosureService
 from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
@@ -285,18 +286,36 @@ COMMUNICATIONS_AUTOMATION_PERMISSION_CODES = [
     "communications.audit.read",
     "communications.live_mode.use",
 ]
+ANALYTICS_PERMISSION_CODES = [
+    "analytics.read",
+    "analytics.executive.read",
+    "analytics.operational.read",
+    "analytics.attendance.read",
+    "analytics.certificates.read",
+    "analytics.surveys.read",
+    "analytics.communications.read",
+    "analytics.data_quality.read",
+    "analytics.compare",
+    "analytics.export",
+    "analytics.sensitive.read",
+    "analytics.definitions.read",
+    "analytics.audit.read",
+    "functional_closure.read",
+    "functional_closure.manage",
+    "functional_closure.approve",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
         "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES, *ANALYTICS_PERMISSION_CODES],
     },
     "Productor": {
         "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES, *ANALYTICS_PERMISSION_CODES],
     },
     "Coordinador": {
         "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read", "analytics.read", "analytics.operational.read", "analytics.attendance.read", "analytics.certificates.read", "analytics.surveys.read", "analytics.communications.read", "analytics.data_quality.read", "analytics.definitions.read", "functional_closure.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -308,7 +327,7 @@ PERMISSION_MATRIX = {
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers", "history"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read", "analytics.read", "analytics.executive.read", "analytics.definitions.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -379,6 +398,10 @@ def communications_automation_service() -> CommunicationsAutomationService:
         force_email=os.environ.get("EMAIL_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_EMAIL_RECIPIENT", ""),
         force_phone=os.environ.get("WHATSAPP_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_WHATSAPP_RECIPIENT", ""),
     )
+
+
+def analytics_closure_service() -> AnalyticsClosureService:
+    return AnalyticsClosureService(audit_service=audit_service(), now=now_iso)
 
 
 def survey_service() -> SurveyService:
@@ -1432,6 +1455,7 @@ def init_db() -> None:
         ensure_v4_3_columns(db)
         ensure_v4_4_columns(db)
         ensure_v4_9_schema(db)
+        ensure_v4_10_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -1953,6 +1977,14 @@ def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
 
 def ensure_v4_9_schema(db: sqlite3.Connection) -> None:
     migration = ROOT / "backend" / "migrations" / "024_v4_9_communications_automation.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v4_10_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "025_v4_10_analytics_functional_closure.sql"
     sql = migration.read_text(encoding="utf-8")
     sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
     sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
@@ -3091,11 +3123,20 @@ def communications_automation_v4_enabled(db: sqlite3.Connection, event_id: int) 
     return feature_flag_enabled(db, "communications_v4_enabled", organization_id=organization_id, event_id=event_id) and feature_flag_enabled(db, "communications_automation_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def analytics_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "analytics_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def operations_center_error_payload(exc: OperationsCenterError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def communications_automation_error_payload(exc: CommunicationsAutomationError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def analytics_closure_error_payload(exc: AnalyticsClosureError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -7008,6 +7049,88 @@ class AppHandler(SimpleHTTPRequestHandler):
                         }[resource]
                         rows = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND event_id = ? ORDER BY id DESC LIMIT 250", (organization_id, event_id)).fetchall()
                         result = {"ok": True, "items": [dict(row) for row in rows]}
+                self.send_json(result)
+                return
+            analytics_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4(?:/(overview|registrations|reservations|attendance|zones|speakers|certificates|surveys|communications|operations|data-quality|snapshots|reports|closure|definitions))?", path)
+            if analytics_match:
+                event_id = int(analytics_match.group(1))
+                resource = analytics_match.group(2) or "overview"
+                permission = {
+                    "overview": "analytics.read",
+                    "registrations": "analytics.read",
+                    "reservations": "analytics.operational.read",
+                    "attendance": "analytics.attendance.read",
+                    "zones": "analytics.operational.read",
+                    "speakers": "analytics.read",
+                    "certificates": "analytics.certificates.read",
+                    "surveys": "analytics.surveys.read",
+                    "communications": "analytics.communications.read",
+                    "operations": "analytics.operational.read",
+                    "data-quality": "analytics.data_quality.read",
+                    "snapshots": "analytics.read",
+                    "reports": "analytics.read",
+                    "closure": "functional_closure.read",
+                    "definitions": "analytics.definitions.read",
+                }[resource]
+                with connect() as db:
+                    if not analytics_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or "analytics")
+                    service = analytics_closure_service()
+                    filters = {key: values[0] for key, values in query.items() if values}
+                    try:
+                        if resource == "definitions":
+                            result = service.metric_definitions()
+                        elif resource == "overview":
+                            result = service.overview(db, organization_id=org_id, event_id=event_id, actor=actor, filters=filters)
+                        elif resource == "registrations":
+                            result = service.registrations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "reservations":
+                            result = service.reservations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "attendance":
+                            result = service.attendance(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "zones":
+                            result = service.zones(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "speakers":
+                            result = service.speakers(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "certificates":
+                            result = service.certificates(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "surveys":
+                            result = service.surveys(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "communications":
+                            result = service.communications(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "operations":
+                            result = service.operations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "data-quality":
+                            result = service.data_quality(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "snapshots":
+                            result = service.list_snapshots(db, organization_id=org_id, event_id=event_id)
+                        elif resource == "reports":
+                            result = service.list_reports(db, organization_id=org_id, event_id=event_id)
+                        else:
+                            result = service.list_closure_reviews(db, organization_id=org_id, event_id=event_id)
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+            if path == "/api/analytics-v4/compare-events":
+                event_ids = [int(value) for value in query.get("event_id", []) if str(value).isdigit()]
+                organization_id = int(query.get("organization_id", ["0"])[0] or 0)
+                with connect() as db:
+                    ok, session = self.require_organization_permission(db, organization_id, "analytics.compare", "analytics.compare")
+                    if not ok:
+                        return
+                    try:
+                        result = analytics_closure_service().compare_events(db, organization_id=organization_id, event_ids=event_ids, actor=str((session or {}).get("name") or "analytics"))
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
                 self.send_json(result)
                 return
             if self.login_required() and not public_api_get(path) and "event_id" in query:
@@ -11348,6 +11471,152 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 ok = job_queue_service().cancel(int(data.get("job_id") or 0), actor)
                 self.send_json({"ok": ok}, 200 if ok else 409)
+                return
+
+            analytics_snapshot_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/snapshots", path)
+            analytics_reports_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/reports", path)
+            analytics_report_export_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/reports/(\d+)/export", path)
+            analytics_closure_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/closure/reviews", path)
+            analytics_closure_approve_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/closure/reviews/(\d+)/approve", path)
+            analytics_compare_post_match = re.fullmatch(r"/api/analytics-v4/compare-events", path)
+            if analytics_snapshot_match:
+                event_id = int(analytics_snapshot_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.read", "analytics.snapshot.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or data.get("actor") or "analytics")
+                    try:
+                        result = analytics_closure_service().create_snapshot(db, organization_id=org_id, event_id=event_id, actor=actor, filters=data.get("filters") if isinstance(data.get("filters"), dict) else None)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_reports_match:
+                event_id = int(analytics_reports_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.export", "analytics.report.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().create_report(db, organization_id=org_id, event_id=event_id, actor=str((session or {}).get("name") or "analytics"), data=data)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_report_export_match:
+                event_id = int(analytics_report_export_match.group(1))
+                report_id = int(analytics_report_export_match.group(2))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.export", "analytics.export")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().export_report(db, organization_id=org_id, event_id=event_id, report_id=report_id, actor=str((session or {}).get("name") or "analytics"), export_format=str(data.get("format") or "json"))
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json({key: value for key, value in result.items() if key != "content"})
+                return
+
+            if analytics_closure_match:
+                event_id = int(analytics_closure_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "functional_closure.manage", "functional_closure.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().create_closure_review(db, organization_id=org_id, event_id=event_id, actor=str((session or {}).get("name") or "analytics"), data=data)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_closure_approve_match:
+                event_id = int(analytics_closure_approve_match.group(1))
+                review_id = int(analytics_closure_approve_match.group(2))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "functional_closure.approve", "functional_closure.approve")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().approve_closure_review(db, organization_id=org_id, event_id=event_id, review_id=review_id, actor=str((session or {}).get("name") or "analytics"))
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_compare_post_match:
+                organization_id = int(data.get("organization_id") or 0)
+                event_ids = []
+                for value in data.get("event_ids", []):
+                    try:
+                        candidate = int(value or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if candidate:
+                        event_ids.append(candidate)
+                with connect() as db:
+                    ok, session = self.require_organization_permission(db, organization_id, "analytics.compare", "analytics.compare")
+                    if not ok:
+                        return
+                    try:
+                        result = analytics_closure_service().compare_events(db, organization_id=organization_id, event_ids=event_ids, actor=str((session or {}).get("name") or "analytics"), filters=data.get("filters") if isinstance(data.get("filters"), dict) else None)
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
                 return
 
             if path == "/api/backups/event/inspect":
