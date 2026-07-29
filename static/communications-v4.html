@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Comunicaciones V4</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; background:#f6f7f9; color:#172026; }
+    body { margin:0; }
+    main { max-width:1180px; margin:0 auto; padding:24px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:20px; }
+    h1 { font-size:24px; margin:0; letter-spacing:0; }
+    h2 { font-size:15px; margin:0 0 12px; letter-spacing:0; }
+    .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    input, select, textarea, button { font:inherit; border:1px solid #cbd3dc; border-radius:6px; background:white; color:#172026; }
+    input, select, textarea { padding:9px 10px; }
+    button { padding:9px 12px; cursor:pointer; background:#17324d; color:white; border-color:#17324d; }
+    button.secondary { background:white; color:#17324d; }
+    .grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:14px; }
+    .panel { background:white; border:1px solid #d8dee6; border-radius:8px; padding:14px; min-width:0; }
+    .metric { font-size:28px; font-weight:700; margin:6px 0 0; }
+    .table { width:100%; border-collapse:collapse; font-size:13px; }
+    .table th, .table td { text-align:left; padding:8px; border-bottom:1px solid #e7ebef; vertical-align:top; }
+    .muted { color:#62717f; }
+    .status { display:inline-flex; min-width:76px; justify-content:center; padding:3px 7px; border-radius:999px; background:#e8f1f8; color:#17324d; font-size:12px; }
+    .stack { display:grid; gap:10px; }
+    textarea { min-height:80px; resize:vertical; }
+    @media (max-width: 860px) { .grid { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Comunicaciones V4</h1>
+      <div class="muted">Safe Mode activo · Live Mode OFF</div>
+    </div>
+    <div class="toolbar">
+      <input id="eventId" type="number" min="1" value="1" aria-label="Evento">
+      <button id="refresh">Actualizar</button>
+    </div>
+  </header>
+  <section class="grid" id="metrics"></section>
+  <section class="grid" style="margin-top:14px">
+    <div class="panel stack">
+      <h2>Plantilla</h2>
+      <input id="templateName" placeholder="Nombre">
+      <select id="channel"><option>email</option><option>whatsapp</option><option>internal</option></select>
+      <input id="subject" placeholder="Asunto">
+      <textarea id="content" placeholder="Hola {{first_name}}, BITORA STAGING"></textarea>
+      <button id="createTemplate">Crear plantilla</button>
+    </div>
+    <div class="panel stack">
+      <h2>Segmento</h2>
+      <input id="segmentName" placeholder="Nombre">
+      <select id="segmentStatus"><option value="">Todos</option><option value="active">Activos</option><option value="confirmed">Confirmados</option></select>
+      <button id="createSegment">Crear segmento</button>
+    </div>
+    <div class="panel stack">
+      <h2>Campaña</h2>
+      <input id="campaignName" placeholder="Nombre">
+      <input id="templateId" type="number" min="1" placeholder="Template ID">
+      <input id="segmentId" type="number" min="1" placeholder="Segment ID">
+      <button id="createCampaign">Crear campaña</button>
+    </div>
+  </section>
+  <section class="panel" style="margin-top:14px">
+    <h2>Campañas</h2>
+    <table class="table"><thead><tr><th>ID</th><th>Nombre</th><th>Canal</th><th>Estado</th><th>Destinatarios</th></tr></thead><tbody id="campaignRows"></tbody></table>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+async function api(path, options = {}) {
+  const res = await fetch(path, {headers:{'Content-Type':'application/json'}, ...options});
+  const body = await res.json();
+  if (!res.ok || body.ok === false) throw new Error(body.error || 'Error');
+  return body;
+}
+function eventPath(part='') { return `/api/events/${$('eventId').value}/communications-v4${part}`; }
+async function refresh() {
+  const summary = await api(eventPath());
+  $('metrics').innerHTML = ['templates','segments','campaigns','messages','deliveries','automations'].map(k => `<div class="panel"><h2>${k}</h2><div class="metric">${summary[k]}</div></div>`).join('');
+  const campaigns = await api(eventPath('/campaigns'));
+  $('campaignRows').innerHTML = campaigns.items.map(c => `<tr><td>${c.id}</td><td>${c.name}</td><td>${c.channel}</td><td><span class="status">${c.status}</span></td><td>${c.recipient_count}</td></tr>`).join('');
+}
+$('refresh').onclick = refresh;
+$('createTemplate').onclick = async () => { await api(eventPath('/templates'), {method:'POST', body:JSON.stringify({name:$('templateName').value, channel:$('channel').value, subject:$('subject').value, content:$('content').value})}); await refresh(); };
+$('createSegment').onclick = async () => { const rules={}; if ($('segmentStatus').value) rules.accreditation_status=$('segmentStatus').value; await api(eventPath('/segments'), {method:'POST', body:JSON.stringify({name:$('segmentName').value, rules})}); await refresh(); };
+$('createCampaign').onclick = async () => { await api(eventPath('/campaigns'), {method:'POST', body:JSON.stringify({name:$('campaignName').value, channel:$('channel').value, template_id:Number($('templateId').value), segment_id:Number($('segmentId').value)})}); await refresh(); };
+refresh().catch(err => { $('metrics').innerHTML = `<div class="panel">${err.message}</div>`; });
+</script>
+</body>
+</html>
