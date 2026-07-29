@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Analytics V4</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; background:#f5f7fa; color:#172026; }
+    body { margin:0; }
+    main { max-width:1240px; margin:0 auto; padding:22px; }
+    header { display:flex; justify-content:space-between; gap:14px; align-items:center; margin-bottom:16px; }
+    h1 { font-size:24px; margin:0; letter-spacing:0; }
+    h2 { font-size:15px; margin:0 0 10px; letter-spacing:0; }
+    .muted { color:#657383; }
+    .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    input, select, button { font:inherit; border:1px solid #cbd3dc; border-radius:6px; background:white; color:#172026; }
+    input, select { padding:9px 10px; min-width:110px; }
+    button { padding:9px 12px; cursor:pointer; background:#15324a; color:white; border-color:#15324a; }
+    button.secondary { background:white; color:#15324a; }
+    .tabs { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 14px; }
+    .tabs button { min-width:92px; }
+    .tabs button.active { background:#0b6b61; border-color:#0b6b61; }
+    .grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; }
+    .panel { background:white; border:1px solid #d8dee6; border-radius:8px; padding:14px; min-width:0; }
+    .metric { font-size:26px; font-weight:700; margin:6px 0 2px; }
+    .wide { grid-column:span 2; }
+    .full { grid-column:1 / -1; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #e7ebef; vertical-align:top; }
+    .status { display:inline-flex; min-width:80px; justify-content:center; padding:3px 7px; border-radius:999px; background:#e8f1f8; color:#17324d; font-size:12px; }
+    .warning { background:#fff5dd; color:#775000; }
+    .error { background:#ffe9e6; color:#8c1d18; }
+    .ok { background:#e6f5ed; color:#0b5b35; }
+    pre { white-space:pre-wrap; overflow:auto; max-height:260px; margin:0; font-size:12px; }
+    @media (max-width: 900px) { header { align-items:flex-start; flex-direction:column; } .grid { grid-template-columns:1fr; } .wide { grid-column:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Analytics V4</h1>
+      <div class="muted">FUNCTIONALLY COMPLETE - PENDING FINAL CERTIFICATION</div>
+    </div>
+    <div class="toolbar">
+      <input id="eventId" type="number" min="1" value="1" aria-label="Evento">
+      <select id="period"><option value="">Evento completo</option><option value="today">Hoy</option><option value="7d">7 dias</option><option value="30d">30 dias</option></select>
+      <button id="refresh">Actualizar</button>
+      <button id="snapshot" class="secondary">Snapshot</button>
+      <button id="closure" class="secondary">Cierre</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <section class="grid" id="content"></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const tabs = ['overview','registrations','reservations','attendance','zones','speakers','certificates','surveys','communications','operations','data-quality','snapshots','reports','closure','definitions'];
+let active = 'overview';
+function eventPath(resource = active) {
+  const q = new URLSearchParams();
+  if ($('period').value) q.set('period', $('period').value);
+  return `/api/events/${$('eventId').value}/analytics-v4/${resource}${q.toString() ? '?' + q.toString() : ''}`;
+}
+async function api(path, options = {}) {
+  const res = await fetch(path, {headers:{'Content-Type':'application/json'}, ...options});
+  const body = await res.json();
+  if (!res.ok || body.ok === false) throw new Error(body.error || 'Error');
+  return body;
+}
+function card(label, value, note = '') { return `<div class="panel"><h2>${label}</h2><div class="metric">${value ?? '-'}</div><div class="muted">${note}</div></div>`; }
+function table(rows) {
+  if (!rows || !rows.length) return '<div class="muted">Sin datos</div>';
+  const keys = Object.keys(rows[0]).slice(0, 6);
+  return `<table><thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${keys.map(k => `<td>${r[k] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function renderMetricPayload(data) {
+  const m = data.metrics || {};
+  return Object.keys(m).map(k => Array.isArray(m[k]) ? `<div class="panel wide"><h2>${k}</h2>${table(m[k])}</div>` : card(k, m[k])).join('');
+}
+function renderOverview(data) {
+  const s = data.sections || {};
+  const q = data.data_quality || [];
+  return [
+    card('Inscripciones', s.registrations?.total, 'total'),
+    card('Asistencia', s.attendance?.attendance_rate + '%', 'tasa'),
+    card('Certificados', s.certificates?.issued, 'emitidos'),
+    card('Comunicaciones', s.communications?.messages, 'mensajes'),
+    `<div class="panel wide"><h2>Calidad de datos</h2>${table(q)}</div>`,
+    `<div class="panel wide"><h2>Definiciones</h2>${table((data.definitions || []).slice(0, 8))}</div>`
+  ].join('');
+}
+function render(data) {
+  if (active === 'overview') return renderOverview(data);
+  if (data.metrics) return renderMetricPayload(data);
+  if (data.items) return `<div class="panel full">${table(data.items)}</div>`;
+  if (data.issues) return `<div class="panel full">${table(data.issues)}</div>`;
+  return `<div class="panel full"><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+}
+async function refresh() {
+  $('content').innerHTML = '<div class="panel">Cargando...</div>';
+  try {
+    const data = await api(eventPath());
+    $('content').innerHTML = render(data);
+  } catch (err) {
+    $('content').innerHTML = `<div class="panel error">${err.message}</div>`;
+  }
+}
+function mountTabs() {
+  $('tabs').innerHTML = tabs.map(tab => `<button data-tab="${tab}" class="${tab === active ? 'active' : ''}">${tab}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(btn => btn.onclick = () => { active = btn.dataset.tab; mountTabs(); refresh(); });
+}
+$('refresh').onclick = refresh;
+$('snapshot').onclick = async () => { await api(`/api/events/${$('eventId').value}/analytics-v4/snapshots`, {method:'POST', body:JSON.stringify({filters:{period:$('period').value}})}); active = 'snapshots'; mountTabs(); await refresh(); };
+$('closure').onclick = async () => { await api(`/api/events/${$('eventId').value}/analytics-v4/closure/reviews`, {method:'POST', body:JSON.stringify({run_id:`V4-CLOSURE-${new Date().toISOString()}`})}); active = 'closure'; mountTabs(); await refresh(); };
+mountTabs();
+refresh();
+</script>
+</body>
+</html>

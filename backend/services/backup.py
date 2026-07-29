@@ -316,6 +316,15 @@ class EventBackupService:
         ("operations_center_alerts", "SELECT * FROM operations_center_alerts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("operations_center_incidents", "SELECT * FROM operations_center_incidents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("operations_center_tasks", "SELECT * FROM operations_center_tasks WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_snapshots", "SELECT * FROM analytics_v4_snapshots WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_reports", "SELECT * FROM analytics_v4_reports WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_export_jobs", "SELECT * FROM analytics_v4_export_jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_saved_views", "SELECT * FROM analytics_v4_saved_views WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_data_quality_issues", "SELECT * FROM analytics_v4_data_quality_issues WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_reviews", "SELECT * FROM functional_closure_reviews WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_gate_results", "SELECT * FROM functional_closure_gate_results WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_findings", "SELECT * FROM functional_closure_findings WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_actions", "SELECT * FROM functional_closure_actions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "speaker_profiles",
             """
@@ -571,6 +580,15 @@ class EventRestoreService:
         "operations_center_alerts",
         "operations_center_incidents",
         "operations_center_tasks",
+        "analytics_v4_snapshots",
+        "analytics_v4_reports",
+        "analytics_v4_export_jobs",
+        "analytics_v4_saved_views",
+        "analytics_v4_data_quality_issues",
+        "functional_closure_reviews",
+        "functional_closure_gate_results",
+        "functional_closure_findings",
+        "functional_closure_actions",
         "speaker_profiles",
         "speaker_private_details",
         "speaker_profile_versions",
@@ -660,6 +678,8 @@ class EventRestoreService:
                 "attendance_closures": counts.get("attendance_closures", 0),
                 "certificates": counts.get("certificate_eligibility", 0) + counts.get("certificate_issuances", 0),
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
+                "analytics": counts.get("analytics_v4_snapshots", 0) + counts.get("analytics_v4_reports", 0),
+                "functional_closure": counts.get("functional_closure_reviews", 0),
                 "templates": counts.get("communication_templates", 0),
                 "users_assigned": counts.get("event_users", 0),
                 "files": len(manifest.get("storage") or []),
@@ -750,6 +770,15 @@ class EventRestoreService:
                     "zone_access_validations": {},
                     "zone_access_overrides": {},
                     "duplicate_resolution_decisions": {},
+                    "analytics_v4_snapshots": {},
+                    "analytics_v4_reports": {},
+                    "analytics_v4_export_jobs": {},
+                    "analytics_v4_saved_views": {},
+                    "analytics_v4_data_quality_issues": {},
+                    "functional_closure_reviews": {},
+                    "functional_closure_gate_results": {},
+                    "functional_closure_findings": {},
+                    "functional_closure_actions": {},
                     "speaker_profiles": {},
                     "speaker_private_details": {},
                     "speaker_profile_versions": {},
@@ -1072,6 +1101,14 @@ class EventRestoreService:
                 row["alert_id"] = maps["operations_center_alerts"].get(int(row["alert_id"]), row["alert_id"])
             if "incident_id" in row and row.get("incident_id") is not None:
                 row["incident_id"] = maps["operations_center_incidents"].get(int(row["incident_id"]), row["incident_id"])
+            if "snapshot_id" in row and row.get("snapshot_id") is not None:
+                row["snapshot_id"] = maps["analytics_v4_snapshots"].get(int(row["snapshot_id"]), row["snapshot_id"])
+            if "report_id" in row and row.get("report_id") is not None:
+                row["report_id"] = maps["analytics_v4_reports"].get(int(row["report_id"]), row["report_id"])
+            if "closure_review_id" in row and row.get("closure_review_id") is not None:
+                row["closure_review_id"] = maps["functional_closure_reviews"].get(int(row["closure_review_id"]), row["closure_review_id"])
+            if "finding_id" in row and row.get("finding_id") is not None:
+                row["finding_id"] = maps["functional_closure_findings"].get(int(row["finding_id"]), row["finding_id"])
             if "parent_zone_id" in row and row.get("parent_zone_id") is not None:
                 row["parent_zone_id"] = maps["event_zones"].get(int(row["parent_zone_id"]), row["parent_zone_id"])
             if "speaker_profile_id" in row and row.get("speaker_profile_id") is not None:
@@ -1155,6 +1192,26 @@ class EventRestoreService:
                 row["safe_mode"] = 1
             if table == "communication_v4_provider_events" and row.get("external_event_id"):
                 row["external_event_id"] = f"{row['external_event_id']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "analytics_v4_snapshots":
+                row["status"] = "STALE"
+                row["updated_at"] = self.now()
+            if table == "analytics_v4_reports":
+                row["status"] = "RESTORED_REVIEW"
+                row["approved_by"] = ""
+                row["approved_at"] = None
+                row["updated_at"] = self.now()
+            if table == "analytics_v4_export_jobs":
+                row["status"] = "RESTORED_EXPIRED"
+                row["storage_key"] = ""
+                row["expires_at"] = self.now()
+            if table == "functional_closure_reviews":
+                row["status"] = "RESTORED_REVIEW"
+                row["approved_by"] = ""
+                row["approved_at"] = None
+                row["updated_at"] = self.now()
+            if table == "functional_closure_actions":
+                row["status"] = "RESTORED_PENDING_REVIEW"
+                row["completed_at"] = None
             if table == "participant_communication_preferences" and row.get("person_id") is not None:
                 existing_preference = db.execute(
                     "SELECT id FROM participant_communication_preferences WHERE person_id = ?",
