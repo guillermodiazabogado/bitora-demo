@@ -75,6 +75,7 @@ from backend.services.whatsapp import (
     verify_meta_signature,
     whatsapp_safe_mode_enabled,
 )
+from backend.services.zones import ZoneDomainError, ZonePermissionService
 from backend.storage import StorageService
 from backend.verticals import normalize_project_type, registered_verticals, vertical_config
 
@@ -229,26 +230,35 @@ SPEAKER_PERMISSION_CODES = [
     "speakers.access_tokens.manage",
     "speakers.audit.read",
 ]
+ZONE_PERMISSION_CODES = [
+    "zones.read",
+    "zones.manage",
+    "zones.assign",
+    "zones.validate",
+    "zones.override",
+    "zones.access_log.read",
+    "zones.audit.read",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
         "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data", "attendance.read"],
     },
     "Operador de acceso": {
-        "modules": ["access"],
-        "actions": ["scan_qr", "attendance.record"],
+        "modules": ["access", "zones"],
+        "actions": ["scan_qr", "attendance.record", "zones.validate"],
     },
     "Visualizador": {
         "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers"],
@@ -300,6 +310,10 @@ def certificate_service() -> CertificateService:
 
 def speaker_service() -> SpeakerService:
     return SpeakerService(audit_service=audit_service(), storage=STORAGE, now=now_iso, secret=os.environ.get("BITORA_SPEAKER_SECRET", "bitora-speakers-local-secret"))
+
+
+def zone_permission_service() -> ZonePermissionService:
+    return ZonePermissionService(audit_service=audit_service(), now=now_iso)
 
 
 def survey_service() -> SurveyService:
@@ -1443,6 +1457,80 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_type, entity_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_activities_event_status_start ON activities(event_id, status, starts_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS event_zones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            parent_zone_id INTEGER REFERENCES event_zones(id) ON DELETE SET NULL,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            capacity INTEGER,
+            access_mode TEXT NOT NULL DEFAULT 'QR',
+            valid_from TEXT,
+            valid_until TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            accreditation_id INTEGER NOT NULL REFERENCES accreditations(id) ON DELETE CASCADE,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            valid_from TEXT,
+            valid_until TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, zone_id, person_id, accreditation_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_validations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            decision TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            accreditation_id INTEGER NOT NULL REFERENCES accreditations(id) ON DELETE CASCADE,
+            override_type TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            valid_until TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_event_zones_scope ON event_zones(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_zone_assignments_zone ON zone_access_assignments(organization_id, event_id, zone_id, status);
+        CREATE INDEX IF NOT EXISTS idx_zone_validations_event ON zone_access_validations(organization_id, event_id, zone_id, decision);
+        CREATE INDEX IF NOT EXISTS idx_zone_overrides_zone ON zone_access_overrides(organization_id, event_id, zone_id);
         """
     )
 
@@ -2831,6 +2919,11 @@ def speakers_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "speakers_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def zone_permissions_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "zone_permissions_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
@@ -2840,6 +2933,10 @@ def certificate_error_payload(exc: CertificateDomainError) -> dict:
 
 
 def speaker_error_payload(exc: SpeakerDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def zone_error_payload(exc: ZoneDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -6831,6 +6928,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result)
                 return
 
+            zone_list_match = re.fullmatch(r"/api/events/(\d+)/zones", path)
+            if zone_list_match:
+                event_id = int(zone_list_match.group(1))
+                with connect() as db:
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "zones.read", "zones.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().list_zones(db, organization_id=org_id, event_id=event_id)
+                    except ZoneDomainError as exc:
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
             if path == "/api/survey-types":
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
                 with connect() as db:
@@ -9463,6 +9579,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             speaker_activity_assign_match = re.fullmatch(r"/api/events/(\d+)/speakers/(\d+)/activities", path)
             speaker_token_match = re.fullmatch(r"/api/speakers/(\d+)/access-token", path)
             speaker_document_match = re.fullmatch(r"/api/speakers/(\d+)/documents", path)
+            zone_create_match = re.fullmatch(r"/api/events/(\d+)/zones", path)
+            zone_assignment_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/assignments", path)
+            zone_validate_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/validate", path)
+            zone_override_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/overrides", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -9704,6 +9824,105 @@ class AppHandler(SimpleHTTPRequestHandler):
                             self.send_json(speaker_error_payload(exc), exc.status_code)
                         else:
                             self.send_json({"ok": False, "code": "SPEAKER_DOCUMENT_INVALID", "error": str(exc)}, 400)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_create_match:
+                event_id = int(zone_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.manage", "zones.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().create_zone(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""), parent_zone_id=int(data.get("parent_zone_id") or 0) or None, capacity=int(data.get("capacity") or 0) or None, access_mode=str(data.get("access_mode") or "QR"), valid_from=str(data.get("valid_from") or ""), valid_until=str(data.get("valid_until") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_assignment_match:
+                event_id = int(zone_assignment_match.group(1))
+                zone_id = int(zone_assignment_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.assign", "zones.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().assign_access(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, valid_from=str(data.get("valid_from") or ""), valid_until=str(data.get("valid_until") or ""), source=str(data.get("source") or "manual"))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_validate_match:
+                event_id = int(zone_validate_match.group(1))
+                zone_id = int(zone_validate_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.validate", "zones.validate", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().validate_access(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, token=str(data.get("token") or ""), person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if zone_override_match:
+                event_id = int(zone_override_match.group(1))
+                zone_id = int(zone_override_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.override", "zones.override", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().create_override(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, override_type=str(data.get("override_type") or ""), reason=str(data.get("reason") or ""), person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, valid_until=str(data.get("valid_until") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
                         return
                     db.execute("COMMIT")
                 self.send_json(result, 201)

@@ -150,6 +150,7 @@ _ID_TABLES = {
     "conversation_sources",
     "email_delivery_events",
     "email_suppressions",
+    "event_zones",
     "events",
     "event_integrations",
     "feature_flags",
@@ -184,6 +185,9 @@ _ID_TABLES = {
     "technical_logs",
     "users",
     "visualization_layouts",
+    "zone_access_assignments",
+    "zone_access_overrides",
+    "zone_access_validations",
     "whatsapp_delivery_events",
     "whatsapp_suppressions",
 }
