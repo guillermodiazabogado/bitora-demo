@@ -45,6 +45,7 @@ from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.certificates import CertificateDomainError, CertificateService
+from backend.services.speakers import SpeakerDomainError, SpeakerService
 from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
 from backend.services.demo_real import DemoRealService
@@ -217,18 +218,29 @@ SURVEY_PERMISSION_CODES = [
     "surveys.archive",
     "surveys.audit.view",
 ]
+SPEAKER_PERMISSION_CODES = [
+    "speakers.read",
+    "speakers.manage",
+    "speakers.publish",
+    "speakers.assign",
+    "speakers.documents.read",
+    "speakers.documents.manage",
+    "speakers.private.read",
+    "speakers.access_tokens.manage",
+    "speakers.audit.read",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
@@ -239,8 +251,8 @@ PERMISSION_MATRIX = {
         "actions": ["scan_qr", "attendance.record"],
     },
     "Visualizador": {
-        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read"],
+        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
@@ -284,6 +296,10 @@ def attendance_service() -> AttendanceService:
 
 def certificate_service() -> CertificateService:
     return CertificateService(audit_service=audit_service(), storage=STORAGE, now=now_iso)
+
+
+def speaker_service() -> SpeakerService:
+    return SpeakerService(audit_service=audit_service(), storage=STORAGE, now=now_iso, secret=os.environ.get("BITORA_SPEAKER_SECRET", "bitora-speakers-local-secret"))
 
 
 def survey_service() -> SurveyService:
@@ -1427,6 +1443,145 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_type, entity_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_activities_event_status_start ON activities(event_id, status, starts_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS speaker_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            public_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            professional_name TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            position TEXT NOT NULL DEFAULT '',
+            company TEXT NOT NULL DEFAULT '',
+            short_bio TEXT NOT NULL DEFAULT '',
+            long_bio TEXT NOT NULL DEFAULT '',
+            photo_storage_key TEXT NOT NULL DEFAULT '',
+            country TEXT NOT NULL DEFAULT '',
+            city TEXT NOT NULL DEFAULT '',
+            links_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            visibility TEXT NOT NULL DEFAULT 'EVENT',
+            current_version_id INTEGER,
+            created_by TEXT NOT NULL DEFAULT '',
+            archived_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, public_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_private_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            email TEXT NOT NULL DEFAULT '',
+            phone TEXT NOT NULL DEFAULT '',
+            document_id TEXT NOT NULL DEFAULT '',
+            internal_notes TEXT NOT NULL DEFAULT '',
+            technical_needs TEXT NOT NULL DEFAULT '',
+            logistics_notes TEXT NOT NULL DEFAULT '',
+            documentation_status TEXT NOT NULL DEFAULT 'PENDING',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, speaker_profile_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_profile_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            snapshot_json TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PUBLISHED',
+            published_at TEXT,
+            published_by TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(speaker_profile_id, version_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_event_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            roles_json TEXT NOT NULL DEFAULT '["SPEAKER"]',
+            status TEXT NOT NULL DEFAULT 'INVITED',
+            visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+            internal_notes TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, speaker_profile_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_activity_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            activity_id INTEGER NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            role TEXT NOT NULL DEFAULT 'SPEAKER',
+            status TEXT NOT NULL DEFAULT 'INVITED',
+            visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            starts_at TEXT,
+            ends_at TEXT,
+            internal_notes TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, activity_id, speaker_profile_id, role)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            document_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            storage_key TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+            uploaded_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_access_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            scope TEXT NOT NULL DEFAULT 'PROFILE_SELF_SERVICE',
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            expires_at TEXT,
+            used_at TEXT,
+            revoked_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_speaker_profiles_scope ON speaker_profiles(organization_id, status, visibility);
+        CREATE INDEX IF NOT EXISTS idx_speaker_private_profile ON speaker_private_details(organization_id, speaker_profile_id);
+        CREATE INDEX IF NOT EXISTS idx_speaker_versions_profile ON speaker_profile_versions(speaker_profile_id, version_number);
+        CREATE INDEX IF NOT EXISTS idx_speaker_event_assignments_event ON speaker_event_assignments(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_speaker_activity_assignments_event ON speaker_activity_assignments(organization_id, event_id, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_speaker_documents_event ON speaker_documents(organization_id, event_id, speaker_profile_id);
+        CREATE INDEX IF NOT EXISTS idx_speaker_access_tokens_hash ON speaker_access_tokens(token_hash, status);
         """
     )
 
@@ -2671,11 +2826,20 @@ def surveys_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "surveys_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def speakers_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "speakers_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
 def attendance_error_payload(exc: AttendanceDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def certificate_error_payload(exc: CertificateDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def speaker_error_payload(exc: SpeakerDomainError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
 
@@ -6248,11 +6412,15 @@ def public_api_get(path: str) -> bool:
         return True
     if path.startswith("/api/public/surveys/access/"):
         return True
+    if path.startswith("/api/public/speakers/"):
+        return True
     return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
 
 
 def public_api_post(path: str) -> bool:
     if path.startswith("/api/public/surveys/access/") or path.startswith("/api/public/surveys/sessions/"):
+        return True
+    if path.startswith("/api/public/speakers/access/"):
         return True
     return path in {
         "/api/register",
@@ -6578,6 +6746,87 @@ class AppHandler(SimpleHTTPRequestHandler):
                         result = survey_service().public_access(db, token=token)
                     except SurveyDomainError as exc:
                         self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            speaker_public_event_match = re.fullmatch(r"/api/public/events/(\d+)/speakers", path)
+            speaker_public_profile_match = re.fullmatch(r"/api/public/speakers/([A-Za-z0-9_.:-]+)", path)
+            speaker_self_service_match = re.fullmatch(r"/api/public/speakers/access/([A-Za-z0-9_.~:-]+)", path)
+            if speaker_public_event_match:
+                event_id = int(speaker_public_event_match.group(1))
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    try:
+                        result = speaker_service().public_event_speakers(db, event_id=event_id)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if speaker_public_profile_match:
+                public_id = speaker_public_profile_match.group(1)
+                with connect() as db:
+                    try:
+                        result = speaker_service().public_profile(db, public_id=public_id)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if speaker_self_service_match:
+                token = speaker_self_service_match.group(1)
+                with connect() as db:
+                    try:
+                        result = speaker_service().self_service_profile(db, token=token)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/speakers":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    permission = "speakers.private.read" if include_private else "speakers.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().list_profiles(db, organization_id=org_id, event_id=event_id, include_private=include_private)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            speaker_detail_match = re.fullmatch(r"/api/speakers/(\d+)", path)
+            if speaker_detail_match:
+                profile_id = int(speaker_detail_match.group(1))
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    permission = "speakers.private.read" if include_private else "speakers.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().get_profile_detail(db, organization_id=org_id, profile_id=profile_id, include_private=include_private)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
                         return
                 self.send_json(result)
                 return
@@ -9205,6 +9454,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             survey_assign_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assign", path)
             survey_close_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assignments/(\d+)/close", path)
             survey_archive_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/archive", path)
+            speaker_self_service_update_match = re.fullmatch(r"/api/public/speakers/access/([A-Za-z0-9_.~:-]+)/update", path)
+            speaker_create_match = re.fullmatch(r"/api/speakers", path)
+            speaker_update_match = re.fullmatch(r"/api/speakers/(\d+)", path)
+            speaker_publish_match = re.fullmatch(r"/api/speakers/(\d+)/publish", path)
+            speaker_archive_match = re.fullmatch(r"/api/speakers/(\d+)/archive", path)
+            speaker_event_assign_match = re.fullmatch(r"/api/events/(\d+)/speakers", path)
+            speaker_activity_assign_match = re.fullmatch(r"/api/events/(\d+)/speakers/(\d+)/activities", path)
+            speaker_token_match = re.fullmatch(r"/api/speakers/(\d+)/access-token", path)
+            speaker_document_match = re.fullmatch(r"/api/speakers/(\d+)/documents", path)
             certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
             certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
             certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
@@ -9250,6 +9508,205 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                     db.execute("COMMIT")
                 self.send_json(result)
+                return
+
+            if speaker_self_service_update_match:
+                token = speaker_self_service_update_match.group(1)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    try:
+                        result = speaker_service().self_service_update(db, token=token, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.manage", "speakers.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().create_profile(db, organization_id=org_id, actor=actor, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_update_match:
+                profile_id = int(speaker_update_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.manage", "speakers.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().update_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_publish_match or speaker_archive_match:
+                profile_id = int((speaker_publish_match or speaker_archive_match).group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                permission = "speakers.publish"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, permission, permission, actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        if speaker_publish_match:
+                            result = speaker_service().publish_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor, notes=str(data.get("notes") or ""))
+                        else:
+                            result = speaker_service().archive_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_event_assign_match:
+                event_id = int(speaker_event_assign_match.group(1))
+                profile_id = int(data.get("speaker_id") or data.get("speaker_profile_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.assign", "speakers.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().assign_to_event(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, actor=actor, roles=data.get("roles") if isinstance(data.get("roles"), list) else ["SPEAKER"], visibility=str(data.get("visibility") or "PUBLIC"), notes=str(data.get("notes") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_activity_assign_match:
+                event_id = int(speaker_activity_assign_match.group(1))
+                profile_id = int(speaker_activity_assign_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.assign", "speakers.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().assign_to_activity(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, activity_id=int(data.get("activity_id") or 0), actor=actor, role=str(data.get("role") or "SPEAKER"), sort_order=int(data.get("sort_order") or 0), visibility=str(data.get("visibility") or "PUBLIC"), notes=str(data.get("notes") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_token_match:
+                profile_id = int(speaker_token_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.access_tokens.manage", "speakers.access_tokens.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().create_access_token(db, organization_id=org_id, profile_id=profile_id, actor=actor, expires_at=str(data.get("expires_at") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_document_match:
+                profile_id = int(speaker_document_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.documents.manage", "speakers.documents.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        content = decode_upload_base64(str(data.get("content_base64") or ""))
+                        result = speaker_service().add_document(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, actor=actor, filename=str(data.get("filename") or ""), mime_type=str(data.get("mime_type") or ""), content=content, document_type=str(data.get("document_type") or "MATERIAL"), visibility=str(data.get("visibility") or "PRIVATE"))
+                    except (SpeakerDomainError, ValueError) as exc:
+                        db.execute("ROLLBACK")
+                        if isinstance(exc, SpeakerDomainError):
+                            self.send_json(speaker_error_payload(exc), exc.status_code)
+                        else:
+                            self.send_json({"ok": False, "code": "SPEAKER_DOCUMENT_INVALID", "error": str(exc)}, 400)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
                 return
 
             if survey_type_create_match:

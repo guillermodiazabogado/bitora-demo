@@ -293,6 +293,53 @@ class EventBackupService:
         ("survey_response_sessions", "SELECT * FROM survey_response_sessions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("survey_answers", "SELECT * FROM survey_answers WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("survey_answer_options", "SELECT * FROM survey_answer_options WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "speaker_profiles",
+            """
+            SELECT DISTINCT sp.*
+            FROM speaker_profiles sp
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = sp.id
+            WHERE sea.event_id = ?
+            ORDER BY sp.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "speaker_private_details",
+            """
+            SELECT DISTINCT spd.*
+            FROM speaker_private_details spd
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = spd.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY spd.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "speaker_profile_versions",
+            """
+            SELECT DISTINCT spv.*
+            FROM speaker_profile_versions spv
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = spv.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY spv.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("speaker_event_assignments", "SELECT * FROM speaker_event_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("speaker_activity_assignments", "SELECT * FROM speaker_activity_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("speaker_documents", "SELECT * FROM speaker_documents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "speaker_access_tokens",
+            """
+            SELECT DISTINCT sat.*
+            FROM speaker_access_tokens sat
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = sat.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY sat.id
+            """,
+            lambda event_id: (event_id,),
+        ),
         ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("simulator_state", "SELECT * FROM simulator_state WHERE event_id = ?", lambda event_id: (event_id,)),
@@ -478,6 +525,13 @@ class EventRestoreService:
         "survey_response_sessions",
         "survey_answers",
         "survey_answer_options",
+        "speaker_profiles",
+        "speaker_private_details",
+        "speaker_profile_versions",
+        "speaker_event_assignments",
+        "speaker_activity_assignments",
+        "speaker_documents",
+        "speaker_access_tokens",
         "access_logs",
         "communication_logs",
         "communication_queue",
@@ -645,6 +699,13 @@ class EventRestoreService:
                     "survey_response_sessions": {},
                     "survey_answers": {},
                     "survey_answer_options": {},
+                    "speaker_profiles": {},
+                    "speaker_private_details": {},
+                    "speaker_profile_versions": {},
+                    "speaker_event_assignments": {},
+                    "speaker_activity_assignments": {},
+                    "speaker_documents": {},
+                    "speaker_access_tokens": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -661,6 +722,7 @@ class EventRestoreService:
 
                 self._repair_certificate_template_versions(db, payload, maps)
                 self._repair_survey_versions(db, payload, maps)
+                self._repair_speaker_versions(db, payload, maps)
                 self._validate_restored(db, payload, new_event_id)
                 files_restored = self._restore_storage_files(raw, manifest, int(payload.get("event_id") or 0), new_event_id)
                 duration_ms = int((datetime.now() - started).total_seconds() * 1000)
@@ -916,6 +978,8 @@ class EventRestoreService:
                 row["session_id"] = maps["survey_response_sessions"].get(int(row["session_id"]), row["session_id"])
             if "answer_id" in row and row.get("answer_id") is not None:
                 row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
+            if "speaker_profile_id" in row and row.get("speaker_profile_id") is not None:
+                row["speaker_profile_id"] = maps["speaker_profiles"].get(int(row["speaker_profile_id"]), row["speaker_profile_id"])
             if table == "certificate_number_sequences" and row.get("scope_key"):
                 source_event_id = int(payload.get("event_id") or 0)
                 target_event_id = next(iter(maps["events"].values()))
@@ -934,6 +998,27 @@ class EventRestoreService:
                 row["token_hint"] = regenerated[:8]
                 row["status"] = "RESTORED_INACTIVE"
                 row["used_at"] = None
+            if table == "speaker_access_tokens":
+                regenerated = self.token_factory()
+                row["token_hash"] = hashlib.sha256(regenerated.encode("utf-8")).hexdigest()
+                row["token_hint"] = regenerated[:8]
+                row["status"] = "RESTORED_INACTIVE"
+                row["used_at"] = None
+                row["revoked_at"] = None
+            if table in {"speaker_profiles"} and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["speaker_profile_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            if table == "speaker_documents" and row.get("storage_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["storage_key"] = str(row["storage_key"]).replace(f"events/{source_event_id}/", f"events/{target_event_id}/", 1)
+            if table == "speaker_profiles" and row.get("public_id"):
+                base_public_id = str(row["public_id"])
+                public_id = base_public_id
+                suffix = 1
+                while db.execute("SELECT id FROM speaker_profiles WHERE organization_id = ? AND public_id = ?", (row.get("organization_id"), public_id)).fetchone():
+                    suffix += 1
+                    public_id = f"{base_public_id}-restored-{suffix}"
+                row["public_id"] = public_id
             if table == "survey_response_sessions" and row.get("idempotency_key"):
                 row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
             if table == "certificate_documents" and row.get("storage_key"):
@@ -1000,6 +1085,15 @@ class EventRestoreService:
             new_version_id = maps.get("survey_versions", {}).get(old_version_id)
             if new_survey_id and new_version_id:
                 db.execute("UPDATE surveys SET current_version_id = ? WHERE id = ?", (new_version_id, new_survey_id))
+
+    def _repair_speaker_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("speaker_profiles", []):
+            old_profile_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_profile_id = maps.get("speaker_profiles", {}).get(old_profile_id)
+            new_version_id = maps.get("speaker_profile_versions", {}).get(old_version_id)
+            if new_profile_id and new_version_id:
+                db.execute("UPDATE speaker_profiles SET current_version_id = ? WHERE id = ?", (new_version_id, new_profile_id))
 
     def _delete_event_scope(self, db, event_id: int) -> None:
         db.execute("DELETE FROM user_event_roles WHERE event_id = ?", (event_id,))
