@@ -6809,6 +6809,10 @@ class AppHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         if args and isinstance(args[0], str) and "/api/integrations/google/callback?" in args[0]:
             args = (re.sub(r"(/api/integrations/google/callback)\?[^ ]*", r"\1?[redacted]", args[0]), *args[1:])
+        if args and isinstance(args[0], str) and "/api/communications/whatsapp/webhook?" in args[0]:
+            sanitized = re.sub(r"([?&](?:hub\.)?verify_token=)[^ &]*", r"\1[redacted]", args[0])
+            sanitized = re.sub(r"([?&]hub_verify_token=)[^ &]*", r"\1[redacted]", sanitized)
+            args = (sanitized, *args[1:])
         super().log_message(format, *args)
 
     def send_response(self, code: int, message: str | None = None) -> None:

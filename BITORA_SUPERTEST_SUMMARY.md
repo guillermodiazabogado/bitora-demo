@@ -4,40 +4,40 @@ Perfil: `release`
 Resultado: RECHAZADO
 Score: 82.6/100
 Pruebas ejecutadas: 47
-Pruebas fallidas/timeouts: 5
+Pruebas fallidas/timeouts: 1
 Hallazgos criticos/altos: 0
 
 ## Pruebas
 
-- PASSED `integridad` (9.09s)
-- PASSED `convivencia` (7.21s)
-- PASSED `email_productivo` (0.84s)
-- PASSED `whatsapp_productivo` (0.85s)
-- PASSED `event_restore` (0.52s)
-- PASSED `storage_event_backup_restore` (0.54s)
-- PASSED `demo_live_10` (0.93s)
-- PASSED `postgres_static` (0.47s)
-- PASSED `production_postgres` (0.47s)
-- PASSED `comunicaciones_permisos` (4.61s)
-- PASSED `usuarios_eventos` (4.23s)
-- PASSED `seguridad_basica` (7.33s)
-- PASSED `datos_basura` (4.87s)
-- PASSED `errores_humanos` (5.15s)
-- PASSED `concurrencia_critica` (8.71s)
-- PASSED `multievent_isolation_20_events` (9.37s)
-- PASSED `multitenant_integrations` (0.89s)
-- PASSED `google_oauth_http_flow` (0.67s)
-- PASSED `google_oauth_state_security` (0.92s)
-- PASSED `google_oauth_multitenant_isolation` (0.87s)
-- PASSED `google_oauth_refresh_contract` (0.69s)
-- PASSED `google_oauth_backup_restore` (0.85s)
-- PASSED `google_oauth_multitenant_live` (5.94s)
-- PASSED `email_multitenant_live` (5.43s)
-- FAILED `whatsapp_multitenant_live` (67.39s)
-- FAILED `webhooks_multitenant_live` (0.62s)
-- PASSED `backup_multitenant_live` (0.64s)
-- PASSED `restore_multitenant_live` (0.62s)
-- PASSED `integrations_disaster_recovery` (0.91s)
+- PASSED `integridad` (9.45s)
+- PASSED `convivencia` (9.53s)
+- PASSED `email_productivo` (0.92s)
+- PASSED `whatsapp_productivo` (0.98s)
+- PASSED `event_restore` (0.57s)
+- PASSED `storage_event_backup_restore` (0.55s)
+- PASSED `demo_live_10` (1.09s)
+- PASSED `postgres_static` (0.53s)
+- PASSED `production_postgres` (0.48s)
+- PASSED `comunicaciones_permisos` (6.53s)
+- PASSED `usuarios_eventos` (5.61s)
+- PASSED `seguridad_basica` (10.57s)
+- PASSED `datos_basura` (6.42s)
+- PASSED `errores_humanos` (6.4s)
+- PASSED `concurrencia_critica` (10.84s)
+- PASSED `multievent_isolation_20_events` (10.8s)
+- PASSED `multitenant_integrations` (1.11s)
+- PASSED `google_oauth_http_flow` (0.94s)
+- PASSED `google_oauth_state_security` (1.0s)
+- PASSED `google_oauth_multitenant_isolation` (0.99s)
+- PASSED `google_oauth_refresh_contract` (0.78s)
+- PASSED `google_oauth_backup_restore` (0.97s)
+- PASSED `google_oauth_multitenant_live` (7.29s)
+- PASSED `email_multitenant_live` (8.65s)
+- PASSED `whatsapp_multitenant_live` (11.42s)
+- PASSED `webhooks_multitenant_live` (12.93s)
+- PASSED `backup_multitenant_live` (0.73s)
+- PASSED `restore_multitenant_live` (0.77s)
+- PASSED `integrations_disaster_recovery` (1.0s)
 - PASSED `staging_environment` (0s)
 - PASSED `postgres_live` (0s)
 - PASSED `storage_persistent` (0s)
@@ -48,8 +48,8 @@ Hallazgos criticos/altos: 0
 - PASSED `integration_assignment` (0s)
 - PASSED `google_oauth_live` (0s)
 - PASSED `email_organization_live` (0s)
-- FAILED `whatsapp_organization_live` (0s)
-- OMITTED `webhook_tenant_resolution_live` (0s)
+- PASSED `whatsapp_organization_live` (0s)
+- PASSED `webhook_tenant_resolution_live` (0s)
 - PASSED `communications_tenant_isolation` (0s)
 - PASSED `backup_multitenant_live` (0s)
 - PASSED `restore_multitenant_live` (0s)
@@ -62,9 +62,13 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_2.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_demo_live_10.py)
 - **MEDIUM** [code] Funcion muy extensa: _live_result ocupa mas de 120 lineas (verificar_whatsapp_multitenant_live.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_4_surveys_foundation.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_5_speakers_foundation.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v7_whatsapp_productivo.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_3_certificates_foundation.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_operacion_8_horas.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_demo_10_live.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_1_attendance_domain.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v6_1_email_real.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_1.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_multitenant_integrations.py)
@@ -73,6 +77,9 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_multievent_isolation_20_events.py)
 - **MEDIUM** [code] Funcion muy extensa: init_db ocupa mas de 120 lineas (server.py)
+- **MEDIUM** [code] Funcion muy extensa: ensure_indexes ocupa mas de 120 lineas (server.py)
+- **MEDIUM** [code] Funcion muy extensa: ensure_v4_3_columns ocupa mas de 120 lineas (server.py)
+- **MEDIUM** [code] Funcion muy extensa: ensure_v4_4_columns ocupa mas de 120 lineas (server.py)
 - **MEDIUM** [code] Funcion muy extensa: queue_communication ocupa mas de 120 lineas (server.py)
 - **MEDIUM** [code] Funcion muy extensa: portal_payload ocupa mas de 120 lineas (server.py)
 - **MEDIUM** [code] Funcion muy extensa: executive_report_data ocupa mas de 120 lineas (server.py)
@@ -82,21 +89,33 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [code] Funcion muy extensa: run_checks ocupa mas de 120 lineas (verificar_mvp.py)
 - **MEDIUM** [code] Funcion muy extensa: _live_result ocupa mas de 120 lineas (verificar_email_multitenant_live.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v6_8_data_visualization.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (verificar_v4_2_attendance_closure_eligibility.py)
 - **MEDIUM** [code] Funcion muy extensa: seed_dataset ocupa mas de 120 lineas (tools/backup_restore_live_dataset.py)
 - **MEDIUM** [code] Funcion muy extensa: write_outputs ocupa mas de 120 lineas (deployment/scripts/certify_disaster_recovery_live.py)
 - **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (deployment/scripts/certify_backup_restore_live.py)
 - **MEDIUM** [code] Funcion muy extensa: write_markdown_reports ocupa mas de 120 lineas (deployment/scripts/certify_backup_restore_live.py)
+- **MEDIUM** [code] Funcion muy extensa: main ocupa mas de 120 lineas (deployment/scripts/certify_upgrade_from_previous_live.py)
+- **MEDIUM** [code] Funcion muy extensa: write_markdown_reports ocupa mas de 120 lineas (deployment/scripts/certify_upgrade_from_previous_live.py)
+- **MEDIUM** [code] Funcion muy extensa: restore_bytes ocupa mas de 120 lineas (backend/services/backup.py)
+- **MEDIUM** [code] Funcion muy extensa: _restore_generic ocupa mas de 120 lineas (backend/services/backup.py)
 - **MEDIUM** [code] Funcion muy extensa: _simulate_peak_operations ocupa mas de 120 lineas (backend/services/demo_real.py)
-- **LOW** [code] Funcion repetida por nombre: assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_9_visual_reports.py:37, verificar_reorganizacion_inscribir_recepcion.py:12
-- **LOW** [code] Funcion repetida por nombre: connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:466
-- **LOW** [code] Funcion repetida por nombre: do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:5702
-- **LOW** [code] Funcion repetida por nombre: log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:5573
-- **LOW** [code] Funcion repetida por nombre: main: verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31, verificar_persistencia_backups.py:55
-- **LOW** [code] Funcion repetida por nombre: ready: backend/storage.py:33, backend/services/whatsapp.py:46, backend/services/whatsapp.py:77, backend/services/whatsapp.py:122, backend/services/email.py:27, backend/services/email.py:85
+- **MEDIUM** [code] Funcion muy extensa: issue_certificate ocupa mas de 120 lineas (backend/services/certificates.py)
+- **LOW** [code] Funcion repetida por nombre: assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_v4_6_zone_permissions_foundation.py:15, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_4_surveys_foundation.py:18
+- **LOW** [code] Funcion repetida por nombre: connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:642
+- **LOW** [code] Funcion repetida por nombre: do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:6942
+- **LOW** [code] Funcion repetida por nombre: log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:6809
+- **LOW** [code] Funcion repetida por nombre: main: verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31, verificar_v4_6_zone_permissions_foundation.py:59
+- **LOW** [code] Funcion repetida por nombre: ready: backend/storage.py:33, backend/services/whatsapp.py:46, backend/services/whatsapp.py:76, backend/services/whatsapp.py:121, backend/services/email.py:27, backend/services/email.py:85
 - **LOW** [code] Funcion repetida por nombre: req: verificar_v4_2.py:15, verificar_v4_9_1_control_room.py:14, verificar_landing_config.py:21, verificar_activity_access_window.py:27, verificar_v5_email.py:31, verificar_v4_9_visual_reports.py:14
 - **LOW** [code] Funcion repetida por nombre: request: verificar_limpieza_panel.py:21, stress_test.py:23, qa2_utils.py:63, robustness_suite.py:64, verificar_mvp.py:19, verificar_auth_red.py:18
-- **LOW** [code] Funcion repetida por nombre: run: tools/supertest/runner.py:61, deployment/scripts/certify_disaster_recovery_live.py:457, deployment/scripts/certify_backup_restore_live.py:377, deployment/scripts/bdf.py:253, backend/services/jobs.py:163
-- **LOW** [code] Funcion repetida por nombre: validate_configuration: backend/services/whatsapp.py:65, backend/services/whatsapp.py:95, backend/services/whatsapp.py:186, backend/services/email.py:66, backend/services/email.py:127, backend/services/google_oauth.py:76
+- **LOW** [code] Funcion repetida por nombre: run: deployment/scripts/certify_disaster_recovery_live.py:464, deployment/scripts/certify_backup_restore_live.py:377, deployment/scripts/certify_upgrade_from_previous_live.py:646, deployment/scripts/bdf.py:253, backend/services/jobs.py:163, tools/supertest/runner.py:61
+- **LOW** [code] Funcion repetida por nombre: seed: verificar_v4_6_zone_permissions_foundation.py:20, verificar_v4_4_surveys_foundation.py:23, verificar_v4_5_speakers_foundation.py:20, verificar_v4_3_certificates_foundation.py:26, verificar_v4_9_communications_automation.py:28, verificar_v4_7_history_autocomplete_foundation.py:22
+- **LOW** [code] Funcion repetida por nombre: validate_configuration: backend/services/whatsapp.py:65, backend/services/whatsapp.py:94, backend/services/whatsapp.py:185, backend/services/email.py:66, backend/services/email.py:127, backend/services/google_oauth.py:76
+- **MEDIUM** [security] SQL string formatting: table: db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (restored_event_id,)).fetchone()["c"] (verificar_v4_6_zone_permissions_foundation.py)
+- **MEDIUM** [security] SQL string formatting: restored_counts = {table: db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (restored_event_id,)).fetchone()["c"] for table in ("surveys", "survey_versions", "survey_questions", "survey_response_sessions", "survey_answers")} (verificar_v4_4_surveys_foundation.py)
+- **MEDIUM** [security] SQL string formatting: table: db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (restored_event_id,)).fetchone()["c"] (verificar_v4_5_speakers_foundation.py)
+- **MEDIUM** [security] SQL string formatting: columns = {row["name"]: row for row in db.execute(f"PRAGMA table_info({table})").fetchall()} (verificar_v4_10_analytics_functional_closure.py)
+- **MEDIUM** [security] SQL string formatting: cur = db.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(['?'] * len(cols))})", [payload[col] for col in cols]) (verificar_v4_10_analytics_functional_closure.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE communication_queue ADD COLUMN {name} {definition}") (server.py)
@@ -104,6 +123,7 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE events ADD COLUMN {name} {definition}") (server.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"ALTER TABLE events ADD COLUMN {name} TEXT NOT NULL DEFAULT ''") (server.py)
 - **MEDIUM** [security] SQL string formatting: activities = db.execute(f"SELECT * FROM activities WHERE {where}", params).fetchall() (server.py)
+- **MEDIUM** [security] SQL string formatting: rows = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND event_id = ? ORDER BY id DESC LIMIT 250", (organization_id, event_id)).fetchall() (server.py)
 - **MEDIUM** [security] SQL string formatting: rows = [dict(row) for row in source.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()] if exists else [] (migrar_sqlite_a_postgres.py)
 - **MEDIUM** [security] SQL string formatting: visible = db.execute(f"SELECT COUNT(*) AS c FROM events e WHERE {where}", params).fetchone()["c"] (verificar_v9_usuarios_eventos.py)
 - **MEDIUM** [security] SQL string formatting: return int(db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE {where}", params).fetchone()["c"] or 0) (tools/backup_restore_live_dataset.py)
@@ -115,8 +135,17 @@ Hallazgos criticos/altos: 0
 - **MEDIUM** [security] SQL string formatting: db.execute(f"DELETE FROM {table} WHERE event_id = ?", (event_id,)) (backend/services/backup.py)
 - **MEDIUM** [security] SQL string formatting: restored = db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?", (event_id,)).fetchone()["c"] (backend/services/backup.py)
 - **MEDIUM** [security] SQL string formatting: return [row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()] (backend/services/backup.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"UPDATE operations_center_incidents SET {', '.join(f'{k} = ?' for k in updates)} WHERE id = ? AND organization_id = ? AND event_id = ?", [*updates.values(), incident_id, organization_id, event_id]) (backend/services/operations_center.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"UPDATE operations_center_tasks SET {', '.join(f'{k} = ?' for k in updates)} WHERE id = ? AND organization_id = ? AND event_id = ?", [*updates.values(), task_id, organization_id, event_id]) (backend/services/operations_center.py)
+- **MEDIUM** [security] SQL string formatting: return int(db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE {where}", params or (organization_id, event_id)).fetchone()["c"] or 0) (backend/services/communications_automation.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"UPDATE surveys SET {assignments} WHERE id = ?", [updates[key] for key in updates] + [survey_id]) (backend/services/surveys.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"SELECT 1 FROM {table} LIMIT 1") (backend/services/analytics_closure.py)
+- **MEDIUM** [security] SQL string formatting: return int(db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE {where}", params).fetchone()["c"] or 0) (backend/services/analytics_closure.py)
 - **MEDIUM** [security] SQL string formatting: db.execute(f"DELETE FROM {table}") (backend/services/demo_real.py)
+- **MEDIUM** [security] SQL string formatting: row = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND idempotency_key = ?", (int(organization_id), key)).fetchone() (backend/services/attendance.py)
 - **MEDIUM** [security] SQL string formatting: activities = db.execute(f"SELECT * FROM activities WHERE {where}", params).fetchall() (backend/services/capacity_buckets.py)
-- **LOW** [database] Prefijo de migracion duplicado conocido: Prefijo 007 aparece mas de una vez
+- **MEDIUM** [security] SQL string formatting: row = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND idempotency_key = ?", (organization_id, key)).fetchone() (backend/services/certificates.py)
+- **MEDIUM** [security] SQL string formatting: db.execute(f"UPDATE speaker_profiles SET {assignments} WHERE id = ?", [updates[key] for key in updates] + [profile_id]) (backend/services/speakers.py)
 - **MEDIUM** [database] Prefijo de migracion duplicado: Prefijo 015 aparece mas de una vez
-- **MEDIUM** [architecture] Controlador principal muy grande: server.py tiene 10453 lineas
+- **LOW** [database] Prefijo de migracion duplicado conocido: Prefijo 007 aparece mas de una vez
+- **MEDIUM** [architecture] Controlador principal muy grande: server.py tiene 13893 lineas

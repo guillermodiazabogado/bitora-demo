@@ -2,9 +2,9 @@
 
 Estado: **RECHAZADO**
 
-Commit certificado: `3b5aca166b3da733e46011970413e1785a21d52f`
+Commit certificado: ``
 Perfil ejecutado: `release`
-Score final: **58.4/100**
+Score final: **82.6/100**
 
 ## Condicion
 
