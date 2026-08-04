@@ -2,14 +2,14 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-29T23:13:39",
+    "started_at": "2026-08-04T20:44:40",
     "python": "3.12.13",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
     "branch": "",
     "commit": "",
     "dirty_files": [],
-    "max_migration": "015_role_permissions.sql",
-    "code_checksum": "11d0df014e3d9a8b6b3e43166d1368352eb4abeaf85fab3b8fe8669d8ccadcb6",
+    "max_migration": "025_v4_10_analytics_functional_closure.sql",
+    "code_checksum": "b593353e815e7b03942b2aa05606507abd853dc76d639092496d397b92fe2eb2",
     "critical_env": {
       "APP_ENV": "staging",
       "BASE_URL": "http***8788",
@@ -26,8 +26,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-29T23:13:39",
-  "finished_at": "2026-07-29T23:16:12",
+  "started_at": "2026-08-04T20:44:40",
+  "finished_at": "2026-08-04T20:46:46",
   "findings": [
     {
       "severity": "medium",
@@ -55,7 +55,28 @@
       "category": "code",
       "title": "Funcion muy extensa",
       "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_4_surveys_foundation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_5_speakers_foundation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
       "file": "verificar_v7_whatsapp_productivo.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_3_certificates_foundation.py"
     },
     {
       "severity": "medium",
@@ -70,6 +91,13 @@
       "title": "Funcion muy extensa",
       "detail": "main ocupa mas de 120 lineas",
       "file": "verificar_demo_10_live.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_1_attendance_domain.py"
     },
     {
       "severity": "medium",
@@ -125,6 +153,27 @@
       "category": "code",
       "title": "Funcion muy extensa",
       "detail": "init_db ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "ensure_indexes ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "ensure_v4_3_columns ocupa mas de 120 lineas",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "ensure_v4_4_columns ocupa mas de 120 lineas",
       "file": "server.py"
     },
     {
@@ -194,6 +243,13 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "verificar_v4_2_attendance_closure_eligibility.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
       "detail": "seed_dataset ocupa mas de 120 lineas",
       "file": "tools/backup_restore_live_dataset.py"
     },
@@ -222,49 +278,84 @@
       "severity": "medium",
       "category": "code",
       "title": "Funcion muy extensa",
+      "detail": "main ocupa mas de 120 lineas",
+      "file": "deployment/scripts/certify_upgrade_from_previous_live.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "write_markdown_reports ocupa mas de 120 lineas",
+      "file": "deployment/scripts/certify_upgrade_from_previous_live.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "restore_bytes ocupa mas de 120 lineas",
+      "file": "backend/services/backup.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "_restore_generic ocupa mas de 120 lineas",
+      "file": "backend/services/backup.py"
+    },
+    {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
       "detail": "_simulate_peak_operations ocupa mas de 120 lineas",
       "file": "backend/services/demo_real.py"
     },
     {
+      "severity": "medium",
+      "category": "code",
+      "title": "Funcion muy extensa",
+      "detail": "issue_certificate ocupa mas de 120 lineas",
+      "file": "backend/services/certificates.py"
+    },
+    {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_9_visual_reports.py:37, verificar_reorganizacion_inscribir_recepcion.py:12",
+      "detail": "assert_true: verificar_v4_2.py:38, verificar_v4_9_1_control_room.py:37, verificar_v4_6_zone_permissions_foundation.py:15, verificar_limpieza_panel.py:44, verificar_landing_config.py:52, verificar_v4_4_surveys_foundation.py:18",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:466",
+      "detail": "connect: verificar_persistencia_backups.py:61, verificar_backup_restore.py:25, verificar_event_restore.py:89, verificar_v6_1_email_productivo.py:18, verificar_storage_event_backup_restore.py:87, server.py:642",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:5702",
+      "detail": "do_POST: verificar_v7_whatsapp_real.py:21, verificar_v5_email.py:20, verificar_demo_10_live.py:22, verificar_v6_1_email_real.py:23, server.py:6942",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:5573",
+      "detail": "log_message: verificar_v7_whatsapp_real.py:18, verificar_v5_email.py:17, verificar_demo_10_live.py:19, verificar_v6_1_email_real.py:20, server.py:6809",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "main: verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31, verificar_persistencia_backups.py:55",
+      "detail": "main: verificar_recuperacion.py:20, verificar_v4_2.py:43, verificar_demo_live_10.py:66, verificar_v4_9_1_control_room.py:42, verificar_stress_extremo.py:31, verificar_v4_6_zone_permissions_foundation.py:59",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "ready: backend/storage.py:33, backend/services/whatsapp.py:46, backend/services/whatsapp.py:77, backend/services/whatsapp.py:122, backend/services/email.py:27, backend/services/email.py:85",
+      "detail": "ready: backend/storage.py:33, backend/services/whatsapp.py:46, backend/services/whatsapp.py:76, backend/services/whatsapp.py:121, backend/services/email.py:27, backend/services/email.py:85",
       "file": ""
     },
     {
@@ -285,15 +376,57 @@
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "run: tools/supertest/runner.py:61, deployment/scripts/certify_disaster_recovery_live.py:457, deployment/scripts/certify_backup_restore_live.py:377, deployment/scripts/bdf.py:253, backend/services/jobs.py:163",
+      "detail": "run: deployment/scripts/certify_disaster_recovery_live.py:464, deployment/scripts/certify_backup_restore_live.py:377, deployment/scripts/certify_upgrade_from_previous_live.py:646, deployment/scripts/bdf.py:253, backend/services/jobs.py:163, tools/supertest/runner.py:61",
       "file": ""
     },
     {
       "severity": "low",
       "category": "code",
       "title": "Funcion repetida por nombre",
-      "detail": "validate_configuration: backend/services/whatsapp.py:65, backend/services/whatsapp.py:95, backend/services/whatsapp.py:186, backend/services/email.py:66, backend/services/email.py:127, backend/services/google_oauth.py:76",
+      "detail": "seed: verificar_v4_6_zone_permissions_foundation.py:20, verificar_v4_4_surveys_foundation.py:23, verificar_v4_5_speakers_foundation.py:20, verificar_v4_3_certificates_foundation.py:26, verificar_v4_9_communications_automation.py:28, verificar_v4_7_history_autocomplete_foundation.py:22",
       "file": ""
+    },
+    {
+      "severity": "low",
+      "category": "code",
+      "title": "Funcion repetida por nombre",
+      "detail": "validate_configuration: backend/services/whatsapp.py:65, backend/services/whatsapp.py:94, backend/services/whatsapp.py:185, backend/services/email.py:66, backend/services/email.py:127, backend/services/google_oauth.py:76",
+      "file": ""
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "table: db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?\", (restored_event_id,)).fetchone()[\"c\"]",
+      "file": "verificar_v4_6_zone_permissions_foundation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "restored_counts = {table: db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?\", (restored_event_id,)).fetchone()[\"c\"] for table in (\"surveys\", \"survey_versions\", \"survey_questions\", \"survey_response_sessions\", \"survey_answers\")}",
+      "file": "verificar_v4_4_surveys_foundation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "table: db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE event_id = ?\", (restored_event_id,)).fetchone()[\"c\"]",
+      "file": "verificar_v4_5_speakers_foundation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "columns = {row[\"name\"]: row for row in db.execute(f\"PRAGMA table_info({table})\").fetchall()}",
+      "file": "verificar_v4_10_analytics_functional_closure.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "cur = db.execute(f\"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join(['?'] * len(cols))})\", [payload[col] for col in cols])",
+      "file": "verificar_v4_10_analytics_functional_closure.py"
     },
     {
       "severity": "medium",
@@ -342,6 +475,13 @@
       "category": "security",
       "title": "SQL string formatting",
       "detail": "activities = db.execute(f\"SELECT * FROM activities WHERE {where}\", params).fetchall()",
+      "file": "server.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "rows = db.execute(f\"SELECT * FROM {table} WHERE organization_id = ? AND event_id = ? ORDER BY id DESC LIMIT 250\", (organization_id, event_id)).fetchall()",
       "file": "server.py"
     },
     {
@@ -425,6 +565,48 @@
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
+      "detail": "db.execute(f\"UPDATE operations_center_incidents SET {', '.join(f'{k} = ?' for k in updates)} WHERE id = ? AND organization_id = ? AND event_id = ?\", [*updates.values(), incident_id, organization_id, event_id])",
+      "file": "backend/services/operations_center.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"UPDATE operations_center_tasks SET {', '.join(f'{k} = ?' for k in updates)} WHERE id = ? AND organization_id = ? AND event_id = ?\", [*updates.values(), task_id, organization_id, event_id])",
+      "file": "backend/services/operations_center.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "return int(db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE {where}\", params or (organization_id, event_id)).fetchone()[\"c\"] or 0)",
+      "file": "backend/services/communications_automation.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"UPDATE surveys SET {assignments} WHERE id = ?\", [updates[key] for key in updates] + [survey_id])",
+      "file": "backend/services/surveys.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"SELECT 1 FROM {table} LIMIT 1\")",
+      "file": "backend/services/analytics_closure.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "return int(db.execute(f\"SELECT COUNT(*) AS c FROM {table} WHERE {where}\", params).fetchone()[\"c\"] or 0)",
+      "file": "backend/services/analytics_closure.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
       "detail": "db.execute(f\"DELETE FROM {table}\")",
       "file": "backend/services/demo_real.py"
     },
@@ -432,8 +614,36 @@
       "severity": "medium",
       "category": "security",
       "title": "SQL string formatting",
+      "detail": "row = db.execute(f\"SELECT * FROM {table} WHERE organization_id = ? AND idempotency_key = ?\", (int(organization_id), key)).fetchone()",
+      "file": "backend/services/attendance.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
       "detail": "activities = db.execute(f\"SELECT * FROM activities WHERE {where}\", params).fetchall()",
       "file": "backend/services/capacity_buckets.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "row = db.execute(f\"SELECT * FROM {table} WHERE organization_id = ? AND idempotency_key = ?\", (organization_id, key)).fetchone()",
+      "file": "backend/services/certificates.py"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "title": "SQL string formatting",
+      "detail": "db.execute(f\"UPDATE speaker_profiles SET {assignments} WHERE id = ?\", [updates[key] for key in updates] + [profile_id])",
+      "file": "backend/services/speakers.py"
+    },
+    {
+      "severity": "medium",
+      "category": "database",
+      "title": "Prefijo de migracion duplicado",
+      "detail": "Prefijo 015 aparece mas de una vez",
+      "file": ""
     },
     {
       "severity": "low",
@@ -444,16 +654,9 @@
     },
     {
       "severity": "medium",
-      "category": "database",
-      "title": "Prefijo de migracion duplicado",
-      "detail": "Prefijo 015 aparece mas de una vez",
-      "file": ""
-    },
-    {
-      "severity": "medium",
       "category": "architecture",
       "title": "Controlador principal muy grande",
-      "detail": "server.py tiene 10453 lineas",
+      "detail": "server.py tiene 13893 lineas",
       "file": ""
     }
   ],
@@ -467,7 +670,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 9.09,
+      "duration_seconds": 9.41,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -481,7 +684,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 7.21,
+      "duration_seconds": 9.23,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -509,7 +712,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.85,
+      "duration_seconds": 0.93,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -523,7 +726,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.52,
+      "duration_seconds": 0.6,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -537,7 +740,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.54,
+      "duration_seconds": 0.52,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -551,7 +754,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.93,
+      "duration_seconds": 1.03,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -565,7 +768,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.47,
+      "duration_seconds": 0.51,
       "stdout_tail": "OK postgres live migrations=[]\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -579,7 +782,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.47,
+      "duration_seconds": 0.46,
       "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -593,8 +796,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.61,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 855, \"event_b\": 856}\n",
+      "duration_seconds": 6.19,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 1171, \"event_b\": 1172}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -607,8 +810,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.23,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 857, \"team_members\": 3}\n",
+      "duration_seconds": 5.86,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 1173, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -621,7 +824,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 7.33,
+      "duration_seconds": 10.77,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -635,7 +838,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 4.87,
+      "duration_seconds": 6.18,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -649,7 +852,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 5.15,
+      "duration_seconds": 6.22,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -663,7 +866,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 8.71,
+      "duration_seconds": 10.01,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -677,7 +880,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 9.37,
+      "duration_seconds": 10.1,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -691,7 +894,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.89,
+      "duration_seconds": 0.86,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -705,7 +908,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.67,
+      "duration_seconds": 0.64,
       "stdout_tail": "{\"name\": \"google_oauth_contract\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"authorization_url\": true, \"offline_access\": true, \"prompt_consent\": true, \"scopes_minimos\": [\"openid\", \"email\", \"profile\"], \"secret_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -719,7 +922,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.92,
+      "duration_seconds": 0.87,
       "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -733,7 +936,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.87,
+      "duration_seconds": 0.86,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -747,7 +950,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.69,
+      "duration_seconds": 0.64,
       "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -775,7 +978,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.94,
+      "duration_seconds": 6.78,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"connected_integration\": true, \"provider\": \"google\", \"organization_id\": 3, \"integration_id\": 5, \"userinfo_live\": true, \"refresh_live\": true, \"refresh_before_userinfo\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"cross_event_assignments\": 0, \"audit_connected\": true, \"audit_tested\": true, \"audit_refreshed\": true, \"audit_disconnected\": true, \"account_email_masked\": \"gui***@gmail.com\"}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -789,8 +992,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 5.43,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"12594d***f370fe\", \"job_id\": 631, \"queue_id\": 945, \"organization_id\": 1, \"integration_id\": 150, \"event_id\": 884, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 7.1,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"8bcb62***63d031\", \"job_id\": 862, \"queue_id\": 1225, \"organization_id\": 1, \"integration_id\": 235, \"event_id\": 1200, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -802,11 +1005,11 @@
         "verificar_whatsapp_multitenant_live.py"
       ],
       "required": false,
-      "status": "failed",
-      "duration_seconds": 67.39,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"failed\", \"missing_env\": [], \"checks\": {}, \"error\": \"WhatsApp debe quedar enviado, estado=pendiente, error=Meta Cloud API HTTP 401: {\\\"error\\\":{\\\"message\\\":\\\"Authentication Error\\\",\\\"code\\\":190,\\\"type\\\":\\\"OAuthException\\\",\\\"fbtrace_id\\\":\\\"AqPzQjb0lm0eis8HzPYprXr\\\"}}\"}\n",
+      "status": "passed",
+      "duration_seconds": 11.79,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***ERgA=\", \"job_id\": 863, \"queue_id\": 1226, \"organization_id\": 1, \"integration_id\": 237, \"event_id\": 1202, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"webhook\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
       "stderr_tail": "",
-      "exit_code": 1
+      "exit_code": 0
     },
     {
       "name": "webhooks_multitenant_live",
@@ -816,11 +1019,11 @@
         "verificar_webhooks_multitenant_live.py"
       ],
       "required": false,
-      "status": "failed",
-      "duration_seconds": 0.62,
-      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"omitted\", \"missing_env\": [\"WHATSAPP_WEBHOOK_PUBLIC_URL\"], \"checks\": {}}\n",
+      "status": "passed",
+      "duration_seconds": 13.19,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"public_url_masked\": \"https://includes-matrix-graduates-encouraging.trycloudflare.com/api/...\", \"meta_verification\": true, \"signature_validation\": true, \"message_id_masked\": \"wamid***0RgA=\", \"webhook_event_type\": \"sent\", \"queue_id\": 1227, \"job_id\": 864, \"organization_id\": 1, \"event_id\": 1204, \"integration_id\": 239, \"tenant_resolution\": true, \"message_state_update\": true, \"idempotency\": true, \"audit\": true, \"cross_tenant_incidents\": 0, \"invalid_signatures_accepted\": 0, \"secrets_exposed\": 0, \"source\": \"meta_webhook\"}}\n",
       "stderr_tail": "",
-      "exit_code": 1
+      "exit_code": 0
     },
     {
       "name": "backup_multitenant_live",
@@ -831,7 +1034,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.64,
+      "duration_seconds": 0.66,
       "stdout_tail": "{\"checks\": {\"backup_consistency\": true, \"database_backup\": true, \"secrets_exposed\": 0, \"storage_backup\": true}, \"mode\": \"live\", \"name\": \"backup_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -845,7 +1048,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.62,
+      "duration_seconds": 0.65,
       "stdout_tail": "{\"checks\": {\"cross_event_access\": 0, \"cross_organization_access\": 0, \"duplicate_sends\": 0, \"external_effects_post_restore\": 0, \"isolated_restore\": true, \"manifest_comparison\": true}, \"mode\": \"live\", \"name\": \"restore_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -859,7 +1062,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.91,
+      "duration_seconds": 0.86,
       "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -979,22 +1182,22 @@
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "failed",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Modo live; estado failed.",
+      "stdout_tail": "Evidencia live aprobada.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "webhook_tenant_resolution_live",
       "category": "integrations",
       "command": [],
       "required": true,
-      "status": "omitted",
+      "status": "passed",
       "duration_seconds": 0,
-      "stdout_tail": "Modo live; estado omitted. Faltan variables: WHATSAPP_WEBHOOK_PUBLIC_URL",
+      "stdout_tail": "Evidencia live aprobada.",
       "stderr_tail": "",
-      "exit_code": null
+      "exit_code": 0
     },
     {
       "name": "communications_tenant_isolation",
