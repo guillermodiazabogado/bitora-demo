@@ -1,12 +1,12 @@
-# BITORA_V4_RELEASE_NOTES
+# BITORA V4.0.0 Release Notes
 
-Estado: DRAFT - NOT RELEASED
+Fecha: 2026-08-04
 
-Fecha: 2026-07-29
+## Estado
 
-## Importante
+BITORA V4.0.0 queda publicada como cierre funcional V4 con Endurance 24h diferido a un prompt posterior.
 
-Estas notas quedan preparadas para V4, pero no se publico release estable porque BSTF release final no aprobo.
+No se declara certificacion operativa sostenida de 24 horas.
 
 ## Incluye
 
@@ -21,12 +21,37 @@ Estas notas quedan preparadas para V4, pero no se publico release estable porque
 - V4.9 Communications Automation.
 - V4.10 Analytics and Functional Closure.
 
-## Estado operativo
+## Validaciones
 
-- Safe Mode: activo.
-- Live Mode: OFF en cierre final.
-- Comunicaciones reales durante cierre final: 0.
+- Security: PASSED.
+- Multitenant isolation: PASSED.
+- Multievent isolation: PASSED.
+- Backup/Restore: PASSED.
+- Email Live: PASSED.
+- Google OAuth Live: PASSED.
+- WhatsApp Live desde BITORA: PASSED.
+- Meta WhatsApp webhook real: PASSED.
+- Firma de webhook: PASSED.
+- Tenant resolution: PASSED.
+- Auditoria: PASSED.
+- Idempotencia: PASSED.
+- Secretos expuestos: 0.
+- Comunicaciones reales no autorizadas: 0.
 
-## Bloqueo antes de publicar
+## BSTF
 
-Resolver gates live de WhatsApp/Webhooks y reejecutar BSTF release.
+- Score: 82.6/100.
+- Gates PASSED: 46.
+- Gate diferido: `endurance_24h`.
+
+## Politica operativa
+
+- Safe Mode debe permanecer ON.
+- Live Mode debe permanecer OFF salvo autorizacion humana expresa.
+- PostgreSQL es obligatorio para staging y produccion.
+- SQLite queda permitido solo para local/demo.
+- Produccion requiere credenciales, recursos, backup y autorizacion humana.
+
+## Limitacion principal
+
+`endurance_24h` queda diferido. Debe ejecutarse antes de declarar certificacion operativa sostenida.
