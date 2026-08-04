@@ -1,21 +1,24 @@
 # BITORA_RELEASE_FINAL_STATUS
 
-Estado: `READY FOR HOSTING CREDENTIALS`
+Estado: `READY FOR HOSTING APPROVAL`
 
 Fecha: 2026-08-04
 
 Rama: `deployment/v4-online`
 
-HEAD base: `5173691c24cc8d522bb51990f8a3ed96d09faa4a`
+HEAD evaluado: `4c70d4224acba79f3fc140ae1413248d165f4f59`
 
-## Estado V4
+## Estado V4 online
 
-- V4.0.0 existe como tag local/remoto historico.
-- Staging Render queda preparado por Blueprint.
-- Docker build local: PASSED.
-- PostgreSQL staging local: PASSED.
-- Health local: PASSED.
-- Readiness local: PASSED.
+- Render Blueprint: PASSED.
+- Render PostgreSQL: PASSED.
+- Render web service: PASSED.
+- URL publica: `https://bitora-staging.onrender.com`.
+- HTTPS: PASSED.
+- `/health`: PARTIAL, `backup=missing`.
+- `/ready`: PARTIAL, warning de storage persistente.
+- Login online: PASSED.
+- UI online: PASSED.
 - Safe Mode: ON.
 - Live Mode: OFF.
 - Comunicaciones reales en este sprint: 0.
@@ -24,19 +27,31 @@ HEAD base: `5173691c24cc8d522bb51990f8a3ed96d09faa4a`
 
 ## Bloqueo actual
 
-- Render authentication: PASSED.
-- Render Blueprint sync: NOT EXECUTED.
-- Render PostgreSQL live: NOT EXECUTED.
-- Render web service live: NOT EXECUTED.
+Render Free no soporta Persistent Disks. El servicio `bitora-staging` necesita disco persistente o storage externo equivalente antes de poder certificar:
 
-Motivo: faltan valores secretos de bootstrap en la pantalla de Blueprint.
+- storage persistent online;
+- backup online remoto;
+- restore online remoto;
+- restart persistence;
+- staging online final.
+
+## PR #12
+
+- Estado GitHub: Ready to merge.
+- Checks: PASSED.
+- Conflictos: 0.
+- Decision: NOT MERGED.
+
+La PR no se fusiona porque la validacion operacional remota no esta completa.
 
 ## Decision final admitida
 
-`READY FOR HOSTING CREDENTIALS`
+`READY FOR HOSTING APPROVAL`
 
 No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
 
 No se ejecuta Endurance 24h.
 
 No se despliega produccion.
+
+No se crea ni mueve tag estable.

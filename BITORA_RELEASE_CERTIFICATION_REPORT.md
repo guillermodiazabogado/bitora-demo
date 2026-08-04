@@ -87,3 +87,50 @@ No se declara release estable ni staging online certificado. En este sprint se p
 - Render Blueprint: UPDATED.
 - Render deployment: NOT EXECUTED por falta de autenticacion/permisos.
 - Endurance 24h: DEFERRED.
+
+# Render staging deployment update - 2026-08-04
+
+Estado online actual: `READY FOR HOSTING APPROVAL`
+
+El bloqueo de credenciales de bootstrap fue resuelto y el Blueprint de Render fue creado correctamente.
+
+## Evidencia remota
+
+- Rama: `deployment/v4-online`
+- HEAD: `4c70d4224acba79f3fc140ae1413248d165f4f59`
+- PR: `#12`
+- Web service: `bitora-staging`
+- PostgreSQL: `bitora-staging-postgres`
+- URL publica: `https://bitora-staging.onrender.com`
+- `/health`: responde `status=ok`, `env=staging`, `db=online`
+- `/ready`: responde `status=ready`
+- Safe Mode: ON
+- Live Mode: OFF
+- Login online: PASSED
+- UI online: PASSED
+- PR checks: PASSED
+- PR conflicts: 0
+
+## Bloqueo restante
+
+El servicio esta en Render Free y Render no permite Persistent Disks en ese plan. La evidencia remota confirma:
+
+- `/health`: `backup=missing`
+- `/ready`: warning `Storage local requiere disco persistente y backup externo`
+
+Por lo tanto no se certifican todavia:
+
+- storage persistent online;
+- backup online remoto;
+- restore online remoto;
+- restart persistence.
+
+## Decision
+
+No se mergea PR `#12`.
+
+No se declara release estable.
+
+No se ejecuta Endurance 24h.
+
+El siguiente paso requiere aprobacion de hosting para habilitar disco persistente o configurar storage externo persistente.

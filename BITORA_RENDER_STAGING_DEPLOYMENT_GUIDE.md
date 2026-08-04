@@ -1,10 +1,10 @@
 # BITORA Render Staging Deployment Guide
 
-Estado: `READY FOR HOSTING CREDENTIALS`
+Estado: `READY FOR HOSTING APPROVAL`
 
 ## Objetivo
 
-Crear `bitora-staging` en Render usando Docker y PostgreSQL real, sin activar produccion, sin ejecutar Endurance 24h y sin habilitar comunicaciones live.
+Mantener y completar `bitora-staging` en Render usando Docker y PostgreSQL real, sin activar produccion, sin ejecutar Endurance 24h y sin habilitar comunicaciones live.
 
 ## Blueprint
 
@@ -61,6 +61,44 @@ Render debe generarlas o pedirlas en dashboard. No se versionan:
 12. Esperar build y deploy.
 13. Validar `/health`.
 14. Validar `/ready`.
+
+## Estado actual Render
+
+El Blueprint ya fue creado y sincronizado.
+
+Recursos actuales:
+
+- Blueprint: `bitora-v4-staging`
+- Web service: `bitora-staging`
+- Web service ID: `srv-d9p5pn6gekts73f8u24g`
+- PostgreSQL: `bitora-staging-postgres`
+- URL publica: `https://bitora-staging.onrender.com`
+- Plan web actual: `Free`
+
+Validaciones ejecutadas:
+
+- HTTPS: PASSED
+- `/health`: PARTIAL, `backup=missing`
+- `/ready`: PARTIAL, warning de storage persistente
+- Login online: PASSED
+- UI online: PASSED
+- Safe Mode: ON
+- Live Mode: OFF
+
+## Bloqueo de disco persistente
+
+Render informa que Persistent Disks no estan disponibles en instancias Free. Para certificar staging online completo, se debe aprobar una de estas opciones:
+
+1. upgrade a un plan Render con Persistent Disk;
+2. storage externo persistente compatible;
+3. mantener el entorno como demo online no certificada.
+
+No mergear PR `#12` hasta completar:
+
+- storage persistente;
+- backup remoto;
+- restore remoto aislado;
+- restart persistence.
 
 ## Validaciones post-deploy
 
