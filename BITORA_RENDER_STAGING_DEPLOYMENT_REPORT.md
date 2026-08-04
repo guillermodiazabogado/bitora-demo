@@ -26,9 +26,9 @@ Render branch: `deployment/v4-online`
 
 Deployment commit: `c18f6838d7c2a4f1bd54c2a0988507e09dd19e8d`
 
-Deployment PR: not created
+Deployment PR: `#12`
 
-Deployment PR status: NOT CREATED
+Deployment PR status: OPEN / BLOCKED BY HOSTING CREDENTIALS
 
 Staging URL: not available
 

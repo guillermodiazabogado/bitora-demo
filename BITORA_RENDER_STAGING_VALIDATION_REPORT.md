@@ -6,6 +6,8 @@ Rama: `deployment/v4-online`
 
 Resultado: `READY FOR HOSTING CREDENTIALS`
 
+Deployment PR: `#12`
+
 ## Validacion local ejecutada
 
 | Prueba | Resultado |

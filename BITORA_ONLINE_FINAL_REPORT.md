@@ -4,6 +4,8 @@ Fecha: 2026-08-04
 
 Rama: `deployment/v4-online`
 
+Deployment PR: `#12`
+
 ## Resultado
 
 `READY FOR HOSTING CREDENTIALS`
