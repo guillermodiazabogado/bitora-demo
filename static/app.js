@@ -291,10 +291,18 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function updateProducerHomeReturn(name) {
+  const button = $("#producerHomeReturnBtn");
+  if (!button) return;
+  const show = producerHomeAllowed() && name !== "home";
+  button.classList.toggle("hidden", !show);
+}
+
 function setView(name) {
   if (name === "visualization") name = "reports";
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  updateProducerHomeReturn(name);
 }
 
 function organizeReportAndDiagnosticViews() {
@@ -455,6 +463,7 @@ function renderProducerHome() {
     const allowed = target === "home" ? producerHomeAllowed() : canSeeModule(target);
     button.classList.toggle("hidden", !allowed);
   });
+  updateProducerHomeReturn($(".view.active")?.id || "");
   if (!producerHomeAllowed()) {
     grid.innerHTML = `
       <section class="panel owner-empty">

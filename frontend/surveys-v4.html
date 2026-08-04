@@ -32,7 +32,10 @@
         <h1>Encuestas V4</h1>
         <div class="muted">Foundation de encuestas versionadas, respuestas y resultados.</div>
       </div>
-      <button id="refreshBtn" class="secondary">Actualizar</button>
+      <div class="producer-module-actions">
+        <a id="producerHomeLink" class="producer-home-return-link" href="/#home">⌂ Volver al Home</a>
+        <button id="refreshBtn" class="secondary">Actualizar</button>
+      </div>
     </header>
 
     <section>
@@ -74,6 +77,12 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
+    function updateHomeLink() {
+      const eventId = $("eventId").value || new URLSearchParams(location.search).get("event_id") || "";
+      $("producerHomeLink").href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : "/#home";
+    }
+    const queryEventId = new URLSearchParams(location.search).get("event_id");
+    if (queryEventId) $("eventId").value = queryEventId;
     const json = (url, options = {}) => fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } }).then(async (r) => {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || data.code || r.statusText);
@@ -103,6 +112,8 @@
     }
     $("refreshBtn").addEventListener("click", () => loadSurveys().catch((e) => $("output").textContent = e.message));
     $("createBtn").addEventListener("click", () => createSurvey().catch((e) => $("output").textContent = e.message));
+    $("eventId").addEventListener("input", updateHomeLink);
+    updateHomeLink();
   </script>
 </body>
 </html>
