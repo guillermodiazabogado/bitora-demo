@@ -27,3 +27,15 @@ Validacion remota completa: NOT EXECUTED.
 - Comunicaciones reales no autorizadas: 0.
 - Defectos HIGH/CRITICAL: 0 en BSTF local.
 - Validacion online pendiente de staging real.
+# Render staging update - 2026-08-04
+
+Estado: `READY FOR HOSTING CREDENTIALS`
+
+- `APP_ENV=staging` exige PostgreSQL.
+- `APP_ENV=staging` exige HTTPS, login, hosts permitidos, secretos de sesion y bootstrap seguro.
+- `BITORA_SAFE_MODE=true` es obligatorio.
+- `BITORA_LIVE_MODE=false` es obligatorio.
+- Usuarios demo/PIN no se siembran en staging/production.
+- `/ready` reporta configuracion, base, migraciones, storage, safe mode y live mode sin secretos.
+- Secret scan versionable: PASSED.
+- Render no fue creado por falta de autenticacion/permisos.

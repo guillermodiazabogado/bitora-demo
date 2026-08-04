@@ -126,3 +126,16 @@ No debe declararse apto para evento real hasta ejecutar:
 - prueba de migracion SQLite -> PostgreSQL sobre copia real;
 - prueba de concurrencia critica contra PostgreSQL;
 - prueba de backup/restauracion en base aislada.
+# Render staging update - 2026-08-04
+
+Estado: `READY FOR HOSTING CREDENTIALS`
+
+Compatibilidad validada para el despliegue online:
+
+- `APP_ENV=staging` requiere `QR_DB_ENGINE=postgres`.
+- `QR_POSTGRES_DSN` o `DATABASE_URL` son obligatorios.
+- La aplicacion rechaza SQLite en staging.
+- `/ready` valida conexion y tabla `schema_migrations`.
+- Render Blueprint conecta `QR_POSTGRES_DSN` y `DATABASE_URL` desde `bitora-staging-postgres`.
+- Validacion local render-like con PostgreSQL: PASSED.
+- Validacion PostgreSQL en Render: NOT EXECUTED por falta de autenticacion Render.

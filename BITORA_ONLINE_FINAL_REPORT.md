@@ -2,27 +2,37 @@
 
 Fecha: 2026-08-04
 
+Rama: `deployment/v4-online`
+
 ## Resultado
 
 `READY FOR HOSTING CREDENTIALS`
 
 ## Completado
 
-- PR live final mergeada.
-- `develop/v4` actualizado.
-- WhatsApp Live revalidado.
-- Webhook Live revalidado.
-- BSTF release ejecutado con score 82.6.
-- Endurance 24h diferido.
-- Documentacion online base creada.
+- Blueprint Render preparado para `bitora-staging`.
+- PostgreSQL Render definido como `bitora-staging-postgres`.
+- Dockerfile creado y validado localmente.
+- `/health` y `/ready` validados en modo staging local con PostgreSQL.
+- Staging online obliga PostgreSQL y rechaza SQLite.
+- Safe Mode queda obligatorio.
+- Live Mode queda apagado.
+- Usuarios demo/PIN iniciales no se imprimen ni se siembran en staging/production.
+- Secret scan versionable ejecutado sin hallazgos reales.
 
 ## No completado
 
-- Staging publico V4 con PostgreSQL.
+- Creacion real de recursos Render.
+- URL publica `bitora-staging.onrender.com`.
 - Pruebas remotas completas.
+- Backup/restore remoto.
 - Produccion.
 - Endurance 24h.
 
+## Bloqueo
+
+No hay Render CLI, Render API token ni sesion automatizable disponible desde esta ejecucion.
+
 ## Accion siguiente
 
-Confirmar proveedor de hosting y credenciales para crear `bitora-staging` con PostgreSQL real.
+Crear o sincronizar el Blueprint en Render desde la rama `deployment/v4-online`, cargar `BITORA_ADMIN_BOOTSTRAP_USER` y `BITORA_ADMIN_BOOTSTRAP_PASSWORD`, y confirmar cualquier costo si Render solicita plan pago.

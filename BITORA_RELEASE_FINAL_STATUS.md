@@ -1,38 +1,40 @@
 # BITORA_RELEASE_FINAL_STATUS
 
-Estado: `READY FOR FINAL FIXES`
+Estado: `READY FOR HOSTING CREDENTIALS`
 
-Fecha: 2026-07-29
+Fecha: 2026-08-04
 
-Rama: `develop/v4`
+Rama: `deployment/v4-online`
 
-HEAD: `1814c945fc4a1b29149563366c28a7e03a8e0673`
+HEAD base: `5173691c24cc8d522bb51990f8a3ed96d09faa4a`
 
-## Cierre funcional V4
+## Estado V4
 
-- V4.10 PR: MERGED
-- V4.1 a V4.10: PASSED
-- Seguridad basica: PASSED
-- Aislamiento multievento: PASSED
-- Backup/restore live: PASSED
-- Health/migrate/smoke-test: PASSED
+- V4.0.0 existe como tag local/remoto historico.
+- Staging Render queda preparado por Blueprint.
+- Docker build local: PASSED.
+- PostgreSQL staging local: PASSED.
+- Health local: PASSED.
+- Readiness local: PASSED.
+- Safe Mode: ON.
+- Live Mode: OFF.
+- Comunicaciones reales en este sprint: 0.
+- Endurance 24h: DEFERRED.
+- Produccion: NOT DEPLOYED.
 
-## Bloqueo
+## Bloqueo actual
 
-BSTF release no aprobo en la corrida final de staging:
-
-- `whatsapp_multitenant_live`: FAILED
-- `webhooks_multitenant_live`: FAILED
-- `whatsapp_organization_live`: FAILED
-- `webhook_tenant_resolution_live`: OMITTED
-- `endurance_24h`: OMITTED
+- Render authentication: FAILED.
+- Render Blueprint sync: NOT EXECUTED.
+- Render PostgreSQL live: NOT EXECUTED.
+- Render web service live: NOT EXECUTED.
 
 ## Decision final admitida
 
-`READY FOR FINAL FIXES`
+`READY FOR HOSTING CREDENTIALS`
 
-No se declara `BITORA V4.0.0 STABLE RELEASED`.
+No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
 
-No se creo tag `v4.0.0`.
+No se ejecuta Endurance 24h.
 
-No se creo GitHub Release estable.
+No se despliega produccion.

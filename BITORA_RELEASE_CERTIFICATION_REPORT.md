@@ -72,3 +72,18 @@ No se crea tag estable.
 No se crea GitHub Release.
 
 Siguiente paso recomendado: corregir o reactivar la evidencia live de WhatsApp/Webhooks en staging y reejecutar BSTF release.
+# Render staging update - 2026-08-04
+
+Estado online: `READY FOR HOSTING CREDENTIALS`
+
+No se declara release estable ni staging online certificado. En este sprint se preparo la infraestructura versionable para Render:
+
+- Docker build local: PASSED.
+- PostgreSQL staging local: PASSED.
+- `/health`: PASSED local.
+- `/ready`: PASSED local.
+- Safe Mode: ON.
+- Live Mode: OFF.
+- Render Blueprint: UPDATED.
+- Render deployment: NOT EXECUTED por falta de autenticacion/permisos.
+- Endurance 24h: DEFERRED.
