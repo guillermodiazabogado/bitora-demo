@@ -2,7 +2,7 @@
   "release": {
     "name": "BITORA Supertest Framework",
     "profile": "release",
-    "started_at": "2026-07-30T00:54:24",
+    "started_at": "2026-08-04T20:44:40",
     "python": "3.12.13",
     "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
     "branch": "",
@@ -26,8 +26,8 @@
     }
   },
   "profile": "release",
-  "started_at": "2026-07-30T00:54:24",
-  "finished_at": "2026-07-30T00:56:36",
+  "started_at": "2026-08-04T20:44:40",
+  "finished_at": "2026-08-04T20:46:46",
   "findings": [
     {
       "severity": "medium",
@@ -670,7 +670,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 9.45,
+      "duration_seconds": 9.41,
       "stdout_tail": "OK: integridad BITORA punta a punta\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -684,7 +684,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 9.53,
+      "duration_seconds": 9.23,
       "stdout_tail": "OK: convivencia de modulos y flags operativos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -698,7 +698,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.92,
+      "duration_seconds": 0.84,
       "stdout_tail": "OK: email productivo validado en configuracion, cola, supresion e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -712,7 +712,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.98,
+      "duration_seconds": 0.93,
       "stdout_tail": "OK: WhatsApp productivo validado en configuracion, cola, webhooks, firma e idempotencia\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -726,7 +726,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.57,
+      "duration_seconds": 0.6,
       "stdout_tail": "OK: restauracion controlada de backup de evento\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -740,7 +740,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.55,
+      "duration_seconds": 0.52,
       "stdout_tail": "OK: storage por evento incluido en backup y restauracion\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -754,7 +754,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.09,
+      "duration_seconds": 1.03,
       "stdout_tail": "OK: Demo Live 10 automatizada validada\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -768,7 +768,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.53,
+      "duration_seconds": 0.51,
       "stdout_tail": "OK postgres live migrations=[]\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -782,7 +782,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.48,
+      "duration_seconds": 0.46,
       "stdout_tail": "OK: PostgreSQL real conectado, migrado e indexado\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -796,8 +796,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 6.53,
-      "stdout_tail": "{\"ok\": true, \"event_a\": 1082, \"event_b\": 1083}\n",
+      "duration_seconds": 6.19,
+      "stdout_tail": "{\"ok\": true, \"event_a\": 1171, \"event_b\": 1172}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -810,8 +810,8 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 5.61,
-      "stdout_tail": "{\"ok\": true, \"event_id\": 1084, \"team_members\": 3}\n",
+      "duration_seconds": 5.86,
+      "stdout_tail": "{\"ok\": true, \"event_id\": 1173, \"team_members\": 3}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -824,7 +824,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 10.57,
+      "duration_seconds": 10.77,
       "stdout_tail": "OK: seguridad basica y permisos\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -838,7 +838,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 6.42,
+      "duration_seconds": 6.18,
       "stdout_tail": "OK: datos basura controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -852,7 +852,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 6.4,
+      "duration_seconds": 6.22,
       "stdout_tail": "OK: errores humanos controlados\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -866,7 +866,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 10.84,
+      "duration_seconds": 10.01,
       "stdout_tail": "OK: concurrencia critica\nmismo_qr=1_concedido_99_rechazados ultimo_cupo=1_confirmado_99_espera dashboards=100\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -880,7 +880,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 10.8,
+      "duration_seconds": 10.1,
       "stdout_tail": "OK: aislamiento multievento 20 eventos / 1000 participantes\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -894,7 +894,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.11,
+      "duration_seconds": 0.86,
       "stdout_tail": "OK verificar_multitenant_integrations\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -908,7 +908,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.94,
+      "duration_seconds": 0.64,
       "stdout_tail": "{\"name\": \"google_oauth_contract\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"authorization_url\": true, \"offline_access\": true, \"prompt_consent\": true, \"scopes_minimos\": [\"openid\", \"email\", \"profile\"], \"secret_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -922,7 +922,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 1.0,
+      "duration_seconds": 0.87,
       "stdout_tail": "{\"name\": \"google_oauth_security\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"state_single_use\": true, \"state_expiration\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -936,7 +936,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.99,
+      "duration_seconds": 0.86,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"cross_integration_assignment_blocked\": true, \"state_context_isolated\": true, \"cross_organization_allowed\": 0, \"callbacks_misassigned\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -950,7 +950,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.78,
+      "duration_seconds": 0.64,
       "stdout_tail": "{\"name\": \"google_oauth_refresh\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"exchange_code\": true, \"refresh_token\": true, \"userinfo\": true, \"calls\": 3, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -964,7 +964,7 @@
       ],
       "required": true,
       "status": "passed",
-      "duration_seconds": 0.97,
+      "duration_seconds": 0.85,
       "stdout_tail": "{\"name\": \"google_oauth_backup_restore\", \"mode\": \"contract\", \"status\": \"passed\", \"checks\": {\"encrypted_backup_safe\": true, \"metadata_sanitized\": true, \"restore_requires_safe_reconnect_policy\": true, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -978,7 +978,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 7.29,
+      "duration_seconds": 6.78,
       "stdout_tail": "{\"name\": \"google_oauth_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"connected_integration\": true, \"provider\": \"google\", \"organization_id\": 3, \"integration_id\": 5, \"userinfo_live\": true, \"refresh_live\": true, \"refresh_before_userinfo\": true, \"token_encryption\": true, \"tokens_exposed\": 0, \"cross_event_assignments\": 0, \"audit_connected\": true, \"audit_tested\": true, \"audit_refreshed\": true, \"audit_disconnected\": true, \"account_email_masked\": \"gui***@gmail.com\"}}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -992,8 +992,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 8.65,
-      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"3bf911***fe99b2\", \"job_id\": 797, \"queue_id\": 1146, \"organization_id\": 1, \"integration_id\": 212, \"event_id\": 1111, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
+      "duration_seconds": 7.1,
+      "stdout_tail": "{\"name\": \"email_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"resend\", \"authentication\": true, \"message_id_masked\": \"8bcb62***63d031\", \"job_id\": 862, \"queue_id\": 1225, \"organization_id\": 1, \"integration_id\": 235, \"event_id\": 1200, \"safe_mode\": true, \"forced_recipient_used\": true, \"audit\": true, \"cross_emails\": 0, \"unauthorized_recipients\": 0, \"secrets_exposed\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -1006,8 +1006,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 11.42,
-      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***5QQA=\", \"job_id\": 798, \"queue_id\": 1147, \"organization_id\": 1, \"integration_id\": 214, \"event_id\": 1113, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"webhook\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
+      "duration_seconds": 11.79,
+      "stdout_tail": "{\"name\": \"whatsapp_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"provider\": \"meta\", \"authentication\": true, \"message_id_masked\": \"wamid***ERgA=\", \"job_id\": 863, \"queue_id\": 1226, \"organization_id\": 1, \"integration_id\": 237, \"event_id\": 1202, \"safe_mode\": true, \"forced_recipient_used\": true, \"receipt_confirmed\": true, \"receipt_source\": \"webhook\", \"audit\": true, \"cross_messages\": 0, \"unauthorized_recipients\": 0, \"tokens_exposed\": 0, \"duplicates_by_bitora\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -1020,8 +1020,8 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 12.93,
-      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"public_url_masked\": \"https://includes-matrix-graduates-encouraging.trycloudflare.com/api/...\", \"meta_verification\": true, \"signature_validation\": true, \"message_id_masked\": \"wamid***xRAA=\", \"webhook_event_type\": \"sent\", \"queue_id\": 1148, \"job_id\": 799, \"organization_id\": 1, \"event_id\": 1115, \"integration_id\": 216, \"tenant_resolution\": true, \"message_state_update\": true, \"idempotency\": true, \"audit\": true, \"cross_tenant_incidents\": 0, \"invalid_signatures_accepted\": 0, \"secrets_exposed\": 0, \"source\": \"meta_webhook\"}}\n",
+      "duration_seconds": 13.19,
+      "stdout_tail": "{\"name\": \"webhooks_multitenant_live\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"public_url_masked\": \"https://includes-matrix-graduates-encouraging.trycloudflare.com/api/...\", \"meta_verification\": true, \"signature_validation\": true, \"message_id_masked\": \"wamid***0RgA=\", \"webhook_event_type\": \"sent\", \"queue_id\": 1227, \"job_id\": 864, \"organization_id\": 1, \"event_id\": 1204, \"integration_id\": 239, \"tenant_resolution\": true, \"message_state_update\": true, \"idempotency\": true, \"audit\": true, \"cross_tenant_incidents\": 0, \"invalid_signatures_accepted\": 0, \"secrets_exposed\": 0, \"source\": \"meta_webhook\"}}\n",
       "stderr_tail": "",
       "exit_code": 0
     },
@@ -1034,7 +1034,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.73,
+      "duration_seconds": 0.66,
       "stdout_tail": "{\"checks\": {\"backup_consistency\": true, \"database_backup\": true, \"secrets_exposed\": 0, \"storage_backup\": true}, \"mode\": \"live\", \"name\": \"backup_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -1048,7 +1048,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 0.77,
+      "duration_seconds": 0.65,
       "stdout_tail": "{\"checks\": {\"cross_event_access\": 0, \"cross_organization_access\": 0, \"duplicate_sends\": 0, \"external_effects_post_restore\": 0, \"isolated_restore\": true, \"manifest_comparison\": true}, \"mode\": \"live\", \"name\": \"restore_multitenant_live\", \"run_id\": \"BACKUP-RESTORE-LIVE-20260729-230545\", \"status\": \"passed\"}\n",
       "stderr_tail": "",
       "exit_code": 0
@@ -1062,7 +1062,7 @@
       ],
       "required": false,
       "status": "passed",
-      "duration_seconds": 1.0,
+      "duration_seconds": 0.86,
       "stdout_tail": "{\"name\": \"integrations_disaster_recovery\", \"mode\": \"live\", \"status\": \"passed\", \"missing_env\": [], \"checks\": {\"jobs_persisted\": true, \"jobs_keep_organization\": true, \"lost_jobs\": 0, \"duplicate_messages\": 0}}\n",
       "stderr_tail": "",
       "exit_code": 0
