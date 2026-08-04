@@ -24,10 +24,12 @@ HEAD base: `5173691c24cc8d522bb51990f8a3ed96d09faa4a`
 
 ## Bloqueo actual
 
-- Render authentication: FAILED.
+- Render authentication: PASSED.
 - Render Blueprint sync: NOT EXECUTED.
 - Render PostgreSQL live: NOT EXECUTED.
 - Render web service live: NOT EXECUTED.
+
+Motivo: faltan valores secretos de bootstrap en la pantalla de Blueprint.
 
 ## Decision final admitida
 

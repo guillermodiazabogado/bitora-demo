@@ -23,14 +23,14 @@ Resultado: `READY FOR HOSTING CREDENTIALS`
 
 | Prueba | Resultado | Motivo |
 | --- | --- | --- |
-| Render authentication | FAILED | No hay CLI/API token/sesion automatizable disponible |
-| Render Blueprint sync | NOT EXECUTED | Bloqueado por autenticacion |
-| Render PostgreSQL live | NOT EXECUTED | Bloqueado por autenticacion |
-| Render web service | NOT EXECUTED | Bloqueado por autenticacion |
+| Render authentication | PASSED | Dashboard autenticado |
+| Render Blueprint sync | NOT EXECUTED | Bloqueado por `BITORA_ADMIN_BOOTSTRAP_USER` y `BITORA_ADMIN_BOOTSTRAP_PASSWORD` |
+| Render PostgreSQL live | NOT EXECUTED | No se crearon recursos sin secretos de bootstrap |
+| Render web service | NOT EXECUTED | No se crearon recursos sin secretos de bootstrap |
 | HTTPS remoto | NOT EXECUTED | No hay URL staging creada |
 | Smoke remoto | NOT EXECUTED | No hay URL staging creada |
 | Backup/restore remoto | NOT EXECUTED | No hay staging remoto creado |
 
 ## Resultado tecnico
 
-El codigo y la configuracion versionable estan listos para crear el entorno. El bloqueo restante es externo: acceso/permisos de Render y posible aprobacion de plan si Render no permite PostgreSQL gratuito.
+El codigo y la configuracion versionable estan listos para crear el entorno. El bloqueo restante es externo: cargar usuario y password bootstrap en Render y confirmar cualquier plan/costo si Render lo solicita.

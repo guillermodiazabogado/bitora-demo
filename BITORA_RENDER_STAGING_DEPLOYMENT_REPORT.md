@@ -8,9 +8,9 @@ Initial develop/v4 reference: `5173691c24cc8d522bb51990f8a3ed96d09faa4a`
 
 GitHub authentication: PARTIAL
 
-Render authentication: FAILED
+Render authentication: PASSED
 
-Render Blueprint: UPDATED
+Render Blueprint: UPDATED, pending secret values
 
 Hosting provider: Render
 
@@ -24,7 +24,7 @@ Render web service name: bitora-staging / not available
 
 Render branch: `deployment/v4-online`
 
-Deployment commit: not created yet
+Deployment commit: `c18f6838d7c2a4f1bd54c2a0988507e09dd19e8d`
 
 Deployment PR: not created
 
@@ -91,5 +91,10 @@ Real personal data: 0
 Endurance 24h: DEFERRED TO SEPARATE POST-ONLINE PROMPT
 
 Production: NOT DEPLOYED IN THIS EXECUTION
+
+Blocking credential fields:
+
+- `BITORA_ADMIN_BOOTSTRAP_USER`
+- `BITORA_ADMIN_BOOTSTRAP_PASSWORD`
 
 Final state: `READY FOR HOSTING CREDENTIALS`

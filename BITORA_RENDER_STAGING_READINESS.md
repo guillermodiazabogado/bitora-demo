@@ -10,7 +10,7 @@ Estado: `READY FOR HOSTING CREDENTIALS`
 
 ## Resumen
 
-BITORA quedo preparado para desplegar un staging online V4 en Render con Docker y PostgreSQL real. No se desplego en Render porque esta sesion no tiene Render CLI, Render API token ni una sesion de dashboard utilizable desde automatizacion.
+BITORA quedo preparado para desplegar un staging online V4 en Render con Docker y PostgreSQL real. Render Dashboard esta autenticado y el Blueprint correcto fue abierto desde la rama `deployment/v4-online`, pero no se desplego porque Render requiere cargar los secretos de bootstrap antes de crear los recursos.
 
 ## Preparado
 
@@ -32,7 +32,7 @@ BITORA quedo preparado para desplegar un staging online V4 en Render con Docker 
 
 | Requisito | Estado |
 | --- | --- |
-| Autenticacion Render | FAILED |
+| Autenticacion Render | PASSED |
 | Creacion del Blueprint en Render | NOT EXECUTED |
 | PostgreSQL Render creado | NO |
 | Servicio web Render creado | NO |
@@ -42,7 +42,7 @@ BITORA quedo preparado para desplegar un staging online V4 en Render con Docker 
 
 ## Accion manual requerida
 
-Entrar a Render, crear o sincronizar un Blueprint desde el repositorio `guillermodiazabogado/bitora-demo`, rama `deployment/v4-online`, archivo `render.yaml`, y cargar los valores secretos marcados con `sync: false`:
+Completar en la pantalla abierta de Render los valores secretos marcados con `sync: false`:
 
 - `BITORA_ADMIN_BOOTSTRAP_USER`
 - `BITORA_ADMIN_BOOTSTRAP_PASSWORD`

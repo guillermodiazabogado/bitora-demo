@@ -31,8 +31,8 @@ Rama: `deployment/v4-online`
 
 ## Bloqueo
 
-No hay Render CLI, Render API token ni sesion automatizable disponible desde esta ejecucion.
+Render Dashboard esta autenticado y el Blueprint correcto fue abierto desde la rama `deployment/v4-online`. El despliegue no se ejecuto porque Render exige completar `BITORA_ADMIN_BOOTSTRAP_USER` y `BITORA_ADMIN_BOOTSTRAP_PASSWORD` antes de crear `bitora-staging-postgres` y `bitora-staging`.
 
 ## Accion siguiente
 
-Crear o sincronizar el Blueprint en Render desde la rama `deployment/v4-online`, cargar `BITORA_ADMIN_BOOTSTRAP_USER` y `BITORA_ADMIN_BOOTSTRAP_PASSWORD`, y confirmar cualquier costo si Render solicita plan pago.
+Cargar `BITORA_ADMIN_BOOTSTRAP_USER` y `BITORA_ADMIN_BOOTSTRAP_PASSWORD` en la pantalla abierta de Render, y confirmar cualquier costo si Render solicita plan pago.
