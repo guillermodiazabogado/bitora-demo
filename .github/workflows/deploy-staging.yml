@@ -1,0 +1,15 @@
+name: BITORA Render Staging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  instructions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deployment gate
+        run: |
+          echo "Render deployment is managed by render.yaml on branch deployment/v4-online."
+          echo "Create/sync the Render Blueprint manually with staging secrets in the Render dashboard."
+          echo "Do not store secrets in GitHub Actions YAML."
