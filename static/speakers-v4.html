@@ -8,7 +8,10 @@
 </head>
 <body>
   <main class="container">
-    <h1>Disertantes</h1>
+    <div class="producer-module-header">
+      <h1>Disertantes</h1>
+      <a id="producerHomeLink" class="producer-home-return-link" href="/#home">⌂ Volver al Home</a>
+    </div>
     <section class="panel">
       <label>Evento <input id="eventId" type="number" min="1"></label>
       <button id="loadBtn">Cargar</button>
@@ -22,6 +25,12 @@
   <script>
     const eventInput = document.getElementById('eventId');
     const list = document.getElementById('speakers');
+    const queryEventId = new URLSearchParams(location.search).get('event_id');
+    if (queryEventId) eventInput.value = queryEventId;
+    function updateHomeLink() {
+      const eventId = eventInput.value || new URLSearchParams(location.search).get('event_id') || '';
+      document.getElementById('producerHomeLink').href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : '/#home';
+    }
     async function loadSpeakers() {
       const eventId = Number(eventInput.value || 0);
       if (!eventId) return;
@@ -35,6 +44,8 @@
         </article>
       `).join('') || '<p>Sin disertantes.</p>';
     }
+    eventInput.addEventListener('input', updateHomeLink);
+    updateHomeLink();
     document.getElementById('loadBtn').addEventListener('click', loadSpeakers);
     document.getElementById('createBtn').addEventListener('click', async () => {
       const eventId = Number(eventInput.value || 0);

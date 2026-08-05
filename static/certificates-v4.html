@@ -23,7 +23,10 @@
 </head>
 <body>
 <main>
-  <h1>BITORA V4.3 Certificados</h1>
+  <div class="producer-module-header">
+    <h1>BITORA V4.3 Certificados</h1>
+    <a id="producerHomeLink" class="producer-home-return-link" href="/#home">⌂ Volver al Home</a>
+  </div>
   <div class="toolbar">
     <label>Evento<input id="eventId" type="number" min="1"></label>
     <label>Participante<input id="participantId" type="number" min="1"></label>
@@ -68,6 +71,12 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const out = $("out");
+function updateHomeLink() {
+  const eventId = $("eventId").value || new URLSearchParams(location.search).get("event_id") || "";
+  $("producerHomeLink").href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : "/#home";
+}
+const queryEventId = new URLSearchParams(location.search).get("event_id");
+if (queryEventId) $("eventId").value = queryEventId;
 const request = async (path, payload) => {
   const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const data = await response.json().catch(() => ({}));
@@ -90,6 +99,8 @@ $("load").onclick = async () => {
   ]);
   out.textContent = JSON.stringify({ types, templates, certificates }, null, 2);
 };
+$("eventId").addEventListener("input", updateHomeLink);
+updateHomeLink();
 $("createType").onclick = () => request("/api/certificate-types", { ...eventPayload(), code: $("typeCode").value, name: $("typeName").value, kind: "ATTENDANCE" });
 $("createTemplate").onclick = () => request("/api/certificate-templates", { ...eventPayload(), certificate_type_id: Number($("typeId").value), name: $("templateName").value });
 $("createVersion").onclick = () => request(`/api/certificate-templates/${$("templateId").value}/versions`, { ...eventPayload(), content_schema: JSON.parse($("templateBody").value) });

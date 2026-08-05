@@ -17,8 +17,10 @@
       <select id="currentUserSelect"></select>
     </label>
     <button id="logoutBtn" class="ghost" type="button">Salir</button>
+    <button id="producerHomeReturnBtn" class="producer-home-return hidden" type="button" data-view-target="home" aria-label="Volver al Home">⌂ Volver al Home</button>
     <nav>
       <button data-view="owner" id="ownerNav">Mis eventos</button>
+      <button data-view="home" id="homeNav">Inicio</button>
       <button data-view="dashboard" class="active">Panel</button>
       <button data-view="register">Inscribir</button>
       <button data-view="reception">Recepcion</button>
@@ -46,6 +48,49 @@
         </div>
       </div>
       <div id="ownerDashboard" class="owner-dashboard"></div>
+    </section>
+
+    <section id="home" class="view">
+      <div class="producer-home-shell">
+        <aside class="producer-home-side">
+          <strong class="producer-home-brand">BITORA</strong>
+          <button type="button" class="producer-home-side-link active" data-view-target="home">Inicio</button>
+          <div class="producer-home-side-group">
+            <span>Accesos rapidos</span>
+            <button type="button" class="producer-home-side-link" data-view-target="register">Buscar participante</button>
+            <button type="button" class="producer-home-side-link" data-view-target="access">Escanear QR</button>
+            <button type="button" class="producer-home-side-link" data-view-target="configure">Crear acreditacion</button>
+          </div>
+          <div class="producer-home-active-event">
+            <span>Evento activo</span>
+            <strong id="producerHomeSideEvent">Sin evento activo</strong>
+            <small id="producerHomeSideDate">Selecciona un evento</small>
+          </div>
+        </aside>
+        <div class="producer-home-main">
+          <div class="producer-home-toolbar">
+            <label>
+              <span>Evento activo</span>
+              <select id="producerHomeEventSelect"></select>
+            </label>
+            <button type="button" class="ghost" id="producerHomeRefreshBtn">Actualizar</button>
+          </div>
+          <div class="producer-home-heading">
+            <div>
+              <h1>Bienvenido, Productor</h1>
+              <p>Selecciona un modulo para comenzar a gestionar tu evento.</p>
+            </div>
+            <span id="producerHomeRoleBadge" class="producer-home-role">Productor</span>
+          </div>
+          <div id="producerHomeGrid" class="producer-module-grid"></div>
+          <div class="producer-home-status">
+            <div><strong>Modo Seguro</strong><span>Activo</span></div>
+            <div><strong>Envios en vivo</strong><span>Desactivado</span></div>
+            <div><strong>Entorno</strong><span id="producerHomeEnv">Staging</span></div>
+            <div><strong>Ultima actualizacion</strong><span id="producerHomeUpdated">-</span></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="dashboard" class="view active">

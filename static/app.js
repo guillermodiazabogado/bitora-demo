@@ -27,6 +27,7 @@ const state = {
   visualizationLayouts: [],
   demoReal: null,
   eventRestore: null,
+  appConfig: null,
   currentUser: "Admin",
   eventId: null,
   cameraStream: null,
@@ -37,6 +38,7 @@ const MODULE_LABELS = {
   owner: "Mis eventos",
   organizations: "Organizaciones",
   dashboard: "Panel",
+  home: "Inicio",
   register: "Inscribir",
   reception: "Recepcion",
   agenda: "Agenda",
@@ -45,6 +47,13 @@ const MODULE_LABELS = {
   users: "Usuarios y Permisos",
   reports: "Reportes",
   communications: "Comunicaciones",
+  certificates: "Certificados",
+  surveys: "Encuestas",
+  speakers: "Speakers",
+  zones: "Zonas",
+  history: "Historial",
+  operations: "Operations Center",
+  analytics: "Analytics",
   audit: "Auditoria",
   diagnostics: "Diagnostico Tecnico",
   simulator: "Simulador Vivo",
@@ -114,6 +123,130 @@ const ACTION_LABELS = {
   "communications.send_test": "Comunicaciones: envio de prueba",
 };
 
+const PRODUCER_HOME_MODULES = [
+  {
+    key: "dashboard",
+    title: "Panel de Control",
+    description: "Resumen general del evento, indicadores clave y actividad en tiempo real.",
+    icon: "PC",
+    tone: "purple",
+    view: "dashboard",
+    metric: () => `${Number(currentEvent()?.checked_in_count || 0)} acreditados`,
+  },
+  {
+    key: "register",
+    title: "Inscripciones",
+    description: "Gestion de participantes, estados de inscripcion y datos de registro.",
+    icon: "IN",
+    tone: "green",
+    view: "register",
+    feature: "registration",
+    metric: () => `${Number(currentEvent()?.accreditation_count || 0)} inscriptos`,
+  },
+  {
+    key: "reception",
+    title: "Recepcion",
+    description: "Acreditacion de participantes y entrega de credenciales.",
+    icon: "RC",
+    tone: "blue",
+    view: "reception",
+    feature: "reception",
+    metric: () => `${state.accreditations.filter((row) => row.status === "checked_in").length} acreditados`,
+  },
+  {
+    key: "access",
+    title: "Acceso",
+    description: "Control de acceso con QR, validacion y monitoreo en tiempo real.",
+    icon: "QR",
+    tone: "teal",
+    view: "access",
+    feature: "access",
+    metric: () => "En vivo",
+  },
+  {
+    key: "attendance",
+    title: "Asistencia",
+    description: "Control de asistencia a actividades y sesiones del evento.",
+    icon: "AS",
+    tone: "orange",
+    route: "/attendance-closure.html",
+    action: "attendance.read",
+    feature: "agenda",
+    metric: () => "Control activo",
+  },
+  {
+    key: "agenda",
+    title: "Actividades",
+    description: "Gestion de actividades, salas, horarios y cupos disponibles.",
+    icon: "AG",
+    tone: "indigo",
+    view: "agenda",
+    feature: "agenda",
+    metric: () => `${state.activities.length} actividades`,
+  },
+  {
+    key: "speakers",
+    title: "Speakers",
+    description: "Administracion de expositores y su participacion en el evento.",
+    icon: "SP",
+    tone: "yellow",
+    route: "/speakers-v4.html",
+    permissionModule: "speakers",
+    metric: () => "Modulo habilitado",
+  },
+  {
+    key: "certificates",
+    title: "Certificados",
+    description: "Generacion y gestion de certificados para participantes.",
+    icon: "CE",
+    tone: "cyan",
+    route: "/certificates-v4.html",
+    permissionModule: "certificates",
+    metric: () => "Elegibilidad",
+  },
+  {
+    key: "surveys",
+    title: "Encuestas",
+    description: "Creacion y analisis de encuestas de satisfaccion.",
+    icon: "EN",
+    tone: "pink",
+    route: "/surveys-v4.html",
+    permissionModule: "surveys",
+    metric: () => "Modulo habilitado",
+  },
+  {
+    key: "communications",
+    title: "Comunicaciones",
+    description: "Envio de comunicaciones y campanas a participantes.",
+    icon: "CO",
+    tone: "red",
+    view: "communications",
+    permissionModule: "communications",
+    metric: () => "Safe Mode",
+  },
+  {
+    key: "operations",
+    title: "Operations Center",
+    description: "Monitoreo avanzado del evento y gestion operativa.",
+    icon: "OP",
+    tone: "mint",
+    route: "/operations-center-v4.html",
+    action: "operations_center.read",
+    metric: () => "Todo operativo",
+  },
+  {
+    key: "analytics",
+    title: "Analytics",
+    description: "Reportes, metricas y analisis del desempeno del evento.",
+    icon: "AN",
+    tone: "blue",
+    route: "/analytics-v4.html",
+    action: "analytics.read",
+    fallbackView: "reports",
+    metric: () => "Ver reportes",
+  },
+];
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -132,6 +265,7 @@ function setHref(selector, href) {
 }
 
 function applyAppConfig(config) {
+  state.appConfig = config || {};
   if (!config?.demo || document.querySelector(".demo-ribbon")) return;
   const ribbon = document.createElement("div");
   ribbon.className = "demo-ribbon";
@@ -157,10 +291,18 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function updateProducerHomeReturn(name) {
+  const button = $("#producerHomeReturnBtn");
+  if (!button) return;
+  const show = producerHomeAllowed() && name !== "home";
+  button.classList.toggle("hidden", !show);
+}
+
 function setView(name) {
   if (name === "visualization") name = "reports";
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  updateProducerHomeReturn(name);
 }
 
 function organizeReportAndDiagnosticViews() {
@@ -202,7 +344,7 @@ function eventOptionsHtml() {
 }
 
 function syncEventSelectors() {
-  ["eventSelect", "usersEventSelect"].forEach((id) => {
+  ["eventSelect", "usersEventSelect", "producerHomeEventSelect"].forEach((id) => {
     const select = $(`#${id}`);
     if (!select) return;
     if (select.options.length !== state.events.length) {
@@ -249,12 +391,121 @@ function canDo(action) {
   return permissionsFor().actions.includes(action);
 }
 
+function producerHomeAllowed() {
+  return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
+}
+
+function moduleFeatureEnabled(module) {
+  if (!module.feature) return true;
+  const projectModules = currentProjectModules();
+  if (module.feature === "agenda") return Boolean(projectModules.agenda && eventFeature("activities_enabled", true));
+  return Boolean(projectModules[module.feature]);
+}
+
+function producerModuleAllowed(module) {
+  if (!moduleFeatureEnabled(module)) return false;
+  if (module.permissionModule) return canSeeModule(module.permissionModule);
+  if (module.action) return canDo(module.action);
+  if (module.view) return canSeeModule(module.view);
+  return false;
+}
+
+function producerModuleUrl(module) {
+  if (module.view) return `#${module.view}`;
+  if (module.route) {
+    const separator = module.route.includes("?") ? "&" : "?";
+    return state.eventId ? `${module.route}${separator}event_id=${encodeURIComponent(state.eventId)}` : module.route;
+  }
+  return "#home";
+}
+
+function openProducerModule(moduleKey) {
+  const module = PRODUCER_HOME_MODULES.find((item) => item.key === moduleKey);
+  if (!module || !producerModuleAllowed(module)) return;
+  if (module.view) {
+    setView(module.view);
+    history.replaceState(null, "", module.view === "dashboard" ? `${location.pathname}${location.search}` : `#${module.view}`);
+    if (module.view === "reports") loadVisualization();
+    return;
+  }
+  location.href = producerModuleUrl(module);
+}
+
+function syncProducerHomeEventSelect() {
+  const select = $("#producerHomeEventSelect");
+  if (!select) return;
+  if (select.options.length !== state.events.length) {
+    select.innerHTML = eventOptionsHtml();
+  }
+  select.value = String(state.eventId || "");
+}
+
+function formatHomeDate(value) {
+  if (!value) return "Fecha sin definir";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function renderProducerHome() {
+  const grid = $("#producerHomeGrid");
+  if (!grid) return;
+  const event = currentEvent();
+  syncProducerHomeEventSelect();
+  $("#homeNav")?.classList.toggle("hidden", !producerHomeAllowed());
+  $("#producerHomeSideEvent").textContent = event?.name || "Sin evento activo";
+  $("#producerHomeSideDate").textContent = event ? `${formatHomeDate(event.starts_at)} - ${formatHomeDate(event.ends_at)}` : "Selecciona un evento";
+  $("#producerHomeRoleBadge").textContent = effectiveRole();
+  $("#producerHomeEnv").textContent = state.appConfig?.env || "Staging";
+  $("#producerHomeUpdated").textContent = new Date().toLocaleString("es-AR");
+  $$(".producer-home-side-link[data-view-target]").forEach((button) => {
+    const target = button.dataset.viewTarget;
+    const allowed = target === "home" ? producerHomeAllowed() : canSeeModule(target);
+    button.classList.toggle("hidden", !allowed);
+  });
+  updateProducerHomeReturn($(".view.active")?.id || "");
+  if (!producerHomeAllowed()) {
+    grid.innerHTML = `
+      <section class="panel owner-empty">
+        <h2>Home no disponible</h2>
+        <p>Selecciona un evento activo con permiso de panel para ver los modulos operativos.</p>
+      </section>
+    `;
+    return;
+  }
+  const modules = PRODUCER_HOME_MODULES.filter(producerModuleAllowed);
+  if (!modules.length) {
+    grid.innerHTML = `
+      <section class="panel owner-empty">
+        <h2>Sin modulos habilitados</h2>
+        <p>Este usuario no tiene modulos operativos disponibles para el evento activo.</p>
+      </section>
+    `;
+    return;
+  }
+  grid.innerHTML = modules.map((module) => `
+    <button type="button" class="producer-module-card" data-module="${module.key}" aria-label="Abrir ${escapeHtml(module.title)}">
+      <span class="producer-module-icon ${module.tone}">${escapeHtml(module.icon)}</span>
+      <span class="producer-module-copy">
+        <strong>${escapeHtml(module.title)}</strong>
+        <small>${escapeHtml(module.description)}</small>
+        <em>${escapeHtml(module.metric ? module.metric() : "Modulo habilitado")}</em>
+      </span>
+      <span class="producer-module-arrow">-></span>
+    </button>
+  `).join("");
+  grid.querySelectorAll("[data-module]").forEach((button) => {
+    button.addEventListener("click", () => openProducerModule(button.dataset.module));
+  });
+}
+
 async function loadPermissions() {
   if (!state.authUser) return;
   const suffix = state.eventId ? `?event_id=${state.eventId}` : "";
   state.permissions = await api(`/api/permissions${suffix}`);
   renderPermissionsMatrix();
   renderCurrentPermissionsSummary();
+  renderProducerHome();
 }
 
 function renderPermissionsMatrix() {
@@ -771,7 +1022,7 @@ function renderFeatureVisibility() {
   const waitlistOn = eventFeature("waitlist_enabled", false);
   $$("nav button[data-view]").forEach((button) => {
     const view = button.dataset.view;
-    button.classList.toggle("hidden", !canSeeModule(view));
+    button.classList.toggle("hidden", view === "home" ? !producerHomeAllowed() : !canSeeModule(view));
   });
   document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration || !canSeeModule("register"));
   document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception || !canSeeModule("reception"));
@@ -787,14 +1038,16 @@ function renderFeatureVisibility() {
   $("#dashboard .layout")?.classList.toggle("ticketing-layout", modules.ticketing);
   const activeView = $(".view.active")?.id;
   if (
-    !canSeeModule(activeView)
+    (activeView === "home" && !producerHomeAllowed())
+    || (activeView !== "home" && !canSeeModule(activeView))
     || (activeView === "register" && !modules.registration)
     || (activeView === "reception" && !modules.reception)
     || (activeView === "agenda" && !modules.agenda)
     || (activeView === "access" && !modules.access)
   ) {
-    setView(canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard");
+    setView(producerHomeAllowed() ? "home" : canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard");
   }
+  renderProducerHome();
 }
 
 function updateControlRoomLink() {
@@ -842,6 +1095,7 @@ function updateMetrics() {
   renderFeatureVisibility();
   renderLandingConfig();
   renderWaitingRoomConfig();
+  renderProducerHome();
 }
 
 function eventStatusLabel(status) {
@@ -2787,7 +3041,11 @@ function stopCameraScan() {
 document.addEventListener("DOMContentLoaded", async () => {
   organizeReportAndDiagnosticViews();
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
-    if (!canSeeModule(button.dataset.view)) return;
+    if (button.dataset.view === "home") {
+      if (!producerHomeAllowed()) return;
+    } else if (!canSeeModule(button.dataset.view)) {
+      return;
+    }
     setView(button.dataset.view);
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
@@ -2797,13 +3055,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }));
   $$("[data-view-target]").forEach((button) => button.addEventListener("click", () => {
     const target = button.dataset.viewTarget;
-    if (!canSeeModule(target)) return;
+    if (target === "home") {
+      if (!producerHomeAllowed()) return;
+    } else if (!canSeeModule(target)) {
+      return;
+    }
     setView(target);
     history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
     await selectActiveEvent(event.target.value);
   });
+  $("#producerHomeEventSelect")?.addEventListener("change", async (event) => {
+    await selectActiveEvent(event.target.value);
+  });
+  $("#producerHomeRefreshBtn")?.addEventListener("click", loadEvents);
   $("#usersEventSelect")?.addEventListener("change", async (event) => {
     await selectActiveEvent(event.target.value);
   });
@@ -2885,10 +3151,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadEvents();
   let initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
   if (initialView === "visualization") initialView = "reports";
-  if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
+  if (!initialView && producerHomeAllowed() && state.authUser?.role === "Productor" && state.events.length === 1) {
+    initialView = "home";
+  } else if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
     initialView = "owner";
   }
-  if (initialView && !canSeeModule(initialView)) {
+  if (initialView === "home" && !producerHomeAllowed()) {
+    initialView = canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard";
+  } else if (initialView && initialView !== "home" && !canSeeModule(initialView)) {
     initialView = permissionsFor().modules[0] || "dashboard";
   }
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
