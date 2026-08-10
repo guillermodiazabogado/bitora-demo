@@ -3110,7 +3110,7 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
         db.execute(
             """
             INSERT OR IGNORE INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
-            VALUES (?, ?, ?, 0, 1, ?, ?)
+            VALUES (?, ?, ?, 1, 1, ?, ?)
             """,
             (name, role, generated_hash, now, now),
         )
@@ -7067,6 +7067,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "role": actor_user["role"],
                     "local": True,
                 }
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
         if not session or not event:
@@ -7089,6 +7091,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             actor_user = user_by_name(db, actor_override)
             if actor_user:
                 session = {"id": int(actor_user["id"]), "name": actor_user["name"], "role": actor_user["role"], "local": True}
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         organization = db.execute("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL", (organization_id,)).fetchone()
         if not session or not organization:
@@ -13214,7 +13218,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/users/delete":
                 session = self.effective_user()
-                actor = session.get("name") if session else data.get("actor", "Admin")
+                actor = session.get("name") if self.login_required() and session else data.get("actor", (session or {}).get("name", "Admin"))
                 user_id = int(data.get("user_id") or 0)
                 if not user_id:
                     self.send_json({"error": "Falta usuario"}, 400)

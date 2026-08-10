@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   events: [],
   types: [],
   spaces: [],
@@ -729,9 +729,9 @@ function renderDiagnosticsLogs() {
   const logs = (state.diagnostics?.logs || []).filter((row) => !filter || row.level === filter);
   $("#diagnosticsLogs").innerHTML = logs.map((row) => `
     <article class="audit-row diagnostics-log ${row.level}">
-      <strong>${row.level.toUpperCase()} Â· ${row.module}</strong>
+      <strong>${row.level.toUpperCase()} · ${row.module}</strong>
       <span>${row.message}</span>
-      <small>${row.created_at}${row.detail ? ` Â· ${row.detail}` : ""}</small>
+      <small>${row.created_at}${row.detail ? ` · ${row.detail}` : ""}</small>
     </article>
   `).join("") || `<p class="empty">Sin logs para este filtro.</p>`;
 }
@@ -749,7 +749,7 @@ async function loadDiagnostics() {
   const labels = { healthy: "Normal", warning: "Atencion", critical: "Critico" };
   $("#diagnosticsTrafficLight").className = `diagnostics-light ${data.app_status}`;
   $("#diagnosticsStatusText").textContent = labels[data.app_status] || data.app_status;
-  $("#diagnosticsMeta").textContent = `${data.meta.version} Â· ${data.meta.env} Â· ${new Date(data.meta.generated_at).toLocaleString()}`;
+  $("#diagnosticsMeta").textContent = `${data.meta.version} · ${data.meta.env} · ${new Date(data.meta.generated_at).toLocaleString()}`;
   $("#diagnosticsServices").innerHTML = Object.entries(data.services).map(([key, item]) => `
     <article class="diagnostics-service ${item.status}">
       <span class="status-dot"></span>
@@ -1263,12 +1263,12 @@ function renderLandingConfig() {
   if (event?.landing_image_data) {
     preview.classList.add("has-image");
     preview.style.backgroundImage = `linear-gradient(90deg, rgba(23, 33, 43, 0.56), rgba(23, 33, 43, 0.12)), url("${event.landing_image_data}")`;
-    preview.innerHTML = `<strong>Imagen personalizada cargada</strong><span>${event.landing_image_name || "landing"} Â· ${event.landing_image_type || "imagen"}</span>`;
+    preview.innerHTML = `<strong>Imagen personalizada cargada</strong><span>${event.landing_image_name || "landing"} · ${event.landing_image_type || "imagen"}</span>`;
     meta.textContent = `Actualizada: ${event.landing_image_updated_at || "-"}`;
   } else {
     preview.classList.remove("has-image");
     preview.style.backgroundImage = "";
-    preview.innerHTML = `<strong>Fondo BITORA por defecto</strong><span>Arena #D2B89A Â· 16:9 Â· zona segura central</span>`;
+    preview.innerHTML = `<strong>Fondo BITORA por defecto</strong><span>Arena #D2B89A · 16:9 · zona segura central</span>`;
     meta.textContent = "Sin imagen personalizada";
   }
 }
@@ -1588,7 +1588,7 @@ async function quickValidateReceptionToken() {
   const token = ($("#quickReceptionToken")?.value || "").trim();
   const box = $("#quickReceptionResult");
   if (!token) {
-    box.innerHTML = `<div class="panel danger">PegÃ¡ un token o QR para acreditar.</div>`;
+    box.innerHTML = `<div class="panel danger">Pegá un token o QR para acreditar.</div>`;
     return;
   }
   await manualCheckIn(token);
@@ -3077,8 +3077,8 @@ async function resetUserPassword(event) {
   data.generate_password = form.elements.generate_password.checked;
   const result = await api("/api/users/password-reset", { method: "POST", body: JSON.stringify(data) });
   $("#passwordResetNotice").innerHTML = result.temporary_password
-    ? `<div class="panel warning"><strong>ContraseÃ±a temporal:</strong> <code>${escapeHtml(result.temporary_password)}</code><br><small>Copiala ahora. BITORA no volvera a mostrarla.</small></div>`
-    : `<div class="panel success">ContraseÃ±a restablecida. El usuario debera cambiarla al ingresar.</div>`;
+    ? `<div class="panel warning"><strong>Contraseña temporal:</strong> <code>${escapeHtml(result.temporary_password)}</code><br><small>Copiala ahora. BITORA no volvera a mostrarla.</small></div>`
+    : `<div class="panel success">Contraseña restablecida. El usuario debera cambiarla al ingresar.</div>`;
   form.reset();
   await Promise.all([loadUsers(), loadAudit()]);
 }
@@ -3097,7 +3097,7 @@ async function changeOwnPassword(event) {
   const form = event.currentTarget;
   try {
     await api("/api/auth/change-password", { method: "POST", body: JSON.stringify(formData(form)) });
-    $("#passwordChangeNotice").innerHTML = `<div class="panel success">ContraseÃ±a actualizada.</div>`;
+    $("#passwordChangeNotice").innerHTML = `<div class="panel success">Contraseña actualizada.</div>`;
     state.authUser.must_change_password = 0;
     form.reset();
     await loadEvents();
@@ -3194,7 +3194,7 @@ async function importAccreditations(event) {
   const rows = parseCsv($("#importCsv").value);
   const resultBox = $("#importResult");
   if (!rows.length) {
-    resultBox.innerHTML = `<div class="panel danger">PegÃ¡ al menos una fila con encabezados.</div>`;
+    resultBox.innerHTML = `<div class="panel danger">Pegá al menos una fila con encabezados.</div>`;
     return;
   }
   try {
