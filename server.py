@@ -50,7 +50,7 @@ from backend.services.communications_automation import CommunicationsAutomationE
 from backend.services.speakers import SpeakerDomainError, SpeakerService
 from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
-from backend.services.demo_full import DemoFullService
+from backend.services.demo_full import DEMO_FLAGS, DemoFullService
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
@@ -11806,6 +11806,46 @@ class AppHandler(SimpleHTTPRequestHandler):
                 with DB_LOCK, connect() as db:
                     result = demo_full_service().prepare(db, actor=(session or {}).get("name") or "demo-full")
                 self.send_json(result)
+                return
+
+            event_feature_flags_match = re.fullmatch(r"/api/events/(\d+)/feature-flags", path)
+            if event_feature_flags_match:
+                event_id = int(event_feature_flags_match.group(1))
+                requested_flags = data.get("flags")
+                if not isinstance(requested_flags, list):
+                    requested_flags = DEMO_FLAGS
+                allowed_flags = set(DEMO_FLAGS)
+                flags = [str(flag).strip() for flag in requested_flags if str(flag).strip() in allowed_flags]
+                if not flags:
+                    self.send_json({"error": "No hay flags validos para habilitar"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, session = self.require_event_permission(db, event_id, "configure_event", "event.feature_flags")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    actor = (session or {}).get("name", "system")
+                    now = now_iso()
+                    for flag in flags:
+                        db.execute(
+                            """
+                            INSERT INTO feature_flags (flag_key, scope_type, scope_id, enabled, updated_by, updated_at)
+                            VALUES (?, 'event', ?, 1, ?, ?)
+                            ON CONFLICT(flag_key, scope_type, scope_id)
+                            DO UPDATE SET enabled = 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+                            """,
+                            (flag, event_id, actor, now),
+                        )
+                    audit(db, actor, "event.feature_flags_enabled", "event", event_id, {"flags": flags})
+                    payload = event_feature_flags_payload(db, event_id)
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "event_id": event_id, "feature_flags": payload})
                 return
 
             if path == "/api/jobs/cancel":
