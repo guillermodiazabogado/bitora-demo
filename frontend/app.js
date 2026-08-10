@@ -2883,15 +2883,24 @@ async function changeAccreditationStatus(id, status) {
 async function saveUser(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const data = formData(form);
-  data.actor = state.currentUser;
-  data.must_change_password = form.elements.must_change_password.checked;
-  data.active = form.elements.active.checked;
-  await api("/api/users", { method: "POST", body: JSON.stringify(data) });
-  form.reset();
-  form.elements.must_change_password.checked = true;
-  form.elements.active.checked = true;
-  await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+  const notice = $("#userNotice");
+  try {
+    const data = formData(form);
+    data.actor = state.currentUser;
+    data.must_change_password = form.elements.must_change_password.checked;
+    data.active = form.elements.active.checked;
+    const result = await api("/api/users", { method: "POST", body: JSON.stringify(data) });
+    form.reset();
+    form.elements.must_change_password.checked = true;
+    form.elements.active.checked = true;
+    if (notice) notice.innerHTML = `<div class="panel success">Usuario guardado: ${escapeHtml(result.user?.name || data.name)}</div>`;
+    const refreshes = await Promise.allSettled([loadUsers(), loadEventUsers(), loadAudit()]);
+    refreshes.forEach((refresh) => {
+      if (refresh.status === "rejected") console.warn("No se pudo refrescar usuarios despues de guardar", refresh.reason);
+    });
+  } catch (err) {
+    if (notice) notice.innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudo guardar el usuario")}</div>`;
+  }
 }
 
 async function resetUserPassword(event) {
