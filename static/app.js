@@ -398,6 +398,10 @@ function producerHomeAllowed() {
   return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
 }
 
+function producerDefaultView() {
+  return state.authUser?.role === "Productor" && producerHomeAllowed() ? "home" : "";
+}
+
 function updateProducerChrome() {
   document.body.classList.toggle("producer-mode", producerHomeAllowed());
 }
@@ -3212,8 +3216,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialView = "passwordChange";
   }
   if (initialView === "visualization") initialView = "reports";
-  if (!initialView && producerHomeAllowed() && state.authUser?.role === "Productor" && state.events.length === 1) {
-    initialView = "home";
+  if (!initialView && producerDefaultView()) {
+    initialView = producerDefaultView();
   } else if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
     initialView = "owner";
   }
