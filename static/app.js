@@ -1170,22 +1170,28 @@ function renderOwnerDashboard() {
 
 async function reloadCurrentEventData() {
   if (!state.eventId) return;
-  await Promise.all([
-    loadTypes(),
-    loadAccreditations(),
-    loadAgenda(),
-    loadAlerts(),
-    loadSystemStatus(),
-    loadNetworkInfo(),
-    loadSummary(),
-    loadMarketing(),
-    loadReadiness(),
-    loadAudit(),
-    loadCommunications(),
-    loadDemoReal(),
-    loadLogs(),
-    loadEventUsers(),
-  ]);
+  const loaders = [
+    ["types", loadTypes],
+    ["accreditations", loadAccreditations],
+    ["agenda", loadAgenda],
+    ["alerts", loadAlerts],
+    ["system_status", loadSystemStatus],
+    ["network_info", loadNetworkInfo],
+    ["summary", loadSummary],
+    ["marketing", loadMarketing],
+    ["readiness", loadReadiness],
+    ["audit", loadAudit],
+    ["communications", loadCommunications],
+    ["demo_real", loadDemoReal],
+    ["logs", loadLogs],
+    ["event_users", loadEventUsers],
+  ];
+  const results = await Promise.allSettled(loaders.map(([, loader]) => loader()));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(`No se pudo cargar ${loaders[index][0]}`, result.reason);
+    }
+  });
 }
 
 function renderLandingConfig() {
