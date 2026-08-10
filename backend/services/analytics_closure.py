@@ -68,7 +68,7 @@ METRIC_DEFINITIONS = [
     MetricDefinition("zones.denial_rate", "Tasa de denegacion de zonas", "zones", "accesos denegados / validaciones", "zone_access_validations denied", "zone_access_validations", "zone_access_validations", "on-demand", "zone", "Ocupacion exacta no se calcula sin eventos de entrada y salida confiables.", "analytics.operational.read"),
     MetricDefinition("speakers.coverage_rate", "Cobertura de speakers", "speakers", "actividades con speaker / actividades", "actividades con speaker asignado", "actividades activas", "speaker_activity_assignments,activities", "on-demand", "event", "No expone datos privados de speakers.", "analytics.read"),
     MetricDefinition("certificates.issue_rate", "Tasa de emision de certificados", "certificates", "emitidos / elegibles", "certificate_issuances activos", "certificate_eligibility elegible", "certificate_eligibility,certificate_issuances", "on-demand", "event", "Respeta reglas historicas almacenadas.", "analytics.certificates.read"),
-    MetricDefinition("surveys.response_rate", "Tasa de respuesta de encuestas", "surveys", "respuestas completas / asignaciones", "survey_response_sessions submitted", "survey_assignments", "surveys,survey_assignments,survey_response_sessions", "on-demand", "survey", "Se aplica umbral de anonimato para muestras chicas.", "analytics.surveys.read"),
+    MetricDefinition("surveys.response_rate", "Tasa de respuesta de encuestas", "surveys", "respuestas completas / participantes alcanzables", "survey_response_sessions submitted", "participantes del evento alcanzados por asignaciones abiertas", "surveys,survey_assignments,survey_response_sessions,accreditations", "on-demand", "survey", "Se aplica umbral de anonimato para muestras chicas.", "analytics.surveys.read"),
     MetricDefinition("communications.delivery_rate", "Tasa de entrega de comunicaciones", "communications", "entregadas / mensajes", "deliveries delivered/read", "mensajes creados", "communication_v4_messages,communication_v4_deliveries", "on-demand", "channel", "Safe Mode y Live Mode se reportan separados.", "analytics.communications.read"),
     MetricDefinition("operations.open_incidents", "Incidentes abiertos", "operations", "COUNT(incidents status OPEN)", "incidentes abiertos", "no aplica", "operations_center_incidents", "on-demand", "event", "No debe usarse para vigilancia personal indebida.", "analytics.operational.read"),
 ]
@@ -242,8 +242,9 @@ class AnalyticsClosureService:
         self._assert_event(db, organization_id, event_id)
         assignments = self._count(db, "survey_assignments", "event_id = ?", (event_id,)) if self._table_exists(db, "survey_assignments") else 0
         responses = self._count(db, "survey_response_sessions", "event_id = ? AND status IN ('submitted','SUBMITTED','completed')", (event_id,)) if self._table_exists(db, "survey_response_sessions") else 0
+        recipients = self._survey_recipients(db, event_id)
         visible = responses >= self.ANONYMITY_THRESHOLD
-        return self._metric_payload("surveys", event_id, {"assignments": assignments, "responses": responses if visible else None, "response_rate": self._rate(responses, assignments) if visible else None, "anonymity_threshold": self.ANONYMITY_THRESHOLD, "suppressed_small_sample": not visible and responses > 0})
+        return self._metric_payload("surveys", event_id, {"assignments": assignments, "recipients": recipients, "responses": responses if visible else None, "response_rate": self._rate(responses, recipients) if visible else None, "anonymity_threshold": self.ANONYMITY_THRESHOLD, "suppressed_small_sample": not visible and responses > 0})
 
     def communications(self, db, *, organization_id: int, event_id: int, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         self._assert_event(db, organization_id, event_id)
@@ -564,6 +565,17 @@ class AnalyticsClosureService:
         if not self._table_exists(db, table):
             return 0
         return int(db.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE {where}", params).fetchone()["c"] or 0)
+
+    def _survey_recipients(self, db, event_id: int) -> int:
+        if not self._table_exists(db, "survey_assignments"):
+            return 0
+        modes = {
+            str(row["access_mode"] or "").upper()
+            for row in db.execute("SELECT DISTINCT access_mode FROM survey_assignments WHERE event_id = ?", (event_id,)).fetchall()
+        }
+        if any(mode in ("EVENT_PARTICIPANTS", "PARTICIPANTS") for mode in modes):
+            return self._count(db, "accreditations", "event_id = ?", (event_id,))
+        return self._count(db, "survey_assignments", "event_id = ?", (event_id,))
 
     @staticmethod
     def _text(value: Any, limit: int) -> str:
