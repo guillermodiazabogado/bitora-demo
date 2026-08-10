@@ -1015,6 +1015,13 @@ def init_db() -> None:
                 name TEXT NOT NULL UNIQUE,
                 role TEXT NOT NULL,
                 pin_hash TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                full_name TEXT NOT NULL DEFAULT '',
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                last_login_at TEXT,
+                password_changed_at TEXT,
+                updated_at TEXT,
+                disabled_at TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             );
@@ -1995,9 +2002,6 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_email_suppressions_lookup
             ON email_suppressions(normalized_email, active, scope, event_id);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
-            ON email_delivery_events(provider, external_event_id)
-            WHERE external_event_id <> '';
         CREATE UNIQUE INDEX IF NOT EXISTS idx_communication_queue_idempotency
             ON communication_queue(idempotency_key)
             WHERE idempotency_key <> '';
@@ -2006,6 +2010,13 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
     event_columns = {row["name"] for row in db.execute("PRAGMA table_info(email_delivery_events)").fetchall()}
     if "external_event_id" not in event_columns:
         db.execute("ALTER TABLE email_delivery_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''")
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
+        ON email_delivery_events(provider, external_event_id)
+        WHERE external_event_id <> ''
+        """
+    )
 
 
 def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
@@ -2614,6 +2625,19 @@ def ensure_user_pin_column(db: sqlite3.Connection) -> None:
     columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
     if "pin_hash" not in columns:
         db.execute("ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''")
+    additions = {
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "full_name": "TEXT NOT NULL DEFAULT ''",
+        "must_change_password": "INTEGER NOT NULL DEFAULT 0",
+        "last_login_at": "TEXT",
+        "password_changed_at": "TEXT",
+        "updated_at": "TEXT",
+        "disabled_at": "TEXT",
+    }
+    columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
+    for column, definition in additions.items():
+        if column not in columns:
+            db.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
 
 
 def ensure_user_event_roles_schema(db: sqlite3.Connection) -> None:
@@ -3037,26 +3061,31 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
             )
         return
     defaults = [
-        ("Admin", "Super Admin", "1234"),
-        ("Productor", "Productor", "2000"),
-        ("Coordinador", "Coordinador", "3000"),
-        ("Recepcion", "Operador de recepcion", "2222"),
-        ("Acceso", "Operador de acceso", "3333"),
-        ("Visualizador", "Visualizador", "4444"),
-        ("Comunicaciones", "Comunicaciones", "5555"),
-        ("Soporte", "Soporte tecnico", "6666"),
+        ("Admin", "Super Admin"),
+        ("Productor", "Productor"),
+        ("Coordinador", "Coordinador"),
+        ("Recepcion", "Operador de recepcion"),
+        ("Acceso", "Operador de acceso"),
+        ("Visualizador", "Visualizador"),
+        ("Comunicaciones", "Comunicaciones"),
+        ("Soporte", "Soporte tecnico"),
     ]
-    for name, role, pin in defaults:
+    now = now_iso()
+    for name, role in defaults:
+        generated_hash = hash_pin(generate_temporary_password())
         db.execute(
             """
-            INSERT OR IGNORE INTO users (name, role, pin_hash, active, created_at)
-            VALUES (?, ?, ?, 1, ?)
+            INSERT OR IGNORE INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
+            VALUES (?, ?, ?, 0, 1, ?, ?)
             """,
-            (name, role, hash_pin(pin), now_iso()),
+            (name, role, generated_hash, now, now),
         )
         row = db.execute("SELECT pin_hash FROM users WHERE name = ?", (name,)).fetchone()
         if row and not row["pin_hash"]:
-            db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
+            db.execute(
+                "UPDATE users SET pin_hash = ?, must_change_password = 1, updated_at = ? WHERE name = ?",
+                (generated_hash, now, name),
+            )
 
 
 def user_by_name(db: sqlite3.Connection, name: str) -> sqlite3.Row | None:
@@ -3638,6 +3667,51 @@ def hash_pin(pin: str) -> str:
 
 def verify_pin(pin: str, stored: str) -> bool:
     return hmac.compare_digest(hash_pin(pin), stored or "")
+
+
+def sanitize_user_row(row: sqlite3.Row | dict, *, public: bool = False) -> dict:
+    data = dict(row)
+    clean = {
+        "id": int(data.get("id") or 0),
+        "name": str(data.get("name") or ""),
+        "role": str(data.get("role") or ""),
+        "active": int(data.get("active") or 0),
+    }
+    if not public:
+        clean.update({
+            "email": str(data.get("email") or ""),
+            "full_name": str(data.get("full_name") or ""),
+            "must_change_password": int(data.get("must_change_password") or 0),
+            "last_login_at": data.get("last_login_at"),
+            "password_changed_at": data.get("password_changed_at"),
+            "created_at": data.get("created_at"),
+            "updated_at": data.get("updated_at"),
+            "disabled_at": data.get("disabled_at"),
+        })
+    return clean
+
+
+def validate_password_policy(password: str) -> str | None:
+    value = str(password or "")
+    if len(value) < 10:
+        return "La contraseña debe tener al menos 10 caracteres"
+    if not re.search(r"[A-Z]", value):
+        return "La contraseña debe incluir una mayuscula"
+    if not re.search(r"[a-z]", value):
+        return "La contraseña debe incluir una minuscula"
+    if not re.search(r"\d", value):
+        return "La contraseña debe incluir un numero"
+    if not re.search(r"[^A-Za-z0-9]", value):
+        return "La contraseña debe incluir un simbolo"
+    return None
+
+
+def generate_temporary_password(length: int = 16) -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*-_"
+    while True:
+        candidate = "".join(secrets.choice(alphabet) for _ in range(length))
+        if not validate_password_policy(candidate):
+            return candidate
 
 
 def parse_local_datetime(value: str) -> datetime:
@@ -7247,6 +7321,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                 session = self.effective_user()
                 if not session and not self.login_required():
                     session = {"id": 0, "name": "Admin", "role": "Super Admin", "local": True}
+                if session and session.get("id"):
+                    with connect() as db:
+                        row = db.execute("SELECT * FROM users WHERE id = ?", (int(session["id"]),)).fetchone()
+                    if row:
+                        session = {**session, **sanitize_user_row(row)}
                 self.send_json({"authenticated": bool(session), "user": session, "config": runtime_config(self)})
                 return
 
@@ -8672,12 +8751,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/users":
+                session = self.effective_user()
                 with connect() as db:
                     ensure_default_users(db)
+                    is_admin = bool(session and session.get("role") in ADMIN_ROLES)
                     rows = db.execute(
-                        "SELECT * FROM users WHERE active = 1 ORDER BY id"
+                        "SELECT * FROM users WHERE active = 1 ORDER BY id" if not is_admin else "SELECT * FROM users ORDER BY active DESC, id"
                     ).fetchall()
-                self.send_json([dict(r) for r in rows])
+                self.send_json([sanitize_user_row(r, public=not is_admin) for r in rows])
                 return
 
             if path == "/api/event-users":
@@ -11552,18 +11633,58 @@ class AppHandler(SimpleHTTPRequestHandler):
                 pin = data.get("pin", "").strip()
                 with connect() as db:
                     user = db.execute("SELECT * FROM users WHERE name = ? AND active = 1", (name,)).fetchone()
+                    if user and verify_pin(pin, user["pin_hash"]):
+                        db.execute("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?", (now_iso(), now_iso(), int(user["id"])))
+                        audit(db, user["name"], "user.login", "user", int(user["id"]), {"role": user["role"]})
                 if not user or not verify_pin(pin, user["pin_hash"]):
                     self.send_json({"error": "Usuario o PIN incorrecto"}, 403)
                     return
                 token = secrets.token_urlsafe(32)
-                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "created_at": time.time()}
+                must_change = int(user["must_change_password"] or 0) if "must_change_password" in user.keys() else 0
+                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change, "created_at": time.time()}
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Set-Cookie", f"qr_session={token}; Path=/; HttpOnly; SameSite=Lax")
-                body = json.dumps({"ok": True, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"]}}, ensure_ascii=False).encode("utf-8")
+                body = json.dumps({"ok": True, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change}}, ensure_ascii=False).encode("utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                return
+
+            if path == "/api/auth/change-password":
+                session = self.effective_user()
+                if not session or not session.get("id"):
+                    self.send_json({"error": "No autenticado"}, 403)
+                    return
+                current_pin = str(data.get("current_pin") or "").strip()
+                new_pin = str(data.get("new_pin") or data.get("password") or "").strip()
+                confirm_pin = str(data.get("confirm_pin") or data.get("confirm_password") or "").strip()
+                if new_pin != confirm_pin:
+                    self.send_json({"error": "Las contraseñas no coinciden"}, 400)
+                    return
+                policy_error = validate_password_policy(new_pin)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
+                    return
+                with connect() as db:
+                    user = db.execute("SELECT * FROM users WHERE id = ? AND active = 1", (int(session["id"]),)).fetchone()
+                    if not user:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    must_change = int(user["must_change_password"] or 0) if "must_change_password" in user.keys() else 0
+                    if not must_change and not verify_pin(current_pin, user["pin_hash"]):
+                        self.send_json({"error": "Contraseña actual incorrecta"}, 403)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        "UPDATE users SET pin_hash = ?, must_change_password = 0, password_changed_at = ?, updated_at = ? WHERE id = ?",
+                        (hash_pin(new_pin), now, now, int(user["id"])),
+                    )
+                    audit(db, user["name"], "user.password_changed", "user", int(user["id"]), {"self_service": True})
+                token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
+                if token in AUTH_SESSIONS:
+                    AUTH_SESSIONS[token]["must_change_password"] = 0
+                self.send_json({"ok": True})
                 return
 
             if path == "/api/jobs/cancel":
@@ -12867,28 +12988,110 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/users":
-                actor = data.get("actor", "Admin")
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
                 name = data.get("name", "").strip()
                 role = data.get("role", "").strip()
+                email = str(data.get("email") or "").strip()
+                full_name = str(data.get("full_name") or "").strip()
+                password = str(data.get("pin") or data.get("password") or "").strip()
+                must_change = 1 if truthy(data.get("must_change_password", True)) else 0
+                active = 1 if truthy(data.get("active", True)) else 0
                 if not name or not role:
                     self.send_json({"error": "Falta nombre o rol"}, 400)
+                    return
+                if role not in set(PERMISSION_MATRIX):
+                    self.send_json({"error": "Rol no permitido"}, 400)
+                    return
+                if password:
+                    policy_error = validate_password_policy(password)
+                    if policy_error:
+                        self.send_json({"error": policy_error}, 400)
+                        return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        INSERT INTO users (name, role, pin_hash, email, full_name, must_change_password, active, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(name)
+                        DO UPDATE SET role = excluded.role,
+                                      pin_hash = CASE WHEN excluded.pin_hash <> '' THEN excluded.pin_hash ELSE users.pin_hash END,
+                                      email = excluded.email,
+                                      full_name = excluded.full_name,
+                                      must_change_password = CASE WHEN excluded.pin_hash <> '' THEN excluded.must_change_password ELSE users.must_change_password END,
+                                      active = excluded.active,
+                                      updated_at = excluded.updated_at,
+                                      disabled_at = CASE WHEN excluded.active = 0 THEN excluded.updated_at ELSE NULL END
+                        """,
+                        (name, role, hash_pin(password) if password else "", email, full_name, must_change, active, now, now),
+                    )
+                    row = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+                    audit(db, actor, "user.saved", "user", int(row["id"]) if row else None, {"name": name, "role": role, "active": active, "must_change_password": must_change})
+                self.send_json({"ok": True, "user": sanitize_user_row(row) if row else None})
+                return
+
+            if path == "/api/users/password-reset":
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
+                user_id = int(data.get("user_id") or 0)
+                generate = truthy(data.get("generate_password", False))
+                password = generate_temporary_password() if generate else str(data.get("pin") or data.get("password") or "").strip()
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                policy_error = validate_password_policy(password)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
                     return
                 with connect() as db:
                     if not can_actor(db, actor, ADMIN_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    now = now_iso()
                     db.execute(
-                        """
-                        INSERT INTO users (name, role, pin_hash, active, created_at)
-                        VALUES (?, ?, ?, 1, ?)
-                        ON CONFLICT(name)
-                        DO UPDATE SET role = excluded.role,
-                                      pin_hash = CASE WHEN excluded.pin_hash <> '' THEN excluded.pin_hash ELSE users.pin_hash END,
-                                      active = 1
-                        """,
-                        (name, role, hash_pin(str(data.get("pin") or "").strip()) if str(data.get("pin") or "").strip() else "", now_iso()),
+                        "UPDATE users SET pin_hash = ?, must_change_password = 1, password_changed_at = ?, updated_at = ? WHERE id = ?",
+                        (hash_pin(password), now, now, user_id),
                     )
-                    audit(db, actor, "user.saved", "user", None, {"name": name, "role": role})
+                    audit(db, actor, "user.password_reset", "user", user_id, {"name": row["name"], "must_change_password": 1})
+                response = {"ok": True}
+                if generate:
+                    response["temporary_password"] = password
+                self.send_json(response)
+                return
+
+            if path == "/api/users/status":
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
+                user_id = int(data.get("user_id") or 0)
+                active = 1 if truthy(data.get("active", True)) else 0
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                if session and int(session.get("id") or 0) == user_id and not active:
+                    self.send_json({"error": "No podes desactivar tu propio usuario"}, 409)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        "UPDATE users SET active = ?, updated_at = ?, disabled_at = ? WHERE id = ?",
+                        (active, now, now if not active else None, user_id),
+                    )
+                    audit(db, actor, "user.activated" if active else "user.deactivated", "user", user_id, {"name": row["name"]})
                 self.send_json({"ok": True})
                 return
 
@@ -13976,7 +14179,7 @@ def main() -> None:
     print(f"Base de datos: {database_label}")
     print(f"Plataforma lista en http://{host}:{port}")
     if httpd.require_login and APP_ENV not in ONLINE_ENVS:
-        print("Consola protegida con PIN. PIN inicial: Admin=1234, Recepcion=2222, Acceso=3333")
+        print("Consola protegida. Use scripts/bootstrap_test_users.py en local/staging para crear accesos temporales.")
     if AUTO_BACKUP_MINUTES > 0:
         print(f"Backup automatico cada {AUTO_BACKUP_MINUTES} min, conserva {BACKUP_KEEP_LAST} copias")
     try:
