@@ -50,6 +50,7 @@ from backend.services.communications_automation import CommunicationsAutomationE
 from backend.services.speakers import SpeakerDomainError, SpeakerService
 from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
+from backend.services.demo_full import DemoFullService
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
@@ -665,6 +666,10 @@ def verify_backup_file(path: Path) -> dict:
 
 def demo_real_service() -> DemoRealService:
     return DemoRealService(now=now_iso, make_token=make_token, hash_pin=hash_pin)
+
+
+def demo_full_service() -> DemoFullService:
+    return DemoFullService(now=now_iso, hash_pin=hash_pin, make_public_id=make_public_id, public_link=public_link)
 
 
 def now_iso() -> str:
@@ -6977,6 +6982,7 @@ def public_api_post(path: str) -> bool:
         "/api/auth/login",
         "/api/auth/logout",
         "/api/admin/bootstrap-reset",
+        "/api/admin/demo-full/prepare",
         "/api/portal/reserve",
         "/api/portal/reservations/status",
         "/api/portal/preferences",
@@ -11780,6 +11786,22 @@ class AppHandler(SimpleHTTPRequestHandler):
                     )
                     audit(db, "bootstrap", "user.bootstrap_admin_reset_endpoint", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
                 self.send_json({"ok": True, "user": bootstrap_user, "must_change_password": True})
+                return
+
+            if path == "/api/admin/demo-full/prepare":
+                if APP_ENV != "staging":
+                    self.send_json({"error": "Operacion disponible solo en staging"}, 403)
+                    return
+                session = self.effective_user()
+                expected_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+                provided_token = str(data.get("reset_token") or "").strip()
+                token_ok = bool(expected_token and provided_token and hmac.compare_digest(expected_token, provided_token))
+                if not token_ok and (not session or session.get("role") not in ADMIN_ROLES):
+                    self.send_json({"error": "Solo administradores pueden preparar la demo"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    result = demo_full_service().prepare(db, actor=(session or {}).get("name") or "demo-full")
+                self.send_json(result)
                 return
 
             if path == "/api/jobs/cancel":
