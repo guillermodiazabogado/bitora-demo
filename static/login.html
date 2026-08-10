@@ -47,7 +47,10 @@
         return;
       }
       const users = await api("/api/users");
-      $("#loginUser").innerHTML = users.map((row) => `<option value="${row.name}">${row.name} - ${row.role}</option>`).join("");
+      $("#loginUser").innerHTML = [
+        '<option value="" selected disabled>Seleccioná usuario</option>',
+        ...users.map((row) => `<option value="${row.name}">${row.name} - ${row.role}</option>`),
+      ].join("");
     }
 
     $("#loginForm").addEventListener("submit", async (event) => {

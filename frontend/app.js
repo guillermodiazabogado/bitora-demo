@@ -395,6 +395,10 @@ function producerHomeAllowed() {
   return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
 }
 
+function updateProducerChrome() {
+  document.body.classList.toggle("producer-mode", producerHomeAllowed());
+}
+
 function moduleFeatureEnabled(module) {
   if (!module.feature) return true;
   const projectModules = currentProjectModules();
@@ -1016,6 +1020,7 @@ function eventFeature(name, fallback = true) {
 }
 
 function renderFeatureVisibility() {
+  updateProducerChrome();
   const modules = currentProjectModules();
   const activitiesOn = eventFeature("activities_enabled", true);
   const capacityOn = eventFeature("capacity_control_enabled", true);

@@ -18,6 +18,8 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     frontend_index = read("frontend/index.html")
     static_index = read("static/index.html")
+    frontend_login = read("frontend/login.html")
+    static_login = read("static/login.html")
     frontend_app = read("frontend/app.js")
     static_app = read("static/app.js")
     frontend_css = read("frontend/styles.css")
@@ -34,8 +36,12 @@ def main() -> None:
     server = read("server.py")
 
     require(frontend_index == static_index, "frontend/static index.html no estan sincronizados")
+    require(frontend_login == static_login, "frontend/static login.html no estan sincronizados")
     require(frontend_app == static_app, "frontend/static app.js no estan sincronizados")
     require(frontend_css == static_css, "frontend/static styles.css no estan sincronizados")
+
+    require('value="" selected disabled' in frontend_login, "El login debe iniciar con usuario vacio")
+    require("Seleccioná usuario" in frontend_login, "El login debe pedir seleccion manual de usuario")
 
     require('data-view="home"' in frontend_index, "Falta boton Inicio")
     require('id="producerHomeReturnBtn"' in frontend_index, "Falta boton Volver al Home en SPA")
@@ -67,8 +73,11 @@ def main() -> None:
     require("canSeeModule(module.permissionModule)" in frontend_app, "Falta filtro por modulo permitido")
     require("canDo(module.action)" in frontend_app, "Falta filtro por accion permitida")
     require("updateProducerHomeReturn" in frontend_app, "Falta control de visibilidad del boton Volver al Home")
+    require("updateProducerChrome" in frontend_app, "Falta control de chrome para Productor")
+    require('document.body.classList.toggle("producer-mode", producerHomeAllowed())' in frontend_app, "Productor debe activar modo visual dedicado")
     require('producerHomeAllowed() && name !== "home"' in frontend_app, "Volver al Home debe limitarse a Productor con Home disponible")
     require('button.dataset.view === "home"' in frontend_app, "Falta excepcion controlada para vista home")
+    require('body.producer-mode .topbar nav button:not(#homeNav)' in frontend_css, "Productor debe ver solo Inicio en el menu superior original")
 
     separated_pages = {
         "attendance": attendance_page,
