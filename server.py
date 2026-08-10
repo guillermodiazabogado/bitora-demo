@@ -1922,9 +1922,6 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_email_suppressions_lookup
             ON email_suppressions(normalized_email, active, scope, event_id);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
-            ON email_delivery_events(provider, external_event_id)
-            WHERE external_event_id <> '';
         CREATE UNIQUE INDEX IF NOT EXISTS idx_communication_queue_idempotency
             ON communication_queue(idempotency_key)
             WHERE idempotency_key <> '';
@@ -1933,6 +1930,13 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
     event_columns = {row["name"] for row in db.execute("PRAGMA table_info(email_delivery_events)").fetchall()}
     if "external_event_id" not in event_columns:
         db.execute("ALTER TABLE email_delivery_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''")
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
+        ON email_delivery_events(provider, external_event_id)
+        WHERE external_event_id <> ''
+        """
+    )
 
 
 def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
