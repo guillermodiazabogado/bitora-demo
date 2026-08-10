@@ -37,6 +37,24 @@
   </header>
 
   <main>
+    <section id="passwordChange" class="view">
+      <div class="section-head">
+        <div>
+          <h1>Cambiar contraseña</h1>
+          <p>Actualiza tu contraseña temporal para continuar.</p>
+        </div>
+      </div>
+      <div class="panel narrow-panel">
+        <form id="passwordChangeForm" class="stack">
+          <input name="current_pin" type="password" placeholder="Contraseña actual">
+          <input name="new_pin" type="password" placeholder="Nueva contraseña" required>
+          <input name="confirm_pin" type="password" placeholder="Repetir nueva contraseña" required>
+          <button>Actualizar contraseña</button>
+        </form>
+        <div id="passwordChangeNotice"></div>
+      </div>
+    </section>
+
     <section id="owner" class="view">
       <div class="section-head">
         <div>
@@ -972,6 +990,8 @@
           <h2>Usuario del sistema</h2>
           <form id="userForm" class="stack">
             <input name="name" placeholder="Nombre" required>
+            <input name="full_name" placeholder="Nombre completo">
+            <input name="email" type="email" placeholder="Email">
             <select name="role" required>
               <option>Super Admin</option>
               <option>Productor</option>
@@ -982,9 +1002,19 @@
               <option>Comunicaciones</option>
               <option>Soporte tecnico</option>
             </select>
-            <input name="pin" type="password" inputmode="numeric" placeholder="PIN inicial o nuevo PIN">
+            <input name="pin" type="password" placeholder="Contraseña inicial">
+            <label class="toggle"><input name="must_change_password" type="checkbox" checked> Forzar cambio al ingresar</label>
+            <label class="toggle"><input name="active" type="checkbox" checked> Usuario activo</label>
             <button>Guardar usuario</button>
           </form>
+          <form id="passwordResetForm" class="stack user-reset-form">
+            <h3>Restablecer contraseña</h3>
+            <select name="user_id" id="passwordResetUser"></select>
+            <input name="pin" type="password" placeholder="Nueva contraseña">
+            <label class="toggle"><input name="generate_password" type="checkbox"> Generar contraseña temporal</label>
+            <button>Restablecer</button>
+          </form>
+          <div id="passwordResetNotice"></div>
           <div id="usersList" class="mini-list"></div>
         </aside>
         <section class="content">

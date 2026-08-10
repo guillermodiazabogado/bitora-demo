@@ -300,6 +300,9 @@ function updateProducerHomeReturn(name) {
 
 function setView(name) {
   if (name === "visualization") name = "reports";
+  if (state.authUser?.must_change_password && name !== "passwordChange") {
+    name = "passwordChange";
+  }
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   updateProducerHomeReturn(name);
@@ -1649,10 +1652,16 @@ async function loadUsers() {
   $("#operator").value = state.currentUser;
   $("#usersList").innerHTML = state.users.map((row) => `
     <div class="mini-row">
-      <strong>${row.name}</strong>
-      <span>${row.role}</span>
+      <strong>${escapeHtml(row.name)}</strong>
+      <span>${escapeHtml(row.role)}${Number(row.active) ? "" : " · inactivo"}${Number(row.must_change_password) ? " · debe cambiar clave" : ""}</span>
+      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="ghost user-status-action" data-user-id="${row.id}" data-active="${Number(row.active) ? "0" : "1"}">${Number(row.active) ? "Desactivar" : "Activar"}</button>` : ""}
     </div>
   `).join("");
+  const resetSelect = $("#passwordResetUser");
+  if (resetSelect) {
+    resetSelect.innerHTML = state.users.map((row) => `<option value="${row.id}">${escapeHtml(row.name)} - ${escapeHtml(row.role)}</option>`).join("");
+  }
+  $$(".user-status-action").forEach((button) => button.addEventListener("click", toggleUserStatus));
 }
 
 async function loadEventUsers() {
@@ -2866,9 +2875,51 @@ async function saveUser(event) {
   const form = event.currentTarget;
   const data = formData(form);
   data.actor = state.currentUser;
+  data.must_change_password = form.elements.must_change_password.checked;
+  data.active = form.elements.active.checked;
   await api("/api/users", { method: "POST", body: JSON.stringify(data) });
   form.reset();
+  form.elements.must_change_password.checked = true;
+  form.elements.active.checked = true;
   await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+}
+
+async function resetUserPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = formData(form);
+  data.actor = state.currentUser;
+  data.generate_password = form.elements.generate_password.checked;
+  const result = await api("/api/users/password-reset", { method: "POST", body: JSON.stringify(data) });
+  $("#passwordResetNotice").innerHTML = result.temporary_password
+    ? `<div class="panel warning"><strong>Contraseña temporal:</strong> <code>${escapeHtml(result.temporary_password)}</code><br><small>Copiala ahora. BITORA no volvera a mostrarla.</small></div>`
+    : `<div class="panel success">Contraseña restablecida. El usuario debera cambiarla al ingresar.</div>`;
+  form.reset();
+  await Promise.all([loadUsers(), loadAudit()]);
+}
+
+async function toggleUserStatus(event) {
+  const button = event.currentTarget;
+  await api("/api/users/status", {
+    method: "POST",
+    body: JSON.stringify({ actor: state.currentUser, user_id: button.dataset.userId, active: button.dataset.active === "1" }),
+  });
+  await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+}
+
+async function changeOwnPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    await api("/api/auth/change-password", { method: "POST", body: JSON.stringify(formData(form)) });
+    $("#passwordChangeNotice").innerHTML = `<div class="panel success">Contraseña actualizada.</div>`;
+    state.authUser.must_change_password = 0;
+    form.reset();
+    await loadEvents();
+    setView(producerHomeAllowed() ? "home" : "dashboard");
+  } catch (err) {
+    $("#passwordChangeNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
 }
 
 async function sendDemoCommunication(event) {
@@ -3111,6 +3162,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#waitingRoomConfigForm")?.addEventListener("submit", saveWaitingRoomConfig);
   $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
+  $("#passwordResetForm")?.addEventListener("submit", resetUserPassword);
+  $("#passwordChangeForm")?.addEventListener("submit", changeOwnPassword);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
   $("#whatsappTestForm")?.addEventListener("submit", sendTestWhatsApp);
@@ -3155,6 +3208,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   await loadEvents();
   let initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  if (state.authUser?.must_change_password) {
+    initialView = "passwordChange";
+  }
   if (initialView === "visualization") initialView = "reports";
   if (!initialView && producerHomeAllowed() && state.authUser?.role === "Productor" && state.events.length === 1) {
     initialView = "home";
