@@ -3281,6 +3281,19 @@ def analytics_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "analytics_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def event_feature_flags_payload(db: sqlite3.Connection, event_id: int) -> dict:
+    return {
+        "attendance_v4_enabled": attendance_v4_enabled(db, event_id),
+        "attendance_closure_eligibility_v4_enabled": attendance_closure_v4_enabled(db, event_id),
+        "certificates_v4_enabled": certificates_v4_enabled(db, event_id),
+        "surveys_v4_enabled": surveys_v4_enabled(db, event_id),
+        "speakers_v4_enabled": speakers_v4_enabled(db, event_id),
+        "operations_center_v4_enabled": operations_center_v4_enabled(db, event_id),
+        "communications_automation_v4_enabled": communications_automation_v4_enabled(db, event_id),
+        "analytics_v4_enabled": analytics_v4_enabled(db, event_id),
+    }
+
+
 def operations_center_error_payload(exc: OperationsCenterError) -> dict:
     return {"ok": False, "error": exc.message, "code": exc.code}
 
@@ -8402,7 +8415,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         access_params,
                     ).fetchall()
-                payload = [dict(r) for r in rows]
+                payload = []
+                for row in rows:
+                    item = dict(row)
+                    item["feature_flags"] = event_feature_flags_payload(db, int(item["id"]))
+                    payload.append(item)
                 RESPONSE_CACHE.set(cache_key, payload, 15)
                 self.send_json(payload)
                 return
@@ -8746,6 +8763,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not event:
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
+                    event["feature_flags"] = event_feature_flags_payload(db, event_id)
                     activities = []
                     if int(event.get("activities_enabled") or 0) == 1:
                         activities = [
