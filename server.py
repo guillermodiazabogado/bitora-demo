@@ -13212,6 +13212,47 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True})
                 return
 
+            if path == "/api/users/delete":
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
+                user_id = int(data.get("user_id") or 0)
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                if session and int(session.get("id") or 0) == user_id:
+                    self.send_json({"error": "No podes eliminar tu propio usuario"}, 409)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    if row["role"] == "Super Admin" and int(row["active"] or 0):
+                        active_super_admins = int(db.execute(
+                            "SELECT COUNT(*) AS c FROM users WHERE role = 'Super Admin' AND active = 1 AND id <> ?",
+                            (user_id,),
+                        ).fetchone()["c"] or 0)
+                        if active_super_admins < 1:
+                            self.send_json({"error": "No se puede eliminar el unico Super Admin del sistema."}, 409)
+                            return
+                    payload = {
+                        "name": row["name"],
+                        "role": row["role"],
+                        "email": row["email"] or "",
+                        "event_roles": int(db.execute("SELECT COUNT(*) AS c FROM user_event_roles WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                        "organization_memberships": int(db.execute("SELECT COUNT(*) AS c FROM organization_users WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                    }
+                    audit(db, actor, "user.deleted", "user", user_id, payload)
+                    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                for token, auth_session in list(AUTH_SESSIONS.items()):
+                    if int(auth_session.get("id") or 0) == user_id:
+                        AUTH_SESSIONS.pop(token, None)
+                self.send_json({"ok": True, "deleted_user": {"id": user_id, "name": payload["name"], "role": payload["role"]}})
+                return
+
             if path == "/api/event-users":
                 session = self.effective_user()
                 actor = data.get("actor", "Admin")
