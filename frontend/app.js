@@ -18,6 +18,9 @@ const state = {
   users: [],
   eventUsers: [],
   permissions: null,
+  selectedUserId: null,
+  permissionDraft: null,
+  permissionChanges: {},
   audit: [],
   communications: null,
   googleOAuth: null,
@@ -526,9 +529,22 @@ async function loadPermissions() {
   if (!state.authUser) return;
   const suffix = state.eventId ? `?event_id=${state.eventId}` : "";
   state.permissions = await api(`/api/permissions${suffix}`);
+  state.permissionDraft = JSON.parse(JSON.stringify(state.permissions.matrix || {}));
+  state.permissionChanges = {};
   renderPermissionsMatrix();
   renderCurrentPermissionsSummary();
   renderProducerHome();
+}
+
+function permissionDraftFor(role) {
+  return state.permissionDraft?.[role] || { modules: [], actions: [] };
+}
+
+function setPermissionsDirty() {
+  const count = Object.keys(state.permissionChanges || {}).length;
+  $("#permissionsDirtyNotice")?.classList.toggle("hidden", count === 0);
+  const saveButton = $("#savePermissionsBtn");
+  if (saveButton) saveButton.disabled = count === 0;
 }
 
 function renderPermissionsMatrix() {
@@ -542,16 +558,18 @@ function renderPermissionsMatrix() {
   const locked = state.permissions.locked || {};
   const editable = state.authUser?.role === "Super Admin";
   const renderCell = ({ role, code, allowed, lockedCell = false, kind }) => `
-    <button
-      type="button"
-      class="permission-cell ${allowed ? "yes" : "no"} ${lockedCell ? "locked" : ""}"
-      data-role="${escapeHtml(role)}"
-      data-${kind}="${escapeHtml(code)}"
-      data-kind="${kind}"
-      data-allowed="${allowed ? "1" : "0"}"
-      ${!editable || lockedCell ? "disabled" : ""}
-      title="${lockedCell ? "Permiso base del sistema" : "Cambiar permiso"}"
-    >${allowed ? "Si" : "No"}</button>
+    <label class="permission-check-cell ${allowed ? "yes" : "no"} ${lockedCell ? "locked" : ""}" title="${lockedCell ? "Este permiso esta definido por el sistema." : "Cambiar permiso"}">
+      <input
+        type="checkbox"
+        data-role="${escapeHtml(role)}"
+        data-${kind}="${escapeHtml(code)}"
+        data-kind="${kind}"
+        ${allowed ? "checked" : ""}
+        ${!editable || lockedCell ? "disabled" : ""}
+        aria-label="${escapeHtml(role)} - ${escapeHtml(kind === "module" ? (MODULE_LABELS[code] || code) : (ACTION_LABELS[code] || code))}"
+      >
+      <span aria-hidden="true"></span>
+    </label>
   `;
   target.innerHTML = `
     <h3 class="permissions-subtitle">Pestanas visibles</h3>
@@ -561,7 +579,7 @@ function renderPermissionsMatrix() {
         ${modules.map((module) => `<span>${MODULE_LABELS[module]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.modules || []);
+        const allowed = new Set(permissionDraftFor(role).modules || config.modules || []);
         return `
           <div class="permissions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -581,7 +599,7 @@ function renderPermissionsMatrix() {
         ${communicationActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.actions || []);
+        const allowed = new Set(permissionDraftFor(role).actions || config.actions || []);
         return `
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -597,7 +615,7 @@ function renderPermissionsMatrix() {
         ${backupActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.actions || []);
+        const allowed = new Set(permissionDraftFor(role).actions || config.actions || []);
         return `
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -623,34 +641,59 @@ function renderPermissionsMatrix() {
       }).join("")}
     </div>
   `;
-  target.querySelectorAll(".permission-cell:not(:disabled)").forEach((button) => {
-    button.addEventListener("click", savePermissionCell);
+  target.querySelectorAll(".permission-check-cell input:not(:disabled)").forEach((input) => {
+    input.addEventListener("change", queuePermissionChange);
   });
+  setPermissionsDirty();
 }
 
-async function savePermissionCell(event) {
-  const button = event.currentTarget;
-  const role = button.dataset.role;
-  const module = button.dataset.module;
-  const action = button.dataset.action;
-  const kind = button.dataset.kind || (action ? "action" : "module");
-  const allowed = button.dataset.allowed !== "1";
-  button.disabled = true;
-  button.textContent = "...";
+function queuePermissionChange(event) {
+  const input = event.currentTarget;
+  const role = input.dataset.role;
+  const module = input.dataset.module;
+  const action = input.dataset.action;
+  const kind = input.dataset.kind || (action ? "action" : "module");
+  const code = kind === "action" ? action : module;
+  const allowed = input.checked;
+  const config = permissionDraftFor(role);
+  const key = kind === "action" ? "actions" : "modules";
+  const values = new Set(config[key] || []);
+  if (allowed) values.add(code);
+  else values.delete(code);
+  state.permissionDraft[role] = { ...config, [key]: Array.from(values) };
+  state.permissionChanges[`${role}:${kind}:${code}`] = { role, module, action, kind, allowed };
+  input.closest(".permission-check-cell")?.classList.toggle("yes", allowed);
+  input.closest(".permission-check-cell")?.classList.toggle("no", !allowed);
+  setPermissionsDirty();
+}
+
+async function savePermissionChanges() {
+  const changes = Object.values(state.permissionChanges || {});
+  const notice = $("#permissionsNotice");
+  if (!changes.length) return;
+  const button = $("#savePermissionsBtn");
+  if (button) button.disabled = true;
   try {
-    const result = await api("/api/permissions", {
-      method: "POST",
-      body: JSON.stringify({ actor: state.currentUser, role, module, action, kind, allowed }),
-    });
-    state.permissions.matrix = result.matrix;
-    state.permissions.locked = result.locked || state.permissions.locked || {};
+    let result = null;
+    for (const change of changes) {
+      result = await api("/api/permissions", {
+        method: "POST",
+        body: JSON.stringify({ actor: state.currentUser, ...change }),
+      });
+    }
+    if (result?.matrix) {
+      state.permissions.matrix = result.matrix;
+      state.permissions.locked = result.locked || state.permissions.locked || {};
+      state.permissionDraft = JSON.parse(JSON.stringify(result.matrix || {}));
+    }
+    state.permissionChanges = {};
+    if (notice) notice.innerHTML = `<div class="panel success">Cambios guardados.</div>`;
     renderPermissionsMatrix();
     renderCurrentPermissionsSummary();
     renderFeatureVisibility();
   } catch (err) {
-    button.disabled = false;
-    button.textContent = button.dataset.allowed === "1" ? "Si" : "No";
-    alert(err.message);
+    if (notice) notice.innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudieron guardar los permisos")}</div>`;
+    setPermissionsDirty();
   }
 }
 
@@ -1678,20 +1721,125 @@ async function loadUsers() {
   }
   select.value = state.currentUser;
   $("#operator").value = state.currentUser;
-  $("#usersList").innerHTML = state.users.map((row) => `
-    <div class="mini-row">
-      <strong>${escapeHtml(row.name)}</strong>
-      <span>${escapeHtml(row.role)}${Number(row.active) ? "" : " · inactivo"}${Number(row.must_change_password) ? " · debe cambiar clave" : ""}</span>
-      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="ghost user-status-action" data-user-id="${row.id}" data-active="${Number(row.active) ? "0" : "1"}">${Number(row.active) ? "Desactivar" : "Activar"}</button>` : ""}
-    </div>
-  `).join("");
+  if (!state.selectedUserId || !state.users.some((row) => Number(row.id) === Number(state.selectedUserId))) {
+    state.selectedUserId = state.users.find((row) => row.name === state.currentUser)?.id || state.users[0]?.id || null;
+  }
+  renderUsersList();
+  renderSelectedUserDetail();
   const resetSelect = $("#passwordResetUser");
   if (resetSelect) {
     resetSelect.innerHTML = state.users.map((row) => `<option value="${row.id}">${escapeHtml(row.name)} - ${escapeHtml(row.role)}</option>`).join("");
+    if (state.selectedUserId) resetSelect.value = String(state.selectedUserId);
   }
-  $$(".user-status-action").forEach((button) => button.addEventListener("click", toggleUserStatus));
 }
 
+function userInitials(row) {
+  const source = String(row.full_name || row.name || "?").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : source.slice(0, 2)).toUpperCase();
+}
+
+function selectedUser() {
+  return state.users.find((row) => Number(row.id) === Number(state.selectedUserId)) || null;
+}
+
+function renderUsersList() {
+  const list = $("#usersList");
+  if (!list) return;
+  const term = ($("#userSearchInput")?.value || "").trim().toLowerCase();
+  const rows = state.users.filter((row) => {
+    const text = `${row.name || ""} ${row.full_name || ""} ${row.email || ""} ${row.role || ""}`.toLowerCase();
+    return !term || text.includes(term);
+  });
+  list.innerHTML = rows.map((row) => `
+    <article class="user-clean-row ${Number(row.id) === Number(state.selectedUserId) ? "selected" : ""}" data-user-id="${row.id}">
+      <button type="button" class="user-select-button" data-user-id="${row.id}">
+        <span class="user-avatar">${escapeHtml(userInitials(row))}</span>
+        <span class="user-main">
+          <strong>${escapeHtml(row.name)}</strong>
+          <small>${escapeHtml(row.role)}${Number(row.active) ? "" : " · inactivo"}${Number(row.must_change_password) ? " · cambia clave" : ""}</small>
+        </span>
+      </button>
+      ${state.authUser?.role === "Super Admin" ? `
+        <button type="button" class="ghost user-edit-action" data-user-id="${row.id}">Editar</button>
+        <button type="button" class="danger-outline user-delete-action" data-user-id="${row.id}">Eliminar</button>
+      ` : ""}
+    </article>
+  `).join("") || `<p class="empty">No hay usuarios para esa busqueda.</p>`;
+  list.querySelectorAll(".user-select-button").forEach((button) => button.addEventListener("click", () => selectUser(button.dataset.userId)));
+  list.querySelectorAll(".user-edit-action").forEach((button) => button.addEventListener("click", () => editUser(button.dataset.userId)));
+  list.querySelectorAll(".user-delete-action").forEach((button) => button.addEventListener("click", () => deleteUser(button.dataset.userId)));
+}
+
+function renderSelectedUserDetail() {
+  const target = $("#selectedUserDetail");
+  if (!target) return;
+  const row = selectedUser();
+  if (!row) {
+    target.innerHTML = `<p class="empty">Selecciona un usuario para ver detalle.</p>`;
+    return;
+  }
+  target.innerHTML = `
+    <div class="selected-user-card">
+      <span class="user-avatar large">${escapeHtml(userInitials(row))}</span>
+      <div>
+        <span class="eyebrow">Usuario seleccionado</span>
+        <h2>${escapeHtml(row.name)}</h2>
+        <p>${escapeHtml(row.full_name || "Sin nombre completo")} · ${escapeHtml(row.email || "Sin email")}</p>
+      </div>
+      <span class="role-pill">${escapeHtml(row.role)}</span>
+    </div>
+    <div class="selected-user-actions">
+      <button type="button" class="ghost" id="selectedUserEditBtn">Editar usuario</button>
+      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="ghost user-status-action" data-user-id="${row.id}" data-active="${Number(row.active) ? "0" : "1"}">${Number(row.active) ? "Desactivar" : "Activar"}</button>` : ""}
+      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="danger-outline" id="selectedUserDeleteBtn">Eliminar</button>` : ""}
+    </div>
+  `;
+  $("#selectedUserEditBtn")?.addEventListener("click", () => editUser(row.id));
+  $("#selectedUserDeleteBtn")?.addEventListener("click", () => deleteUser(row.id));
+  target.querySelector(".user-status-action")?.addEventListener("click", toggleUserStatus);
+}
+
+function selectUser(userId) {
+  state.selectedUserId = Number(userId);
+  const resetSelect = $("#passwordResetUser");
+  if (resetSelect) resetSelect.value = String(userId);
+  renderUsersList();
+  renderSelectedUserDetail();
+}
+
+function editUser(userId) {
+  selectUser(userId);
+  const row = selectedUser();
+  const form = $("#userForm");
+  if (!row || !form) return;
+  form.closest("details")?.setAttribute("open", "open");
+  form.elements.name.value = row.name || "";
+  form.elements.full_name.value = row.full_name || "";
+  form.elements.email.value = row.email || "";
+  form.elements.role.value = row.role || "Visualizador";
+  form.elements.pin.value = "";
+  form.elements.must_change_password.checked = Boolean(Number(row.must_change_password || 0));
+  form.elements.active.checked = Boolean(Number(row.active || 0));
+}
+
+async function deleteUser(userId) {
+  const row = state.users.find((item) => Number(item.id) === Number(userId));
+  if (!row) return;
+  const ok = confirm(`Eliminar usuario\n\nEstas seguro de que queres eliminar al usuario "${row.name}"?\n\nEsta accion no se puede deshacer.`);
+  if (!ok) return;
+  try {
+    await api("/api/users/delete", {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, user_id: userId }),
+    });
+    $("#userNotice").innerHTML = `<div class="panel success">Usuario eliminado correctamente.</div>`;
+    if (Number(state.selectedUserId) === Number(userId)) state.selectedUserId = null;
+    await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+  } catch (err) {
+    $("#userNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudo eliminar el usuario")}</div>`;
+  }
+}
 async function loadEventUsers() {
   const panel = $("#eventUsersList");
   if (!panel || !state.eventId) return;
@@ -3199,7 +3347,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#waitingRoomConfigForm")?.addEventListener("submit", saveWaitingRoomConfig);
   $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
+  $("#userSearchInput")?.addEventListener("input", renderUsersList);
   $("#passwordResetForm")?.addEventListener("submit", resetUserPassword);
+  $("#savePermissionsBtn")?.addEventListener("click", savePermissionChanges);
   $("#passwordChangeForm")?.addEventListener("submit", changeOwnPassword);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#emailTestForm")?.addEventListener("submit", sendTestEmail);

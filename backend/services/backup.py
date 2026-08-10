@@ -509,7 +509,7 @@ class EventBackupService:
 class EventRestoreService:
     """Validates and restores event backup bundles with ID remapping."""
 
-    MAX_BACKUP_BYTES = 25 * 1024 * 1024
+    MAX_BACKUP_BYTES = 100 * 1024 * 1024
     SUPPORTED_SCHEMA_VERSIONS = {1}
     INSERT_ORDER = [
         "accreditation_types",

@@ -3110,7 +3110,7 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
         db.execute(
             """
             INSERT OR IGNORE INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
-            VALUES (?, ?, ?, 0, 1, ?, ?)
+            VALUES (?, ?, ?, 1, 1, ?, ?)
             """,
             (name, role, generated_hash, now, now),
         )
@@ -7067,6 +7067,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "role": actor_user["role"],
                     "local": True,
                 }
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
         if not session or not event:
@@ -7089,6 +7091,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             actor_user = user_by_name(db, actor_override)
             if actor_user:
                 session = {"id": int(actor_user["id"]), "name": actor_user["name"], "role": actor_user["role"], "local": True}
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         organization = db.execute("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL", (organization_id,)).fetchone()
         if not session or not organization:
@@ -13210,6 +13214,47 @@ class AppHandler(SimpleHTTPRequestHandler):
                     )
                     audit(db, actor, "user.activated" if active else "user.deactivated", "user", user_id, {"name": row["name"]})
                 self.send_json({"ok": True})
+                return
+
+            if path == "/api/users/delete":
+                session = self.effective_user()
+                actor = session.get("name") if self.login_required() and session else data.get("actor", (session or {}).get("name", "Admin"))
+                user_id = int(data.get("user_id") or 0)
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                if session and int(session.get("id") or 0) == user_id:
+                    self.send_json({"error": "No podes eliminar tu propio usuario"}, 409)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    if row["role"] == "Super Admin" and int(row["active"] or 0):
+                        active_super_admins = int(db.execute(
+                            "SELECT COUNT(*) AS c FROM users WHERE role = 'Super Admin' AND active = 1 AND id <> ?",
+                            (user_id,),
+                        ).fetchone()["c"] or 0)
+                        if active_super_admins < 1:
+                            self.send_json({"error": "No se puede eliminar el unico Super Admin del sistema."}, 409)
+                            return
+                    payload = {
+                        "name": row["name"],
+                        "role": row["role"],
+                        "email": row["email"] or "",
+                        "event_roles": int(db.execute("SELECT COUNT(*) AS c FROM user_event_roles WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                        "organization_memberships": int(db.execute("SELECT COUNT(*) AS c FROM organization_users WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                    }
+                    audit(db, actor, "user.deleted", "user", user_id, payload)
+                    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                for token, auth_session in list(AUTH_SESSIONS.items()):
+                    if int(auth_session.get("id") or 0) == user_id:
+                        AUTH_SESSIONS.pop(token, None)
+                self.send_json({"ok": True, "deleted_user": {"id": user_id, "name": payload["name"], "role": payload["role"]}})
                 return
 
             if path == "/api/event-users":

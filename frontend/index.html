@@ -17,7 +17,7 @@
       <select id="currentUserSelect"></select>
     </label>
     <button id="logoutBtn" class="ghost" type="button">Salir</button>
-    <button id="producerHomeReturnBtn" class="producer-home-return hidden" type="button" data-view-target="home" aria-label="Volver al Home">⌂ Volver al Home</button>
+    <button id="producerHomeReturnBtn" class="producer-home-return hidden" type="button" data-view-target="home" aria-label="Volver al Home">âŒ‚ Volver al Home</button>
     <nav>
       <button data-view="owner" id="ownerNav">Mis eventos</button>
       <button data-view="home" id="homeNav">Inicio</button>
@@ -985,29 +985,48 @@
           </label>
         </div>
       </div>
-      <div class="layout">
-        <aside class="panel">
-          <h2>Usuario del sistema</h2>
-          <form id="userForm" class="stack">
-            <input name="name" placeholder="Nombre" required>
-            <input name="full_name" placeholder="Nombre completo">
-            <input name="email" type="email" placeholder="Email">
-            <select name="role" required>
-              <option>Super Admin</option>
-              <option>Productor</option>
-              <option>Coordinador</option>
-              <option>Operador de recepcion</option>
-              <option>Operador de acceso</option>
-              <option>Visualizador</option>
+      <div class="users-polish-layout">
+        <aside class="panel users-sidebar">
+          <div class="users-sidebar-head">
+            <div>
+              <h2>Usuarios</h2>
+              <p>Selecciona un usuario para ver su rol, editarlo o eliminarlo.</p>
+            </div>
+          </div>
+          <label class="users-search-label">
+            <span>Buscar usuario</span>
+            <input id="userSearchInput" type="search" placeholder="Nombre, rol o email">
+          </label>
+          <div id="usersList" class="users-clean-list"></div>
+          <details class="user-create-details">
+            <summary>+ Nuevo usuario</summary>
+            <form id="userForm" class="stack">
+              <input name="name" placeholder="Nombre" required>
+              <input name="full_name" placeholder="Nombre completo">
+              <input name="email" type="email" placeholder="Email">
+              <select name="role" required>
+                <option>Super Admin</option>
+                <option>Productor</option>
+                <option>Coordinador</option>
+                <option>Operador de recepcion</option>
+                <option>Operador de acceso</option>
+                <option>Visualizador</option>
               <option>Comunicaciones</option>
               <option>Soporte tecnico</option>
             </select>
-            <input name="pin" type="password" placeholder="Contraseña inicial">
-            <label class="toggle"><input name="must_change_password" type="checkbox" checked> Forzar cambio al ingresar</label>
-            <label class="toggle"><input name="active" type="checkbox" checked> Usuario activo</label>
-            <button>Guardar usuario</button>
-          </form>
+              <input name="pin" type="password" placeholder="Contrasena inicial">
+              <label class="toggle"><input name="must_change_password" type="checkbox" checked> Forzar cambio al ingresar</label>
+              <label class="toggle"><input name="active" type="checkbox" checked> Usuario activo</label>
+              <button>Guardar usuario</button>
+            </form>
+          </details>
           <div id="userNotice"></div>
+        </aside>
+        <section class="content users-main">
+          <div class="panel user-detail-panel">
+            <div id="selectedUserDetail"></div>
+          </div>
+          <div class="panel user-edit-panel">
           <form id="passwordResetForm" class="stack user-reset-form">
             <h3>Restablecer contraseña</h3>
             <select name="user_id" id="passwordResetUser"></select>
@@ -1016,18 +1035,26 @@
             <button>Restablecer</button>
           </form>
           <div id="passwordResetNotice"></div>
-          <div id="usersList" class="mini-list"></div>
-        </aside>
-        <section class="content">
+          </div>
           <div class="panel">
             <h2>Equipo asignado a este evento</h2>
             <p class="empty">Marca quien participa de este evento y con que rol operativo.</p>
             <div id="eventUsersList" class="event-users-list"></div>
           </div>
           <div class="panel">
-            <h2>Matriz de permisos recomendada</h2>
+            <div class="permissions-toolbar">
+              <div>
+                <h2>Matriz de permisos por rol</h2>
+                <p class="empty">Checkbox marcado = permiso habilitado. Los cambios se guardan juntos.</p>
+              </div>
+              <div class="permissions-save-actions">
+                <span id="permissionsDirtyNotice" class="permissions-dirty hidden">Cambios sin guardar</span>
+                <button id="savePermissionsBtn" type="button" disabled>Guardar cambios</button>
+              </div>
+            </div>
             <p class="empty">Visibilidad por rol. Las acciones criticas se validan tambien en backend.</p>
             <div id="permissionsMatrix" class="permissions-matrix"></div>
+            <div id="permissionsNotice"></div>
           </div>
           <div class="panel">
             <h2>Permisos del usuario actual</h2>
