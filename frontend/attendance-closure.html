@@ -28,7 +28,7 @@
   <main>
     <header>
       <h1>Cierre de Asistencia</h1>
-      <a href="/">Volver</a>
+      <a id="producerHomeLink" class="producer-home-return-link" href="/#home">⌂ Volver al Home</a>
     </header>
 
     <section>
@@ -94,6 +94,12 @@
     const out = document.getElementById("output");
     const value = (id) => document.getElementById(id).value.trim();
     const numeric = (id) => Number(value(id) || 0);
+    function updateHomeLink() {
+      const eventId = value("eventId") || new URLSearchParams(location.search).get("event_id") || "";
+      document.getElementById("producerHomeLink").href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : "/#home";
+    }
+    const queryEventId = new URLSearchParams(location.search).get("event_id");
+    if (queryEventId) document.getElementById("eventId").value = queryEventId;
     function show(data) { out.textContent = JSON.stringify(data, null, 2); }
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
@@ -102,6 +108,8 @@
       return data;
     }
     function body(extra = {}) { return JSON.stringify({ actor: "Admin", ...extra }); }
+    document.getElementById("eventId").addEventListener("input", updateHomeLink);
+    updateHomeLink();
     async function listRules() { await api(`/api/events/${numeric("eventId")}/attendance-rule-sets`); }
     async function createRuleSet() {
       const data = await api(`/api/events/${numeric("eventId")}/attendance-rule-sets`, { method: "POST", body: body({ name: value("ruleName"), scope_type: value("scopeType"), activity_id: numeric("activityId") || null }) });

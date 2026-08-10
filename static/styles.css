@@ -68,6 +68,55 @@ button:hover,
   color: var(--ink);
 }
 
+.producer-home-return,
+.producer-home-return-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 1px solid rgba(11, 127, 134, 0.26);
+  border-radius: 8px;
+  background: #e8f7f7;
+  color: var(--brand-dark);
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.producer-home-return {
+  padding: 0 13px;
+}
+
+.producer-home-return-link {
+  padding: 9px 13px;
+}
+
+.producer-home-return:hover,
+.producer-home-return-link:hover,
+.producer-home-return:focus-visible,
+.producer-home-return-link:focus-visible {
+  border-color: var(--brand);
+  background: #d9f0ef;
+  color: var(--brand-dark);
+  outline: 2px solid rgba(11, 127, 134, 0.2);
+  outline-offset: 2px;
+}
+
+.producer-module-header,
+.producer-module-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.producer-module-header h1 {
+  margin-bottom: 0;
+}
+
 .action-backup {
   background: var(--gold);
   color: #17212b;
@@ -175,6 +224,10 @@ nav button {
 nav button.active {
   background: var(--brand);
   color: white;
+}
+
+body.producer-mode .topbar nav button:not(#homeNav) {
+  display: none;
 }
 
 main {

@@ -1,6 +1,73 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BITORA Operations Center</title>
-<style>body{font-family:system-ui;margin:0;background:#f5f7fb;color:#1e293b}.wrap{max-width:1100px;margin:auto;padding:28px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.status{font-weight:700;color:#087f5b}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:22px 0}.card{background:white;border:1px solid #dbe3ef;border-radius:8px;padding:16px}.value{font-size:28px;font-weight:750}.muted{color:#64748b;font-size:13px}.section{margin-top:20px}.item{padding:10px 0;border-bottom:1px solid #edf1f7}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#e8f5ef;color:#087f5b;font-size:12px;font-weight:700}</style></head>
-<body><main class="wrap"><div class="hero"><div><div class="muted">BITORA STAGING</div><h1>Operations Center</h1><p id="event" class="muted">Seleccioná un evento para ver el estado operativo.</p></div><div id="status" class="status">Sin datos</div></div><div id="metrics" class="grid"></div><section class="section card"><h2>Readiness</h2><div id="readiness"></div></section><section class="section card"><h2>Alertas</h2><div id="alerts"></div></section><section class="section card"><h2>Incidentes y tareas</h2><div id="work"></div></section></main>
-<script>const eventId=new URLSearchParams(location.search).get('event_id');const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function load(){if(!eventId)return;const r=await fetch(`/api/events/${eventId}/operations-center`);const d=await r.json();if(!r.ok){document.getElementById('status').textContent=d.error||'No disponible';return}document.getElementById('event').textContent=`${d.event.name} · ${d.updated_at}`;document.getElementById('status').textContent=d.operational_status;document.getElementById('metrics').innerHTML=Object.entries(d.metrics).map(([k,v])=>`<article class="card"><div class="muted">${esc(k)}</div><div class="value">${v.value}</div><div class="muted">${esc(v.source)}</div></article>`).join('');document.getElementById('readiness').innerHTML=d.readiness.items.map(x=>`<div class="item"><span class="pill">${esc(x.status)}</span> ${esc(x.message)} <span class="muted">${esc(x.recommendation)}</span></div>`).join('');document.getElementById('alerts').innerHTML=d.alerts.length?d.alerts.map(x=>`<div class="item"><b>${esc(x.severity)}</b> ${esc(x.message)} <span class="muted">${esc(x.status)}</span></div>`).join(''):'<div class="muted">Sin alertas.</div>';document.getElementById('work').innerHTML=[...d.incidents.map(x=>`<div class="item">Incidente: ${esc(x.title)} · ${esc(x.status)}</div>`),...d.tasks.map(x=>`<div class="item">Tarea: ${esc(x.title)} · ${esc(x.status)}</div>`)].join('')||'<div class="muted">Sin incidentes ni tareas.</div>'}load();</script></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Operations Center</title>
+  <style>
+    body { font-family: system-ui; margin: 0; background: #f5f7fb; color: #1e293b; }
+    .wrap { max-width: 1100px; margin: auto; padding: 28px; }
+    .hero { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    .status { display: block; margin-top: 10px; font-weight: 700; color: #087f5b; text-align: right; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+    .card { background: white; border: 1px solid #dbe3ef; border-radius: 8px; padding: 16px; }
+    .value { font-size: 28px; font-weight: 750; }
+    .muted { color: #64748b; font-size: 13px; }
+    .section { margin-top: 20px; }
+    .item { padding: 10px 0; border-bottom: 1px solid #edf1f7; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e8f5ef; color: #087f5b; font-size: 12px; font-weight: 700; }
+    .producer-home-return-link { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 9px 12px; border: 1px solid #cbd3dc; border-radius: 6px; background: #fff; color: #15324a; font-weight: 700; text-decoration: none; white-space: nowrap; }
+    .producer-home-return-link:hover, .producer-home-return-link:focus-visible { border-color: #15324a; outline: 2px solid rgba(21, 50, 74, .18); outline-offset: 2px; }
+    @media (max-width: 720px) { .wrap { padding: 16px; } .hero { flex-direction: column; } .status { text-align: left; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="hero">
+      <div>
+        <div class="muted">BITORA STAGING</div>
+        <h1>Operations Center</h1>
+        <p id="event" class="muted">Selecciona un evento para ver el estado operativo.</p>
+      </div>
+      <div>
+        <a id="producerHomeLink" class="producer-home-return-link" href="/#home">⌂ Volver al Home</a>
+        <div id="status" class="status">Sin datos</div>
+      </div>
+    </div>
+    <div id="metrics" class="grid"></div>
+    <section class="section card"><h2>Readiness</h2><div id="readiness"></div></section>
+    <section class="section card"><h2>Alertas</h2><div id="alerts"></div></section>
+    <section class="section card"><h2>Incidentes y tareas</h2><div id="work"></div></section>
+  </main>
+  <script>
+    const eventId = new URLSearchParams(location.search).get("event_id");
+    document.getElementById("producerHomeLink").href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : "/#home";
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    async function load() {
+      if (!eventId) return;
+      const response = await fetch(`/api/events/${eventId}/operations-center`);
+      const data = await response.json();
+      if (!response.ok) {
+        document.getElementById("status").textContent = data.error || "No disponible";
+        return;
+      }
+      document.getElementById("event").textContent = `${data.event.name} - ${data.updated_at}`;
+      document.getElementById("status").textContent = data.operational_status;
+      document.getElementById("metrics").innerHTML = Object.entries(data.metrics).map(([key, value]) => `
+        <article class="card"><div class="muted">${esc(key)}</div><div class="value">${value.value}</div><div class="muted">${esc(value.source)}</div></article>
+      `).join("");
+      document.getElementById("readiness").innerHTML = data.readiness.items.map((item) => `
+        <div class="item"><span class="pill">${esc(item.status)}</span> ${esc(item.message)} <span class="muted">${esc(item.recommendation)}</span></div>
+      `).join("");
+      document.getElementById("alerts").innerHTML = data.alerts.length ? data.alerts.map((item) => `
+        <div class="item"><b>${esc(item.severity)}</b> ${esc(item.message)} <span class="muted">${esc(item.status)}</span></div>
+      `).join("") : '<div class="muted">Sin alertas.</div>';
+      document.getElementById("work").innerHTML = [
+        ...data.incidents.map((item) => `<div class="item">Incidente: ${esc(item.title)} - ${esc(item.status)}</div>`),
+        ...data.tasks.map((item) => `<div class="item">Tarea: ${esc(item.title)} - ${esc(item.status)}</div>`),
+      ].join("") || '<div class="muted">Sin incidentes ni tareas.</div>';
+    }
+    load();
+  </script>
+</body>
+</html>

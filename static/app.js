@@ -291,10 +291,18 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function updateProducerHomeReturn(name) {
+  const button = $("#producerHomeReturnBtn");
+  if (!button) return;
+  const show = producerHomeAllowed() && name !== "home";
+  button.classList.toggle("hidden", !show);
+}
+
 function setView(name) {
   if (name === "visualization") name = "reports";
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  updateProducerHomeReturn(name);
 }
 
 function organizeReportAndDiagnosticViews() {
@@ -387,6 +395,10 @@ function producerHomeAllowed() {
   return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
 }
 
+function updateProducerChrome() {
+  document.body.classList.toggle("producer-mode", producerHomeAllowed());
+}
+
 function moduleFeatureEnabled(module) {
   if (!module.feature) return true;
   const projectModules = currentProjectModules();
@@ -455,6 +467,7 @@ function renderProducerHome() {
     const allowed = target === "home" ? producerHomeAllowed() : canSeeModule(target);
     button.classList.toggle("hidden", !allowed);
   });
+  updateProducerHomeReturn($(".view.active")?.id || "");
   if (!producerHomeAllowed()) {
     grid.innerHTML = `
       <section class="panel owner-empty">
@@ -1007,6 +1020,7 @@ function eventFeature(name, fallback = true) {
 }
 
 function renderFeatureVisibility() {
+  updateProducerChrome();
   const modules = currentProjectModules();
   const activitiesOn = eventFeature("activities_enabled", true);
   const capacityOn = eventFeature("capacity_control_enabled", true);
