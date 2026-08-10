@@ -5608,6 +5608,7 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     data["communications"] = communications
     data["announcements"] = announcements
     data["attendances"] = attendances
+    data["surveys"] = participant_survey_payloads(db, int(data["event_id"]), int(data["person_id"]))
     data["certificates"] = [
         {
             "id": item["certificate_id"],
@@ -5638,6 +5639,49 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         "waitlist_enabled": int(data.get("waitlist_enabled") or 0),
     }
     return data
+
+
+def participant_survey_payloads(db: sqlite3.Connection, event_id: int, participant_id: int) -> list[dict]:
+    if not surveys_v4_enabled(db, event_id):
+        return []
+    rows = db.execute(
+        """
+        SELECT sa.id AS assignment_id, sa.survey_id, sa.version_id,
+               s.name, s.description, s.response_mode, s.duplicate_policy,
+               sv.title, sv.instructions,
+               srs.id AS session_id, srs.status AS response_status, srs.submitted_at
+        FROM survey_assignments sa
+        JOIN surveys s ON s.id = sa.survey_id
+        JOIN survey_versions sv ON sv.id = sa.version_id
+        LEFT JOIN survey_response_sessions srs
+          ON srs.assignment_id = sa.id
+         AND srs.participant_id = ?
+         AND srs.status = 'SUBMITTED'
+        WHERE sa.event_id = ?
+          AND sa.status = 'OPEN'
+          AND s.status = 'OPEN'
+          AND s.response_mode = 'IDENTIFIED'
+          AND sa.access_mode = 'EVENT_PARTICIPANTS'
+        ORDER BY sa.id
+        """,
+        (participant_id, event_id),
+    ).fetchall()
+    return [
+        {
+            "assignment_id": int(row["assignment_id"]),
+            "survey_id": int(row["survey_id"]),
+            "version_id": int(row["version_id"]),
+            "name": row["name"],
+            "title": row["title"],
+            "description": row["description"],
+            "instructions": row["instructions"],
+            "response_mode": row["response_mode"],
+            "duplicate_policy": row["duplicate_policy"],
+            "status": "SUBMITTED" if row["response_status"] == "SUBMITTED" else "PENDING",
+            "submitted_at": row["submitted_at"],
+        }
+        for row in rows
+    ]
 
 
 def reservation_status_label(status: str) -> str:
@@ -6987,6 +7031,8 @@ def public_api_post(path: str) -> bool:
         "/api/portal/reservations/status",
         "/api/portal/preferences",
         "/api/portal/profile",
+        "/api/portal/surveys/start",
+        "/api/portal/surveys/submit",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
         "/api/waiting-room/join",
@@ -12321,6 +12367,90 @@ class AppHandler(SimpleHTTPRequestHandler):
                     db.execute("COMMIT")
                     result = portal_payload(db, token)
                 self.send_json({"ok": True, "portal": result})
+                return
+
+            if path == "/api/portal/surveys/start":
+                token = data.get("token", "").strip()
+                assignment_id = int(data.get("assignment_id") or 0)
+                if not token or not assignment_id:
+                    self.send_json({"error": "Faltan portal o encuesta"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    portal = portal_payload(db, token)
+                    if not portal:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Portal inexistente"}, 404)
+                        return
+                    assignment = db.execute(
+                        """
+                        SELECT sa.*, s.response_mode, s.duplicate_policy
+                        FROM survey_assignments sa
+                        JOIN surveys s ON s.id = sa.survey_id
+                        WHERE sa.id = ? AND sa.event_id = ? AND sa.status = 'OPEN'
+                        """,
+                        (assignment_id, portal["event_id"]),
+                    ).fetchone()
+                    if not assignment or str(assignment["response_mode"]) != "IDENTIFIED" or str(assignment["access_mode"]) != "EVENT_PARTICIPANTS":
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_NOT_AVAILABLE", "error": "Encuesta no disponible"}, 403)
+                        return
+                    try:
+                        result = survey_service().start_response(
+                            db,
+                            organization_id=event_organization_id(db, int(portal["event_id"])),
+                            event_id=int(portal["event_id"]),
+                            assignment_id=assignment_id,
+                            participant_id=int(portal["person_id"]),
+                            idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or f"portal-survey-{assignment_id}-{portal['person_id']}"),
+                        )
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    questions = survey_service()._questions_payload(db, int(assignment["version_id"]))
+                    audit(db, "portal", "portal.survey_started", "survey_assignment", assignment_id, {"event_id": portal["event_id"], "person_id": portal["person_id"]})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "session": result["item"], "questions": questions})
+                return
+
+            if path == "/api/portal/surveys/submit":
+                token = data.get("token", "").strip()
+                session_id = int(data.get("session_id") or 0)
+                if not token or not session_id:
+                    self.send_json({"error": "Faltan portal o sesion"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    portal = portal_payload(db, token)
+                    if not portal:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Portal inexistente"}, 404)
+                        return
+                    session_row = db.execute(
+                        "SELECT * FROM survey_response_sessions WHERE id = ? AND event_id = ? AND participant_id = ?",
+                        (session_id, portal["event_id"], portal["person_id"]),
+                    ).fetchone()
+                    if not session_row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_SESSION_NOT_FOUND", "error": "Sesion inexistente"}, 404)
+                        return
+                    try:
+                        result = survey_service().submit_response(
+                            db,
+                            organization_id=event_organization_id(db, int(portal["event_id"])),
+                            event_id=int(portal["event_id"]),
+                            session_id=session_id,
+                            answers=data.get("answers") if isinstance(data.get("answers"), list) else [],
+                        )
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, "portal", "portal.survey_submitted", "survey_session", session_id, {"event_id": portal["event_id"], "person_id": portal["person_id"]})
+                    db.execute("COMMIT")
+                    result_portal = portal_payload(db, token)
+                self.send_json({"ok": True, "session": result["item"], "portal": result_portal})
                 return
 
             if path == "/api/portal/reserve":

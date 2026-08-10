@@ -41,6 +41,7 @@
       <a href="#agenda">Agenda</a>
       <a href="#charlas">Mis charlas</a>
       <a href="#asistencia">Asistencia</a>
+      <a href="#encuesta">Encuesta</a>
       <a href="#certificado">Certificado</a>
       <a href="#notificaciones">Notificaciones <span id="notificationBadge" class="participant-badge hidden">0</span></a>
       <a href="#perfil">Perfil</a>
@@ -116,6 +117,16 @@
           </div>
         </div>
         <div id="myAttendances" class="participant-list"></div>
+      </article>
+
+      <article class="participant-panel" id="encuesta">
+        <div class="participant-panel-head">
+          <div>
+            <span class="badge">Encuesta</span>
+            <h2>Tu opinion del evento</h2>
+          </div>
+        </div>
+        <div id="surveyStatus"></div>
       </article>
 
       <article class="participant-panel" id="certificado">
@@ -207,6 +218,7 @@
     <a href="#agenda">Agenda</a>
     <a href="#qr">QR</a>
     <a href="#charlas">Charlas</a>
+    <a href="#encuesta">Encuesta</a>
     <a href="#perfil">Perfil</a>
   </nav>
 
@@ -347,6 +359,11 @@
         content: row.title || "Ya podes descargar tu certificado.",
         kind: "Certificado",
       }));
+      (data.surveys || []).filter((row) => row.status !== "SUBMITTED").forEach((row) => notifications.push({
+        title: "Encuesta disponible",
+        content: row.title || row.name || "Ya podes responder la encuesta del evento.",
+        kind: "Encuesta",
+      }));
       return notifications;
     }
 
@@ -475,6 +492,8 @@
         </article>
       `).join("") || `<p class="participant-empty">Todavia no hay asistencias registradas.</p>`;
 
+      renderSurveys(data.surveys || []);
+
       const certificates = data.certificates || [];
       $("#certificateStatus").innerHTML = certificates.length ? `
         <div class="participant-list">
@@ -517,6 +536,92 @@
 
       document.querySelectorAll(".portal-reserve").forEach((button) => button.addEventListener("click", () => openReservationDialog(button.dataset.id)));
       document.querySelectorAll(".portal-cancel").forEach((button) => button.addEventListener("click", () => cancelReservation(button.dataset.id)));
+      document.querySelectorAll(".portal-survey-open").forEach((button) => button.addEventListener("click", () => openSurvey(button.dataset.id)));
+    }
+
+    function renderSurveys(surveys) {
+      const box = $("#surveyStatus");
+      if (!surveys.length) {
+        box.innerHTML = `<p class="participant-empty">No hay encuestas disponibles por ahora.</p>`;
+        return;
+      }
+      box.innerHTML = `<div class="participant-list">
+        ${surveys.map((row) => `
+          <article class="participant-list-row">
+            <div>
+              <strong>${escapeHtml(row.title || row.name || "Encuesta")}</strong>
+              <span>${row.status === "SUBMITTED" ? `Respondida ${formatDate(row.submitted_at)}` : escapeHtml(row.description || "Disponible para responder")}</span>
+            </div>
+            ${row.status === "SUBMITTED" ? `<span class="pill">Respondida</span>` : `<button type="button" class="portal-survey-open" data-id="${row.assignment_id}">Responder</button>`}
+          </article>
+        `).join("")}
+      </div>`;
+    }
+
+    function surveyInput(question) {
+      const name = `q-${question.id}`;
+      if (question.type === "SCALE") {
+        const min = Number(question.config?.min || 1);
+        const max = Number(question.config?.max || 5);
+        return `<select name="${name}" ${question.required ? "required" : ""}>
+          ${Array.from({ length: max - min + 1 }, (_, index) => min + index).map((value) => `<option value="${value}">${value}</option>`).join("")}
+        </select>`;
+      }
+      if (question.type === "YES_NO") {
+        return `<select name="${name}" ${question.required ? "required" : ""}>
+          <option value="true">Si</option>
+          <option value="false">No</option>
+        </select>`;
+      }
+      return `<textarea name="${name}" rows="3" ${question.required ? "required" : ""}></textarea>`;
+    }
+
+    async function openSurvey(assignmentId) {
+      try {
+        const result = await api("/api/portal/surveys/start", {
+          method: "POST",
+          body: JSON.stringify({ token, assignment_id: Number(assignmentId), idempotency_key: `portal-${assignmentId}-${portal.person_id || ""}` }),
+        });
+        $("#surveyStatus").innerHTML = `
+          <form id="surveyResponseForm" class="participant-form survey-response-form">
+            <input type="hidden" name="session_id" value="${result.session.id}">
+            ${result.questions.map((question) => `
+              <label>
+                ${escapeHtml(question.prompt)}${question.required ? " *" : ""}
+                ${surveyInput(question)}
+              </label>
+            `).join("")}
+            <button>Enviar encuesta</button>
+          </form>
+        `;
+        $("#surveyResponseForm").addEventListener("submit", submitSurvey);
+      } catch (err) {
+        $("#portalNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function submitSurvey(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const answers = Array.from(form.querySelectorAll("[name^='q-']")).map((input) => {
+        const questionId = Number(input.name.replace("q-", ""));
+        let value = input.value;
+        if (value === "true") value = true;
+        else if (value === "false") value = false;
+        else if (input.tagName === "SELECT" && /^\d+(\.\d+)?$/.test(value)) value = Number(value);
+        return { question_id: questionId, value };
+      });
+      try {
+        const result = await api("/api/portal/surveys/submit", {
+          method: "POST",
+          body: JSON.stringify({ token, session_id: Number(form.elements.session_id.value), answers }),
+        });
+        $("#portalNotice").innerHTML = `<div class="panel success">Encuesta enviada. Gracias por responder.</div>`;
+        render(result.portal);
+        location.hash = "#encuesta";
+      } catch (err) {
+        $("#portalNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message)}</div>`;
+      }
     }
 
     async function loadPortal() {
