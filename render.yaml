@@ -1,29 +1,86 @@
+databases:
+  - name: bitora-staging-postgres
+    plan: free
+    databaseName: bitora_staging
+    user: bitora_staging
+
 services:
   - type: web
-    name: bitora-demo
-    env: python
+    name: bitora-staging
+    runtime: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python backend/app.py
+    branch: deployment/v4-online
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    autoDeploy: false
     envVars:
       - key: APP_ENV
-        value: demo
+        value: staging
+      - key: BITORA_ENV
+        value: staging
+      - key: QR_DB_ENGINE
+        value: postgres
+      - key: QR_POSTGRES_DSN
+        fromDatabase:
+          name: bitora-staging-postgres
+          property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bitora-staging-postgres
+          property: connectionString
+      - key: QR_HOST
+        value: 0.0.0.0
       - key: BASE_URL
-        value: https://bitora-demo.onrender.com
+        value: https://bitora-staging.onrender.com
+      - key: BITORA_PUBLIC_URL
+        value: https://bitora-staging.onrender.com
       - key: HTTPS_REQUIRED
         value: "true"
-      - key: QR_DB_ENGINE
-        value: sqlite
-      - key: QR_SQLITE_PATH
-        value: acreditaciones.sqlite3
-      - key: QR_POSTGRES_DSN
-        sync: false
-      - key: QR_POSTGRES_POOL_MIN
-        value: "1"
-      - key: QR_POSTGRES_POOL_MAX
-        value: "10"
+      - key: QR_REQUIRE_LOGIN
+        value: "true"
+      - key: BITORA_COOKIE_SECURE
+        value: "true"
+      - key: BITORA_TRUST_PROXY
+        value: "true"
+      - key: BITORA_ALLOWED_HOSTS
+        value: bitora-staging.onrender.com
+      - key: BITORA_CORS_ORIGINS
+        value: https://bitora-staging.onrender.com
+      - key: BITORA_SAFE_MODE
+        value: "true"
+      - key: BITORA_LIVE_MODE
+        value: "false"
+      - key: BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED
+        value: "false"
+      - key: BITORA_DISABLE_EMBEDDED_WORKER
+        value: "0"
+      - key: BITORA_BACKUP_ENABLED
+        value: "true"
       - key: QR_AUTO_BACKUP_MINUTES
-        value: "10"
+        value: "0"
       - key: QR_BACKUP_KEEP_LAST
-        value: "24"
+        value: "12"
+      - key: BITORA_STORAGE_PATH
+        value: /bitora/storage
+      - key: BITORA_BACKUP_PATH
+        value: /bitora/backups
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: BITORA_INTEGRATION_ENCRYPTION_KEY
+        generateValue: true
+      - key: BITORA_HEALTH_TOKEN
+        generateValue: true
+      - key: BITORA_ADMIN_BOOTSTRAP_USER
+        sync: false
+      - key: BITORA_ADMIN_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: EMAIL_SAFE_MODE
+        value: "true"
+      - key: WHATSAPP_ENABLED
+        value: "false"
+      - key: WHATSAPP_SAFE_MODE
+        value: "true"

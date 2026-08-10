@@ -92,7 +92,9 @@ if not DB_PATH.is_absolute():
 FRONTEND_DIR = ROOT / "frontend"
 LEGACY_STATIC_DIR = ROOT / "static"
 STATIC_DIR = FRONTEND_DIR if FRONTEND_DIR.exists() else LEGACY_STATIC_DIR
-BACKUP_DIR = ROOT / "backups"
+BACKUP_DIR = Path(os.environ.get("BITORA_BACKUP_PATH", str(ROOT / "backups")))
+if not BACKUP_DIR.is_absolute():
+    BACKUP_DIR = ROOT / BACKUP_DIR
 STORAGE_ROOT = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
 if not STORAGE_ROOT.is_absolute():
     STORAGE_ROOT = ROOT / STORAGE_ROOT
@@ -111,6 +113,8 @@ HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "
 STARTED_AT = now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(timespec="seconds")
 AUTH_SESSIONS: dict[str, dict] = {}
 REQUIRE_LOGIN = os.environ.get("QR_REQUIRE_LOGIN", "").lower() in {"1", "true", "si", "yes"}
+ONLINE_ENVS = {"staging", "production"}
+WEAK_BOOTSTRAP_PASSWORDS = {"1234", "2222", "3333", "4444", "5555", "6666", "admin", "password", "bitora"}
 QR_ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 ADMIN_ROLES = {"Super Admin"}
 CONFIG_ROLES = {"Super Admin", "Productor", "Coordinador"}
@@ -418,6 +422,26 @@ def backup_service():
     return BackupService(DB_PATH, BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
 
 
+def env_value(env: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = str(env.get(name, "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def env_truthy(env: dict[str, str], *names: str) -> bool:
+    return env_value(env, *names).lower() in {"1", "true", "yes", "si"}
+
+
+def staging_or_production(env_name: str | None = None) -> bool:
+    return (env_name or APP_ENV).strip().lower() in ONLINE_ENVS
+
+
+def bootstrap_password_is_strong(password: str) -> bool:
+    return len(password) >= 12 and password.lower() not in WEAK_BOOTSTRAP_PASSWORDS
+
+
 def production_backup_manager() -> ProductionBackupManager:
     return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT)
 
@@ -469,11 +493,11 @@ def cache_snapshot() -> dict:
 def validate_production_configuration(environment: dict[str, str] | None = None) -> dict:
     env = environment or os.environ
     app_env = str(env.get("APP_ENV", APP_ENV)).strip().lower()
-    base_url = str(env.get("BASE_URL", BASE_URL)).strip().rstrip("/")
+    base_url = env_value(env, "BITORA_PUBLIC_URL", "BASE_URL").rstrip("/")
     db_engine = str(env.get("QR_DB_ENGINE", DB_CONFIG.engine)).strip().lower()
-    postgres_dsn = str(env.get("QR_POSTGRES_DSN", "")).strip()
-    https_required = str(env.get("HTTPS_REQUIRED", "")).lower() in {"1", "true", "yes", "si"}
-    require_login = str(env.get("QR_REQUIRE_LOGIN", "")).lower() in {"1", "true", "yes", "si"}
+    postgres_dsn = env_value(env, "QR_POSTGRES_DSN", "DATABASE_URL")
+    https_required = env_truthy(env, "HTTPS_REQUIRED", "BITORA_COOKIE_SECURE")
+    require_login = env_truthy(env, "QR_REQUIRE_LOGIN", "BITORA_REQUIRE_LOGIN")
     storage_backend = str(env.get("STORAGE_BACKEND", STORAGE_BACKEND)).strip().lower()
     email_enabled = str(env.get("EMAIL_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
     email_provider = str(env.get("EMAIL_PROVIDER", "demo")).strip().lower()
@@ -482,23 +506,45 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     whatsapp_enabled = str(env.get("WHATSAPP_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
     whatsapp_provider = str(env.get("WHATSAPP_PROVIDER", "demo")).strip().lower()
     whatsapp_safe_mode = str(env.get("WHATSAPP_SAFE_MODE", "true")).lower() in {"1", "true", "yes", "si"}
+    bitora_safe_mode = env_truthy(env, "BITORA_SAFE_MODE")
+    bitora_live_mode = env_truthy(env, "BITORA_LIVE_MODE", "BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED")
+    bootstrap_user = env_value(env, "BITORA_ADMIN_BOOTSTRAP_USER")
+    bootstrap_password = env_value(env, "BITORA_ADMIN_BOOTSTRAP_PASSWORD")
+    allowed_hosts = env_value(env, "BITORA_ALLOWED_HOSTS")
     errors = []
     warnings = []
-    if app_env not in {"development", "demo", "production"}:
+    if app_env not in {"development", "demo", "staging", "production"}:
         errors.append("APP_ENV invalido")
-    if app_env == "production":
+    if app_env in ONLINE_ENVS:
         if not base_url.startswith("https://"):
-            errors.append("BASE_URL debe usar HTTPS")
+            errors.append("BITORA_PUBLIC_URL/BASE_URL debe usar HTTPS")
         if not https_required:
             errors.append("HTTPS_REQUIRED debe estar activo")
         if db_engine != "postgres":
-            errors.append("Produccion requiere PostgreSQL")
+            errors.append(f"{app_env} requiere PostgreSQL")
         if not postgres_dsn:
             errors.append("Falta QR_POSTGRES_DSN")
         if not require_login:
             errors.append("QR_REQUIRE_LOGIN debe estar activo")
+        if not env_value(env, "SECRET_KEY"):
+            errors.append("Falta SECRET_KEY")
+        if not env_value(env, "SESSION_SECRET"):
+            errors.append("Falta SESSION_SECRET")
+        if not allowed_hosts:
+            errors.append("Falta BITORA_ALLOWED_HOSTS")
+        if not bitora_safe_mode:
+            errors.append("BITORA_SAFE_MODE debe estar activo")
+        if bitora_live_mode:
+            errors.append("BITORA_LIVE_MODE debe permanecer OFF")
+        if not bootstrap_user:
+            errors.append("Falta BITORA_ADMIN_BOOTSTRAP_USER")
+        if not bootstrap_password:
+            errors.append("Falta BITORA_ADMIN_BOOTSTRAP_PASSWORD")
+        elif not bootstrap_password_is_strong(bootstrap_password):
+            errors.append("BITORA_ADMIN_BOOTSTRAP_PASSWORD debe ser fuerte")
         if storage_backend == "local":
             warnings.append("Storage local requiere disco persistente y backup externo")
+    if app_env == "production":
         if email_enabled and email_provider != "demo":
             if not env.get("EMAIL_API_KEY", "").strip():
                 errors.append("EMAIL_API_KEY es obligatorio para email real")
@@ -579,6 +625,40 @@ def production_health_payload() -> tuple[dict, int]:
     return payload, 200 if db_status == "online" else 503
 
 
+def readiness_payload() -> tuple[dict, int]:
+    configuration = validate_production_configuration()
+    db_ok = False
+    migrations_ok = False
+    storage_ok = bool(STORAGE.ready)
+    try:
+        with connect() as db:
+            db.execute("SELECT 1 AS ok").fetchone()
+            if DB_CONFIG.engine == "postgres":
+                db.execute("SELECT COUNT(*) AS c FROM schema_migrations").fetchone()
+            migrations_ok = True
+            db_ok = True
+    except Exception:
+        db_ok = False
+        migrations_ok = False
+    checks = {
+        "configuration": configuration["ok"],
+        "database": db_ok,
+        "migrations": migrations_ok,
+        "storage": storage_ok,
+        "safe_mode": env_truthy(os.environ, "BITORA_SAFE_MODE"),
+        "live_mode_off": not env_truthy(os.environ, "BITORA_LIVE_MODE", "BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED"),
+    }
+    ok = all(checks.values())
+    return {
+        "status": "ready" if ok else "not_ready",
+        "env": APP_ENV,
+        "version": APP_VERSION,
+        "checks": checks,
+        "configuration_errors": configuration["errors"],
+        "configuration_warnings": configuration["warnings"],
+    }, 200 if ok else 503
+
+
 def verify_backup_file(path: Path) -> dict:
     return backup_service().verify_backup(path)
 
@@ -608,7 +688,7 @@ def request_uses_https(handler: SimpleHTTPRequestHandler) -> bool:
 
 
 def should_force_https(handler: SimpleHTTPRequestHandler) -> bool:
-    if APP_ENV != "production" or not HTTPS_REQUIRED or request_uses_https(handler):
+    if APP_ENV not in ONLINE_ENVS or not HTTPS_REQUIRED or request_uses_https(handler):
         return False
     host = (handler.headers.get("Host") or "").split(":", 1)[0].lower()
     return host not in {"localhost", "127.0.0.1", "::1"}
@@ -621,7 +701,7 @@ def absolute_url(path: str, handler: SimpleHTTPRequestHandler | None = None) -> 
 
 
 def public_link(path: str, handler: SimpleHTTPRequestHandler | None = None) -> str:
-    if BASE_URL or (handler and APP_ENV in {"demo", "production"}):
+    if BASE_URL or (handler and APP_ENV in {"demo", "staging", "production"}):
         return absolute_url(path, handler)
     return path if path.startswith("/") else "/" + path
 
@@ -2965,6 +3045,50 @@ def public_activity_status(activity: dict) -> str:
 
 
 def ensure_default_users(db: sqlite3.Connection) -> None:
+    if staging_or_production():
+        bootstrap_user = os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER", "").strip()
+        bootstrap_password = os.environ.get("BITORA_ADMIN_BOOTSTRAP_PASSWORD", "").strip()
+        if not bootstrap_user or not bootstrap_password_is_strong(bootstrap_password):
+            raise RuntimeError("Bootstrap seguro requerido para staging/production")
+        existing_count = int(db.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0)
+        if existing_count == 0:
+            db.execute(
+                """
+                INSERT INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
+                VALUES (?, 'Super Admin', ?, 1, 1, ?, ?)
+                """,
+                (bootstrap_user, hash_pin(bootstrap_password), now_iso(), now_iso()),
+            )
+            return
+        reset_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+        if APP_ENV == "staging" and reset_token:
+            token_hash = hashlib.sha256(reset_token.encode("utf-8")).hexdigest()
+            already_used = db.execute(
+                "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset' AND payload LIKE ? LIMIT 1",
+                (f"%{token_hash}%",),
+            ).fetchone()
+            if already_used:
+                return
+            user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+            if not user:
+                raise RuntimeError("Usuario bootstrap inexistente para reset controlado")
+            now = now_iso()
+            db.execute(
+                """
+                UPDATE users
+                SET role = 'Super Admin',
+                    pin_hash = ?,
+                    active = 1,
+                    must_change_password = 1,
+                    password_changed_at = ?,
+                    updated_at = ?,
+                    disabled_at = NULL
+                WHERE id = ?
+                """,
+                (hash_pin(bootstrap_password), now, now, int(user["id"])),
+            )
+            audit(db, "bootstrap", "user.bootstrap_admin_reset", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+        return
     defaults = [
         ("Admin", "Super Admin"),
         ("Productor", "Productor"),
@@ -6839,6 +6963,7 @@ def public_api_post(path: str) -> bool:
         "/api/captation/event",
         "/api/auth/login",
         "/api/auth/logout",
+        "/api/admin/bootstrap-reset",
         "/api/portal/reserve",
         "/api/portal/reservations/status",
         "/api/portal/preferences",
@@ -6993,6 +7118,10 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if parsed.path == "/health":
                 payload, status = production_health_payload()
+                self.send_json(payload, status)
+                return
+            if parsed.path == "/ready":
+                payload, status = readiness_payload()
                 self.send_json(payload, status)
                 return
             if should_force_https(self):
@@ -11588,6 +11717,53 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True})
                 return
 
+            if path == "/api/admin/bootstrap-reset":
+                if APP_ENV != "staging":
+                    self.send_json({"error": "Operacion disponible solo en staging"}, 403)
+                    return
+                expected_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+                provided_token = str(data.get("reset_token") or "").strip()
+                bootstrap_user = str(data.get("user") or os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER") or "").strip()
+                password = str(data.get("password") or "").strip()
+                if not expected_token or not provided_token or not hmac.compare_digest(expected_token, provided_token):
+                    self.send_json({"error": "Token de recuperacion invalido"}, 403)
+                    return
+                policy_error = validate_password_policy(password)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
+                    return
+                token_hash = hashlib.sha256(provided_token.encode("utf-8")).hexdigest()
+                with connect() as db:
+                    used = db.execute(
+                        "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset_endpoint' AND payload LIKE ? LIMIT 1",
+                        (f"%{token_hash}%",),
+                    ).fetchone()
+                    if used:
+                        self.send_json({"error": "Token de recuperacion ya utilizado"}, 409)
+                        return
+                    user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+                    if not user:
+                        self.send_json({"error": "Usuario bootstrap inexistente"}, 404)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        UPDATE users
+                        SET role = 'Super Admin',
+                            pin_hash = ?,
+                            active = 1,
+                            must_change_password = 1,
+                            password_changed_at = ?,
+                            updated_at = ?,
+                            disabled_at = NULL
+                        WHERE id = ?
+                        """,
+                        (hash_pin(password), now, now, int(user["id"])),
+                    )
+                    audit(db, "bootstrap", "user.bootstrap_admin_reset_endpoint", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+                self.send_json({"ok": True, "user": bootstrap_user, "must_change_password": True})
+                return
+
             if path == "/api/jobs/cancel":
                 session = self.effective_user()
                 actor = data.get("actor", "Admin")
@@ -14043,8 +14219,8 @@ class _TextWriter:
 
 def main() -> None:
     configuration = validate_production_configuration()
-    if APP_ENV == "production" and not configuration["ok"]:
-        raise RuntimeError("Configuracion productiva invalida: " + "; ".join(configuration["errors"]))
+    if APP_ENV in ONLINE_ENVS and not configuration["ok"]:
+        raise RuntimeError("Configuracion online invalida: " + "; ".join(configuration["errors"]))
     STORAGE.ensure()
     init_db()
     seed_if_empty()
@@ -14066,9 +14242,9 @@ def main() -> None:
     if not truthy(os.environ.get("BITORA_DISABLE_EMBEDDED_WORKER", "0")):
         start_job_worker()
     start_simulator_loop()
-    if APP_ENV in {"demo", "production"} and HTTPS_REQUIRED and not BASE_URL:
+    if APP_ENV in {"demo", "staging", "production"} and HTTPS_REQUIRED and not BASE_URL:
         print("ADVERTENCIA: HTTPS_REQUIRED esta activo pero BASE_URL no fue definido")
-    host = os.environ.get("QR_HOST", "0.0.0.0" if APP_ENV in {"demo", "production"} else "localhost")
+    host = os.environ.get("QR_HOST", os.environ.get("HOST", "0.0.0.0" if APP_ENV in {"demo", "staging", "production"} else "localhost"))
     port = int(os.environ.get("PORT") or os.environ.get("QR_PORT") or "8787")
     start_auto_backup()
     httpd = OperationalHTTPServer((host, port), AppHandler)
@@ -14076,9 +14252,10 @@ def main() -> None:
     print(f"BITORA {APP_VERSION} iniciada")
     print(f"Entorno: {APP_ENV}")
     print(f"Base URL: {configured_base_url()}")
-    print(f"Base de datos: {DB_CONFIG.engine} ({DB_PATH})")
+    database_label = f"sqlite ({DB_PATH})" if DB_CONFIG.engine == "sqlite" else "postgres"
+    print(f"Base de datos: {database_label}")
     print(f"Plataforma lista en http://{host}:{port}")
-    if httpd.require_login:
+    if httpd.require_login and APP_ENV not in ONLINE_ENVS:
         print("Consola protegida. Use scripts/bootstrap_test_users.py en local/staging para crear accesos temporales.")
     if AUTO_BACKUP_MINUTES > 0:
         print(f"Backup automatico cada {AUTO_BACKUP_MINUTES} min, conserva {BACKUP_KEEP_LAST} copias")

@@ -398,6 +398,10 @@ function producerHomeAllowed() {
   return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
 }
 
+function producerDefaultView() {
+  return state.authUser?.role === "Productor" && producerHomeAllowed() ? "home" : "";
+}
+
 function updateProducerChrome() {
   document.body.classList.toggle("producer-mode", producerHomeAllowed());
 }
@@ -1166,22 +1170,28 @@ function renderOwnerDashboard() {
 
 async function reloadCurrentEventData() {
   if (!state.eventId) return;
-  await Promise.all([
-    loadTypes(),
-    loadAccreditations(),
-    loadAgenda(),
-    loadAlerts(),
-    loadSystemStatus(),
-    loadNetworkInfo(),
-    loadSummary(),
-    loadMarketing(),
-    loadReadiness(),
-    loadAudit(),
-    loadCommunications(),
-    loadDemoReal(),
-    loadLogs(),
-    loadEventUsers(),
-  ]);
+  const loaders = [
+    ["types", loadTypes],
+    ["accreditations", loadAccreditations],
+    ["agenda", loadAgenda],
+    ["alerts", loadAlerts],
+    ["system_status", loadSystemStatus],
+    ["network_info", loadNetworkInfo],
+    ["summary", loadSummary],
+    ["marketing", loadMarketing],
+    ["readiness", loadReadiness],
+    ["audit", loadAudit],
+    ["communications", loadCommunications],
+    ["demo_real", loadDemoReal],
+    ["logs", loadLogs],
+    ["event_users", loadEventUsers],
+  ];
+  const results = await Promise.allSettled(loaders.map(([, loader]) => loader()));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(`No se pudo cargar ${loaders[index][0]}`, result.reason);
+    }
+  });
 }
 
 function renderLandingConfig() {
@@ -2873,15 +2883,24 @@ async function changeAccreditationStatus(id, status) {
 async function saveUser(event) {
   event.preventDefault();
   const form = event.currentTarget;
-  const data = formData(form);
-  data.actor = state.currentUser;
-  data.must_change_password = form.elements.must_change_password.checked;
-  data.active = form.elements.active.checked;
-  await api("/api/users", { method: "POST", body: JSON.stringify(data) });
-  form.reset();
-  form.elements.must_change_password.checked = true;
-  form.elements.active.checked = true;
-  await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+  const notice = $("#userNotice");
+  try {
+    const data = formData(form);
+    data.actor = state.currentUser;
+    data.must_change_password = form.elements.must_change_password.checked;
+    data.active = form.elements.active.checked;
+    const result = await api("/api/users", { method: "POST", body: JSON.stringify(data) });
+    form.reset();
+    form.elements.must_change_password.checked = true;
+    form.elements.active.checked = true;
+    if (notice) notice.innerHTML = `<div class="panel success">Usuario guardado: ${escapeHtml(result.user?.name || data.name)}</div>`;
+    const refreshes = await Promise.allSettled([loadUsers(), loadEventUsers(), loadAudit()]);
+    refreshes.forEach((refresh) => {
+      if (refresh.status === "rejected") console.warn("No se pudo refrescar usuarios despues de guardar", refresh.reason);
+    });
+  } catch (err) {
+    if (notice) notice.innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudo guardar el usuario")}</div>`;
+  }
 }
 
 async function resetUserPassword(event) {
@@ -3212,8 +3231,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialView = "passwordChange";
   }
   if (initialView === "visualization") initialView = "reports";
-  if (!initialView && producerHomeAllowed() && state.authUser?.role === "Productor" && state.events.length === 1) {
-    initialView = "home";
+  if (!initialView && producerDefaultView()) {
+    initialView = producerDefaultView();
   } else if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
     initialView = "owner";
   }

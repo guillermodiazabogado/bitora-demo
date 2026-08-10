@@ -8,7 +8,7 @@ if db_path.exists():
     db_path.unlink()
 os.environ["QR_DB_ENGINE"] = "sqlite"
 os.environ["QR_SQLITE_PATH"] = str(db_path)
-os.environ["APP_ENV"] = "staging"
+os.environ["APP_ENV"] = "local"
 
 import server  # noqa: E402
 

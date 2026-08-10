@@ -1,38 +1,57 @@
 # BITORA_RELEASE_FINAL_STATUS
 
-Estado: `READY FOR FINAL FIXES`
+Estado: `READY FOR HOSTING APPROVAL`
 
-Fecha: 2026-07-29
+Fecha: 2026-08-04
 
-Rama: `develop/v4`
+Rama: `deployment/v4-online`
 
-HEAD: `1814c945fc4a1b29149563366c28a7e03a8e0673`
+HEAD evaluado: `4c70d4224acba79f3fc140ae1413248d165f4f59`
 
-## Cierre funcional V4
+## Estado V4 online
 
-- V4.10 PR: MERGED
-- V4.1 a V4.10: PASSED
-- Seguridad basica: PASSED
-- Aislamiento multievento: PASSED
-- Backup/restore live: PASSED
-- Health/migrate/smoke-test: PASSED
+- Render Blueprint: PASSED.
+- Render PostgreSQL: PASSED.
+- Render web service: PASSED.
+- URL publica: `https://bitora-staging.onrender.com`.
+- HTTPS: PASSED.
+- `/health`: PARTIAL, `backup=missing`.
+- `/ready`: PARTIAL, warning de storage persistente.
+- Login online: PASSED.
+- UI online: PASSED.
+- Safe Mode: ON.
+- Live Mode: OFF.
+- Comunicaciones reales en este sprint: 0.
+- Endurance 24h: DEFERRED.
+- Produccion: NOT DEPLOYED.
 
-## Bloqueo
+## Bloqueo actual
 
-BSTF release no aprobo en la corrida final de staging:
+Render Free no soporta Persistent Disks. El servicio `bitora-staging` necesita disco persistente o storage externo equivalente antes de poder certificar:
 
-- `whatsapp_multitenant_live`: FAILED
-- `webhooks_multitenant_live`: FAILED
-- `whatsapp_organization_live`: FAILED
-- `webhook_tenant_resolution_live`: OMITTED
-- `endurance_24h`: OMITTED
+- storage persistent online;
+- backup online remoto;
+- restore online remoto;
+- restart persistence;
+- staging online final.
+
+## PR #12
+
+- Estado GitHub: Ready to merge.
+- Checks: PASSED.
+- Conflictos: 0.
+- Decision: NOT MERGED.
+
+La PR no se fusiona porque la validacion operacional remota no esta completa.
 
 ## Decision final admitida
 
-`READY FOR FINAL FIXES`
+`READY FOR HOSTING APPROVAL`
 
-No se declara `BITORA V4.0.0 STABLE RELEASED`.
+No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
 
-No se creo tag `v4.0.0`.
+No se ejecuta Endurance 24h.
 
-No se creo GitHub Release estable.
+No se despliega produccion.
+
+No se crea ni mueve tag estable.
