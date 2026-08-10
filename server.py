@@ -6963,6 +6963,7 @@ def public_api_post(path: str) -> bool:
         "/api/captation/event",
         "/api/auth/login",
         "/api/auth/logout",
+        "/api/admin/bootstrap-reset",
         "/api/portal/reserve",
         "/api/portal/reservations/status",
         "/api/portal/preferences",
@@ -11714,6 +11715,53 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if token in AUTH_SESSIONS:
                     AUTH_SESSIONS[token]["must_change_password"] = 0
                 self.send_json({"ok": True})
+                return
+
+            if path == "/api/admin/bootstrap-reset":
+                if APP_ENV != "staging":
+                    self.send_json({"error": "Operacion disponible solo en staging"}, 403)
+                    return
+                expected_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+                provided_token = str(data.get("reset_token") or "").strip()
+                bootstrap_user = str(data.get("user") or os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER") or "").strip()
+                password = str(data.get("password") or "").strip()
+                if not expected_token or not provided_token or not hmac.compare_digest(expected_token, provided_token):
+                    self.send_json({"error": "Token de recuperacion invalido"}, 403)
+                    return
+                policy_error = validate_password_policy(password)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
+                    return
+                token_hash = hashlib.sha256(provided_token.encode("utf-8")).hexdigest()
+                with connect() as db:
+                    used = db.execute(
+                        "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset_endpoint' AND payload LIKE ? LIMIT 1",
+                        (f"%{token_hash}%",),
+                    ).fetchone()
+                    if used:
+                        self.send_json({"error": "Token de recuperacion ya utilizado"}, 409)
+                        return
+                    user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+                    if not user:
+                        self.send_json({"error": "Usuario bootstrap inexistente"}, 404)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        UPDATE users
+                        SET role = 'Super Admin',
+                            pin_hash = ?,
+                            active = 1,
+                            must_change_password = 1,
+                            password_changed_at = ?,
+                            updated_at = ?,
+                            disabled_at = NULL
+                        WHERE id = ?
+                        """,
+                        (hash_pin(password), now, now, int(user["id"])),
+                    )
+                    audit(db, "bootstrap", "user.bootstrap_admin_reset_endpoint", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+                self.send_json({"ok": True, "user": bootstrap_user, "must_change_password": True})
                 return
 
             if path == "/api/jobs/cancel":
