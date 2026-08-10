@@ -172,6 +172,7 @@ const PRODUCER_HOME_MODULES = [
     route: "/attendance-closure.html",
     action: "attendance.read",
     feature: "agenda",
+    featureFlag: "attendance_closure_eligibility_v4_enabled",
     metric: () => "Control activo",
   },
   {
@@ -192,6 +193,8 @@ const PRODUCER_HOME_MODULES = [
     tone: "yellow",
     route: "/speakers-v4.html",
     permissionModule: "speakers",
+    action: "speakers.read",
+    featureFlag: "speakers_v4_enabled",
     metric: () => "Modulo habilitado",
   },
   {
@@ -202,6 +205,8 @@ const PRODUCER_HOME_MODULES = [
     tone: "cyan",
     route: "/certificates-v4.html",
     permissionModule: "certificates",
+    action: "certificates.read",
+    featureFlag: "certificates_v4_enabled",
     metric: () => "Elegibilidad",
   },
   {
@@ -212,6 +217,8 @@ const PRODUCER_HOME_MODULES = [
     tone: "pink",
     route: "/surveys-v4.html",
     permissionModule: "surveys",
+    action: "surveys.read",
+    featureFlag: "surveys_v4_enabled",
     metric: () => "Modulo habilitado",
   },
   {
@@ -222,6 +229,8 @@ const PRODUCER_HOME_MODULES = [
     tone: "red",
     view: "communications",
     permissionModule: "communications",
+    action: "communications.view",
+    featureFlag: "communications_automation_v4_enabled",
     metric: () => "Safe Mode",
   },
   {
@@ -232,6 +241,7 @@ const PRODUCER_HOME_MODULES = [
     tone: "mint",
     route: "/operations-center-v4.html",
     action: "operations_center.read",
+    featureFlag: "operations_center_v4_enabled",
     metric: () => "Todo operativo",
   },
   {
@@ -242,6 +252,7 @@ const PRODUCER_HOME_MODULES = [
     tone: "blue",
     route: "/analytics-v4.html",
     action: "analytics.read",
+    featureFlag: "analytics_v4_enabled",
     fallbackView: "reports",
     metric: () => "Ver reportes",
   },
@@ -415,10 +426,11 @@ function moduleFeatureEnabled(module) {
 
 function producerModuleAllowed(module) {
   if (!moduleFeatureEnabled(module)) return false;
-  if (module.permissionModule) return canSeeModule(module.permissionModule);
-  if (module.action) return canDo(module.action);
-  if (module.view) return canSeeModule(module.view);
-  return false;
+  if (module.featureFlag && !eventFeatureFlag(module.featureFlag, false)) return false;
+  if (module.permissionModule && !canSeeModule(module.permissionModule)) return false;
+  if (module.action && !canDo(module.action)) return false;
+  if (module.view && !canSeeModule(module.view)) return false;
+  return Boolean(module.permissionModule || module.action || module.view);
 }
 
 function producerModuleUrl(module) {
@@ -1024,6 +1036,12 @@ function eventFeature(name, fallback = true) {
   const event = currentEvent();
   if (!event || event[name] === undefined || event[name] === null) return fallback;
   return Number(event[name]) === 1;
+}
+
+function eventFeatureFlag(name, fallback = false) {
+  const event = currentEvent();
+  if (!event || !event.feature_flags || event.feature_flags[name] === undefined) return fallback;
+  return Boolean(event.feature_flags[name]);
 }
 
 function renderFeatureVisibility() {
