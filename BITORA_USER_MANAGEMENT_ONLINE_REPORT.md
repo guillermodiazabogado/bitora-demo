@@ -40,6 +40,22 @@ Estado inicial: DEPLOYMENT PREPARED
 - Desactivar/reactivar online.
 - RBAC online.
 
+## Recuperacion Admin Staging
+
+Se agrego un mecanismo controlado para recuperar el usuario admin de staging cuando la clave operativa se perdio.
+
+Condiciones:
+
+- solo opera con `APP_ENV=staging`;
+- requiere `BITORA_ADMIN_BOOTSTRAP_USER`;
+- requiere `BITORA_ADMIN_BOOTSTRAP_PASSWORD` fuerte;
+- requiere `BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN`;
+- registra auditoria `user.bootstrap_admin_reset`;
+- el mismo token de reset no se reutiliza;
+- no imprime ni versiona passwords, hashes ni tokens.
+
+No aplica en produccion.
+
 ## Restricciones Mantenidas
 
 - Production: NOT TOUCHED

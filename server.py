@@ -3054,11 +3054,40 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
         if existing_count == 0:
             db.execute(
                 """
-                INSERT INTO users (name, role, pin_hash, active, created_at)
-                VALUES (?, 'Super Admin', ?, 1, ?)
+                INSERT INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
+                VALUES (?, 'Super Admin', ?, 1, 1, ?, ?)
                 """,
-                (bootstrap_user, hash_pin(bootstrap_password), now_iso()),
+                (bootstrap_user, hash_pin(bootstrap_password), now_iso(), now_iso()),
             )
+            return
+        reset_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+        if APP_ENV == "staging" and reset_token:
+            token_hash = hashlib.sha256(reset_token.encode("utf-8")).hexdigest()
+            already_used = db.execute(
+                "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset' AND payload LIKE ? LIMIT 1",
+                (f"%{token_hash}%",),
+            ).fetchone()
+            if already_used:
+                return
+            user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+            if not user:
+                raise RuntimeError("Usuario bootstrap inexistente para reset controlado")
+            now = now_iso()
+            db.execute(
+                """
+                UPDATE users
+                SET role = 'Super Admin',
+                    pin_hash = ?,
+                    active = 1,
+                    must_change_password = 1,
+                    password_changed_at = ?,
+                    updated_at = ?,
+                    disabled_at = NULL
+                WHERE id = ?
+                """,
+                (hash_pin(bootstrap_password), now, now, int(user["id"])),
+            )
+            audit(db, "bootstrap", "user.bootstrap_admin_reset", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
         return
     defaults = [
         ("Admin", "Super Admin"),
