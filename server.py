@@ -99,7 +99,7 @@ if not BACKUP_DIR.is_absolute():
 STORAGE_ROOT = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
 if not STORAGE_ROOT.is_absolute():
     STORAGE_ROOT = ROOT / STORAGE_ROOT
-STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local").strip().lower() or "local"
+STORAGE_BACKEND = os.environ.get("BITORA_STORAGE_PROVIDER", os.environ.get("STORAGE_BACKEND", "local")).strip().lower() or "local"
 DB_LOCK = threading.Lock()
 BACKUP_STOP = threading.Event()
 WORKER: JobWorker | None = None
@@ -444,7 +444,7 @@ def bootstrap_password_is_strong(password: str) -> bool:
 
 
 def production_backup_manager() -> ProductionBackupManager:
-    return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT)
+    return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT, storage=STORAGE)
 
 
 def event_backup_service() -> EventBackupService:
@@ -499,7 +499,7 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     postgres_dsn = env_value(env, "QR_POSTGRES_DSN", "DATABASE_URL")
     https_required = env_truthy(env, "HTTPS_REQUIRED", "BITORA_COOKIE_SECURE")
     require_login = env_truthy(env, "QR_REQUIRE_LOGIN", "BITORA_REQUIRE_LOGIN")
-    storage_backend = str(env.get("STORAGE_BACKEND", STORAGE_BACKEND)).strip().lower()
+    storage_backend = str(env.get("BITORA_STORAGE_PROVIDER", env.get("STORAGE_BACKEND", STORAGE_BACKEND))).strip().lower()
     email_enabled = str(env.get("EMAIL_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
     email_provider = str(env.get("EMAIL_PROVIDER", "demo")).strip().lower()
     email_from = str(env.get("EMAIL_FROM") or env.get("EMAIL_FROM_ADDRESS") or "").strip()
@@ -545,6 +545,17 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
             errors.append("BITORA_ADMIN_BOOTSTRAP_PASSWORD debe ser fuerte")
         if storage_backend == "local":
             warnings.append("Storage local requiere disco persistente y backup externo")
+        if storage_backend in {"r2", "cloudflare_r2", "cloudflare-r2", "s3"}:
+            required_storage = [
+                ("R2_BUCKET", "S3_BUCKET"),
+                ("R2_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"),
+                ("R2_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY"),
+            ]
+            if not (env.get("R2_ENDPOINT") or env.get("S3_ENDPOINT_URL") or env.get("R2_ACCOUNT_ID")):
+                errors.append("Falta R2_ENDPOINT/S3_ENDPOINT_URL o R2_ACCOUNT_ID")
+            for primary, fallback in required_storage:
+                if not (env.get(primary) or env.get(fallback)):
+                    errors.append(f"Falta {primary} o {fallback}")
     if app_env == "production":
         if email_enabled and email_provider != "demo":
             if not env.get("EMAIL_API_KEY", "").strip():
@@ -606,6 +617,8 @@ def production_health_payload() -> tuple[dict, int]:
             reverse=True,
         )
     backup_status = "recent" if backup_files else "missing"
+    if not backup_files and STORAGE_BACKEND in {"r2", "cloudflare_r2", "cloudflare-r2", "s3"} and STORAGE.ready:
+        backup_status = "configured"
     if backup_files and time.time() - backup_files[0].stat().st_mtime > 86400 * 2:
         backup_status = "stale"
     payload = {
@@ -630,7 +643,8 @@ def readiness_payload() -> tuple[dict, int]:
     configuration = validate_production_configuration()
     db_ok = False
     migrations_ok = False
-    storage_ok = bool(STORAGE.ready)
+    storage_check = STORAGE.check()
+    storage_ok = bool(storage_check.get("ok"))
     try:
         with connect() as db:
             db.execute("SELECT 1 AS ok").fetchone()
@@ -5850,6 +5864,9 @@ def technical_log(level: str, module: str, message: str, detail: str = "", reque
         "WHATSAPP_VERIFY_TOKEN",
         "WHATSAPP_APP_SECRET",
         "S3_SECRET_ACCESS_KEY",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_ACCESS_KEY_ID",
+        "S3_ACCESS_KEY_ID",
     ):
         secret = os.environ.get(secret_name, "")
         if secret:
@@ -5879,7 +5896,7 @@ def safe_public_error(exc: Exception) -> str:
         return "Error interno controlado"
     text = str(exc)
     text = re.sub(r"(?i)postgres(?:ql)?://[^\s,;]+", "postgresql://[REDACTED]", text)
-    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET"):
+    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "R2_SECRET_ACCESS_KEY", "R2_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_ACCESS_KEY_ID"):
         secret = os.environ.get(secret_name, "")
         if secret:
             text = text.replace(secret, "[REDACTED]")

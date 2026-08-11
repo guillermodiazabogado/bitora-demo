@@ -124,10 +124,11 @@ class PostgresBackupService:
 class ProductionBackupManager:
     """Creates a restorable bundle with database backup, storage and manifest."""
 
-    def __init__(self, database_backup, backup_dir: Path, storage_root: Path) -> None:
+    def __init__(self, database_backup, backup_dir: Path, storage_root: Path, storage=None) -> None:
         self.database_backup = database_backup
         self.backup_dir = Path(backup_dir)
         self.storage_root = Path(storage_root)
+        self.storage = storage
 
     def create_bundle(self) -> Path:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +147,17 @@ class ProductionBackupManager:
         }
         with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.write(database_path, f"database/{database_path.name}")
-            if self.storage_root.exists():
+            if self.storage is not None and getattr(self.storage, "backend", "local") != "local":
+                for item in self.storage.inventory():
+                    key = item["key"]
+                    if key.startswith("backups/"):
+                        continue
+                    content = self.storage.read_key(key)
+                    if hashlib.sha256(content).hexdigest() != item.get("sha256"):
+                        raise ValueError("Checksum de storage invalido")
+                    manifest["storage"].append(item)
+                    archive.writestr(f"storage/{key}", content)
+            elif self.storage_root.exists():
                 for path in sorted(item for item in self.storage_root.rglob("*") if item.is_file()):
                     relative = path.relative_to(self.storage_root).as_posix()
                     manifest["storage"].append(
@@ -154,6 +165,8 @@ class ProductionBackupManager:
                     )
                     archive.write(path, f"storage/{relative}")
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        if self.storage is not None and getattr(self.storage, "backend", "local") != "local":
+            self.storage.save("backups", bundle.name, bundle.read_bytes())
         keep_last = getattr(self.database_backup, "keep_last", lambda: 24)()
         bundles = sorted(self.backup_dir.glob("bitora-production-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True)
         for old_bundle in bundles[max(0, int(keep_last)):]:
@@ -433,12 +446,13 @@ class EventBackupService:
             if self.storage:
                 for item in storage_files:
                     key = item.get("key") or ""
-                    path = (self.storage.root / key).resolve()
-                    root = self.storage.root.resolve()
-                    if root not in path.parents:
-                        raise ValueError("Archivo de storage fuera de raiz")
-                    archive.write(path, f"storage/{key}")
+                    content = self.storage.read_key(key)
+                    if hashlib.sha256(content).hexdigest() != item.get("sha256"):
+                        raise ValueError("Checksum de storage invalido")
+                    archive.writestr(f"storage/{key}", content)
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        if self.storage and getattr(self.storage, "backend", "local") != "local":
+            self.storage.save("backups", bundle.name, bundle.read_bytes())
         return bundle
 
     def verify_event_bundle(self, bundle: Path) -> dict:
