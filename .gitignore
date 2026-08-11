@@ -33,6 +33,7 @@ output/
 tmp/
 deployment/logs/
 deployment/backup/artifacts/
+artifacts/
 ~$*
 
 # Sistema/editor

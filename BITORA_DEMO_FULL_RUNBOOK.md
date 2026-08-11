@@ -1,65 +1,67 @@
 # BITORA Demo Full Runbook
 
-## Objetivo
+Estado: DEMO FULL READY
+Staging: https://bitora-staging.onrender.com
+Organizacion: BITORA TEST LAB
+Evento: BITORA E2E TEST - 10 PARTICIPANTES - E2E10-20260810-174702
+Event ID: 7
+Safe Mode: ON
+Live Mode: OFF
+Comunicaciones reales esperadas: 0
 
-Guia para presentar BITORA online de punta a punta con datos ficticios y sin consola.
+## Ruta de 15 minutos
 
-## URL
+### 1. Admin
 
-- Staging: `https://bitora-staging.onrender.com`
-- Login: `https://bitora-staging.onrender.com/login.html`
+- URL: https://bitora-staging.onrender.com/login.html
+- Usuario: admin-demo-final
+- Accion: entrar al panel, abrir Usuarios y Permisos, Evento, Configuracion, Agenda y Analytics.
+- Resultado esperado: acceso completo, gestion de usuarios visible, evento 7 seleccionado.
 
-## Demo
+### 2. Productor
 
-- Organizacion: BITORA Demo
-- Evento: BITORA Demo Full 2026
-- Datos: 100% ficticios
-- Safe Mode: ON
-- Live Mode: OFF
-- Comunicaciones reales: 0
+- Usuario: productor-demo-final
+- Accion: entrar al Home Visual, abrir Inscripciones, Agenda, Speakers, Encuestas, Comunicaciones, Operations Center y Analytics.
+- Resultado esperado: solo tarjetas autorizadas por permisos efectivos; Live Mode apagado.
 
-## Recorrido sugerido de 15 minutos
+### 3. Participante
 
-1. Admin
-   - Ingresar al login.
-   - Abrir Usuarios y Permisos.
-   - Mostrar usuarios demo, roles y matriz.
-   - Abrir Configurar Evento y confirmar evento activo.
+- URL ejemplo: portal de participante elegible del evento 7.
+- Accion: revisar Inicio, QR, Agenda, Mis charlas, Reservas, Asistencia, Certificado, Notificaciones y Perfil.
+- Resultado esperado: evento activo unico, encuesta enviada y certificado disponible para participante elegible.
 
-2. Productor
-   - Ingresar como `productor-demo-online`.
-   - Ver Home Visual.
-   - Abrir Inscripciones, Agenda, Speakers, Encuestas, Comunicaciones, Analytics y Operations Center.
-   - Mostrar que Persistent Storage puede seguir como limitacion conocida de hosting.
+### 4. Recepcion
 
-3. Participante
-   - Abrir el Portal URL de Juan Demo.
-   - Mostrar Inicio, Mi QR, Agenda, Mis charlas, Asistencia, Certificado, Notificaciones y Perfil.
-   - Reservar una actividad si se desea mostrar interaccion.
+- Usuario: recepcion-demo-final
+- Accion: buscar participante del evento 7 y revisar estado de acreditacion.
+- Resultado esperado: puede operar recepcion segun permisos, sin modificar datos baseline durante la demo.
 
-4. Recepcion
-   - Ingresar como `recepcion-demo-online`.
-   - Buscar `Juan Demo`.
-   - Mostrar acreditacion y estado.
+### 5. Acceso
 
-5. Acceso
-   - Ingresar como `acceso-demo-online`.
-   - Validar QR o carga manual segun capacidad disponible del navegador.
-   - Mostrar bloqueo de doble validacion si aplica.
+- Usuario: acceso-demo-final
+- Accion: validar QR acreditado y QR no acreditado.
+- Resultado esperado: QR acreditado permitido; QR no acreditado bloqueado; duplicados y cruces bloqueados.
 
-6. Cierre
-   - Volver a Productor/Admin.
-   - Mostrar Analytics y Operations Center con datos derivados.
+### 6. Analytics
+
+- Usuario: productor-demo-final o admin-demo-final
+- Accion: abrir Analytics del evento 7.
+- Resultado esperado:
+  - Participantes: 10
+  - Acreditados: 8
+  - Encuestas respondidas: 7
+  - Tasa encuesta: 70%
+  - Elegibles: 8
+  - Certificados emitidos: 8
 
 ## Criterios de suspension
 
-- Error general de login.
-- Perdida de aislamiento por rol.
-- Envio externo inesperado.
-- Datos reales visibles.
-- Error persistente de PostgreSQL.
-- Fallo de health check.
+Suspender la demo si aparece cualquiera de estos casos:
 
-## Notas
-
-No incluir passwords en este archivo. Las claves demo se entregan una sola vez al finalizar la preparacion.
+- Safe Mode OFF.
+- Live Mode ON.
+- Envio real no autorizado.
+- Error de autenticacion generalizado.
+- Perdida de aislamiento entre eventos u organizaciones.
+- Datos baseline modificados accidentalmente.
+- Certificados o encuestas inconsistentes.

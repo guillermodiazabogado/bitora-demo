@@ -1,14 +1,19 @@
 # BITORA Demo Users
 
-No guardar passwords en este documento.
+No guardar contrasenas en este documento.
 
-| Username | Rol | Organizacion | Evento | Uso |
+| Usuario | Rol | Organizacion | Evento | Modulos esperados |
 | --- | --- | --- | --- | --- |
-| superadmin-demo-online | Super Admin | BITORA Demo | BITORA Demo Full 2026 | Administracion |
-| coordinador-demo-online | Coordinador | BITORA Demo | BITORA Demo Full 2026 | Coordinacion |
-| productor-demo-online | Productor | BITORA Demo | BITORA Demo Full 2026 | Home Productor y gestion |
-| recepcion-demo-online | Operador de recepcion | BITORA Demo | BITORA Demo Full 2026 | Recepcion |
-| acceso-demo-online | Operador de acceso | BITORA Demo | BITORA Demo Full 2026 | Acceso |
-| visualizador-demo-online | Visualizador | BITORA Demo | BITORA Demo Full 2026 | Vista lectura |
-| comunicaciones-demo-online | Comunicaciones | BITORA Demo | BITORA Demo Full 2026 | Comunicaciones Safe Mode |
-| soporte-demo-online | Soporte tecnico | BITORA Demo | BITORA Demo Full 2026 | Diagnostico |
+| admin-demo-final | Super Admin | BITORA TEST LAB | Event 7 | Usuarios, permisos, configuracion, agenda, participantes, analytics, auditoria |
+| productor-demo-final | Productor | BITORA TEST LAB | Event 7 | Home Visual, inscripciones, agenda, speakers, encuestas, comunicaciones, operations, analytics |
+| recepcion-demo-final | Operador de recepcion | BITORA TEST LAB | Event 7 | Recepcion, busqueda de participantes, acreditacion segun permisos |
+| acceso-demo-final | Operador de acceso | BITORA TEST LAB | Event 7 | Validacion QR y control de acceso |
+| visualizador-demo-final | Visualizador | BITORA TEST LAB | Event 7 | Lectura autorizada, reportes permitidos |
+| comunicaciones-demo-final | Comunicaciones | BITORA TEST LAB | Event 7 | Comunicaciones en Safe Mode, sin Live Mode |
+| soporte-demo-final | Soporte tecnico | BITORA TEST LAB | Event 7 | Diagnostico y soporte segun permisos |
+
+Estado validado:
+
+- Login: PASSED para usuarios creados/restablecidos.
+- Asignacion al evento 7: PASSED.
+- Passwords temporales: mostradas una sola vez fuera de Git.
