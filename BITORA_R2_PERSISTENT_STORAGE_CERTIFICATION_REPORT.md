@@ -12,7 +12,7 @@ Base tecnica: a5aabfd986c652d853bc1ae4e1ee120953c90a09
 | Current Render plan | free |
 | Render Persistent Disk | NOT AVAILABLE |
 | Selected storage | Cloudflare R2 |
-| R2 configured | BLOCKED |
+| R2 configured | BLOCKED BY BILLING APPROVAL |
 | Local storage fallback | PASSED |
 | Remote PUT | BLOCKED |
 | Remote GET | BLOCKED |
@@ -78,12 +78,32 @@ https://<ACCOUNT_ID>.r2.cloudflarestorage.com
 
 PLATAFORMA: Cloudflare  
 SECCION: R2  
-ACCION: crear bucket y token R2 compatible S3  
+ACCION: activar R2 y luego crear bucket/token R2 compatible S3  
 BUCKET: bitora-staging-storage  
 PERMISOS TOKEN: Object Read, Object Write y Object List sobre el bucket de staging  
 REANUDAR CON: `R2 listo`
 
 No pegar secretos en el chat.
+
+## Checkpoint Cloudflare
+
+Cloudflare esta autenticado y muestra la pantalla de activacion de R2.
+
+Estado observado:
+
+```text
+Total Due Now: $0.00
+Due Monthly: $0.00 + additional usage
+Free tier: 10 GB-month, 1M Class A operations, 10M Class B operations
+```
+
+Bloqueo:
+
+```text
+BLOCKED BY BILLING APPROVAL
+```
+
+Motivo: el boton disponible agrega una suscripcion de R2 a la cuenta y Cloudflare indica que puede facturar uso adicional si se exceden los limites mensuales gratuitos. Codex no esta autorizado a aceptar esa accion.
 
 ## Evidencia local
 
@@ -103,7 +123,7 @@ No pegar secretos en el chat.
 
 ## Estado final
 
-READY FOR R2 MANUAL SETUP
+BLOCKED BY BILLING APPROVAL
 
 No corresponde ejecutar nuevo Endurance 24H hasta completar:
 

@@ -8,14 +8,23 @@ Usar Render Free para la app y Cloudflare R2 para archivos persistentes, backups
 
 1. Entrar a Cloudflare Dashboard.
 2. Abrir R2.
-3. Crear el bucket:
+3. Si aparece la pantalla de activacion de R2, revisar:
+
+```text
+Total Due Now
+Due Monthly
+Free tier
+```
+
+4. Activar R2 solo si aceptas la condicion de billing de Cloudflare.
+5. Crear el bucket:
 
 ```text
 bitora-staging-storage
 ```
 
-4. Crear un API token R2 compatible S3 limitado al bucket.
-5. Permisos minimos:
+6. Crear un API token R2 compatible S3 limitado al bucket.
+7. Permisos minimos:
 
 ```text
 Object Read
