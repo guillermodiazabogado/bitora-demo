@@ -1,12 +1,12 @@
 # BITORA_RELEASE_FINAL_STATUS
 
-Estado: `READY FOR HOSTING APPROVAL`
+Estado: `STAGING ONLINE CON R2 OPERATIVO CON RESTRICCIONES`
 
-Fecha: 2026-08-04
+Fecha: 2026-08-11
 
 Rama: `deployment/v4-online`
 
-HEAD evaluado: `4c70d4224acba79f3fc140ae1413248d165f4f59`
+HEAD evaluado: `961bedebc46238bcf527e00b759d6df08c94eb21`
 
 ## Estado V4 online
 
@@ -15,8 +15,8 @@ HEAD evaluado: `4c70d4224acba79f3fc140ae1413248d165f4f59`
 - Render web service: PASSED.
 - URL publica: `https://bitora-staging.onrender.com`.
 - HTTPS: PASSED.
-- `/health`: PARTIAL, `backup=missing`.
-- `/ready`: PARTIAL, warning de storage persistente.
+- `/health`: PASSED, `storage=r2`, `backup=recent`.
+- `/ready`: PASSED, storage OK.
 - Login online: PASSED.
 - UI online: PASSED.
 - Safe Mode: ON.
@@ -25,15 +25,16 @@ HEAD evaluado: `4c70d4224acba79f3fc140ae1413248d165f4f59`
 - Endurance 24h: DEFERRED.
 - Produccion: NOT DEPLOYED.
 
-## Bloqueo actual
+## Estado R2
 
-Render Free no soporta Persistent Disks. El servicio `bitora-staging` necesita disco persistente o storage externo equivalente antes de poder certificar:
+Render Free no soporta Persistent Disks. Se activo Cloudflare R2 como storage externo equivalente para staging.
 
-- storage persistent online;
-- backup online remoto;
-- restore online remoto;
-- restart persistence;
-- staging online final.
+- Storage backend remoto: PASSED.
+- Bucket R2: `bitora-staging-storage`.
+- Prefijo: `staging/`.
+- Backup remoto observado: `staging/backups/bitora-event-7-20260811-224929.zip`.
+- Restore aislado desde artefacto remoto: PENDING.
+- Certificado nuevo post-R2 persistido en bucket: PENDING.
 
 ## PR #12
 
@@ -46,7 +47,7 @@ La PR no se fusiona porque la validacion operacional remota no esta completa.
 
 ## Decision final admitida
 
-`READY FOR HOSTING APPROVAL`
+`STAGING ONLINE CON R2 OPERATIVO CON RESTRICCIONES`
 
 No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
 
