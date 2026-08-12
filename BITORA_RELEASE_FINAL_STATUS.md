@@ -1,6 +1,6 @@
 # BITORA_RELEASE_FINAL_STATUS
 
-Estado: `STAGING ONLINE CON R2 OPERATIVO CON RESTRICCIONES`
+Estado: `STAGING ONLINE CON R2 CERTIFICADO`
 
 Fecha: 2026-08-11
 
@@ -33,8 +33,10 @@ Render Free no soporta Persistent Disks. Se activo Cloudflare R2 como storage ex
 - Bucket R2: `bitora-staging-storage`.
 - Prefijo: `staging/`.
 - Backup remoto observado: `staging/backups/bitora-event-7-20260811-224929.zip`.
-- Restore aislado desde artefacto remoto: PENDING.
-- Certificado nuevo post-R2 persistido en bucket: PENDING.
+- Certificado nuevo post-R2: PASSED.
+- Backup post-certificado: PASSED.
+- Restore aislado desde artefacto post-certificado: PASSED.
+- Efectos externos durante restore: 0.
 
 ## PR #12
 
@@ -47,7 +49,7 @@ La PR no se fusiona porque la validacion operacional remota no esta completa.
 
 ## Decision final admitida
 
-`STAGING ONLINE CON R2 OPERATIVO CON RESTRICCIONES`
+`STAGING ONLINE CON R2 CERTIFICADO`
 
 No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
 

@@ -1,0 +1,31 @@
+{
+  "status": "PASSED",
+  "backup_file": "bitora-r2-event7-postcert.zip",
+  "backup_sha256": "8CEA435E81D2CF2B416361376EB89E73C80A25DEF2844C7F954D860F7C44B371",
+  "isolated_root": "C:\\Users\\Noxie-PC\\AppData\\Local\\Temp\\bitora-r2-restore-isolated-s9lz8w0f",
+  "inspect": {
+    "ok": true,
+    "participants": 10,
+    "accreditations": 10,
+    "files": 1,
+    "files_size": 2278
+  },
+  "restore": {
+    "ok": true,
+    "new_event_id": 1,
+    "files_restored": 1,
+    "duration_ms": 231,
+    "token_regenerated": 10
+  },
+  "counts": {
+    "organizations": 2,
+    "events": 1,
+    "people": 10,
+    "accreditations_restored": 10,
+    "certificate_documents_restored": 9,
+    "jobs_restored": 0,
+    "audit_restore": 1
+  },
+  "storage_files_restored": 1,
+  "external_effects": 0
+}

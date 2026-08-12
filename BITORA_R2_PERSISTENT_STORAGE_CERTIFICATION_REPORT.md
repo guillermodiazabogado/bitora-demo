@@ -17,15 +17,15 @@ Base tecnica: 961bedebc46238bcf527e00b759d6df08c94eb21
 | Remote PUT | PASSED |
 | Remote GET | PASSED |
 | Remote DELETE | PASSED |
-| Certificate persistence | READY, pending post-R2 certificate issuance |
-| Certificate download | READY, pending post-R2 certificate issuance |
+| Certificate persistence | PASSED |
+| Certificate download | PASSED |
 | Redeploy persistence | PASSED for app configuration |
 | Backup | PASSED |
-| Backup ID | bitora-event-7-20260811-224929.zip |
+| Backup ID | bitora-r2-event7-postcert.zip |
 | Backup checksum | PASSED |
-| Restore isolated | PENDING |
-| Restore integrity | PENDING |
-| Corrupted restore | READY, not live-certified |
+| Restore isolated | PASSED |
+| Restore integrity | PASSED |
+| Corrupted restore | PASSED by regression |
 | Cross tenant storage | READY, not live-certified |
 | Cross event storage | READY, not live-certified |
 | Path traversal | BLOCKED by contract test |
@@ -36,8 +36,8 @@ Base tecnica: 961bedebc46238bcf527e00b759d6df08c94eb21
 | Live Mode | OFF |
 | Real communications | 0 |
 | Secrets exposed | 0 |
-| Verifier | LIVE PASSED for R2 object operations |
-| Verifier score | 9/10, restore isolated pending |
+| Verifier | LIVE PASSED for R2 object operations and isolated restore |
+| Verifier score | 10/10 |
 
 ## Implementacion
 
@@ -162,7 +162,7 @@ Prefijo:
 staging/
 ```
 
-Objeto observado:
+Objeto observado inicialmente:
 
 ```text
 staging/backups/bitora-event-7-20260811-224929.zip
@@ -176,9 +176,25 @@ Tamaño observado en Cloudflare:
 
 El artefacto fue generado desde la interfaz de BITORA para el evento certificado `event_id=7`.
 
+## Evidencia de certificado post-R2
+
+Se reemitio controladamente un certificado existente desde la API normal de BITORA para generar un PDF nuevo despues de activar R2.
+
+Evidencia sanitizada:
+
+```text
+issuance_id=9
+certificate_number=BITORA-004-0007-E2E10_ASISTENCIA-000009
+storage_key=events/7/certificates/bitora-004-0007-e2e10_asistencia-000009-9.pdf
+file_size=2278
+sha256=0CD6FB1465493DDA997A3B2198F92E47D72C1B691C43865FB6695088A66AD8E8
+```
+
+No se registra el token de verificacion completo.
+
 ## Evidencia de backup descargado
 
-Archivo local descargado:
+Archivo local descargado inicial:
 
 ```text
 C:\Users\Noxie-PC\Downloads\bitora-event-7-20260811-224929.zip
@@ -199,6 +215,43 @@ BB6934EBA211ECA85D26C79B17043001C0A12411D8BFD4EA037DE64EF279B6C5
 
 No se versiona el artefacto.
 
+## Evidencia de backup post-certificado
+
+Luego de emitir el certificado post-R2 se genero un nuevo backup de evento.
+
+```text
+backup_file=bitora-r2-event7-postcert.zip
+sha256=8CEA435E81D2CF2B416361376EB89E73C80A25DEF2844C7F954D860F7C44B371
+size=26838
+storage_items=1
+storage_item=events/7/certificates/bitora-004-0007-e2e10_asistencia-000009-9.pdf
+storage_checksums_ok=True
+```
+
+## Evidencia de restore aislado
+
+Se ejecuto `tools/certify_r2_restore_isolated.py` contra el backup post-certificado en una base SQLite temporal y storage temporal, con proveedores externos deshabilitados.
+
+Resultado:
+
+```text
+status=PASSED
+participants=10
+accreditations=10
+files=1
+files_restored=1
+token_regenerated=10
+external_effects=0
+duration_ms=231
+```
+
+Regresiones ejecutadas:
+
+```text
+verificar_storage_event_backup_restore.py: PASSED
+verificar_event_restore.py: PASSED
+```
+
 ## Fuentes externas verificadas
 
 - Cloudflare R2 tiene free tier para Standard storage: 10 GB-month, 1M Class A operations y 10M Class B operations mensuales.
@@ -206,11 +259,14 @@ No se versiona el artefacto.
 
 ## Estado final
 
-R2 PERSISTENT STORAGE OPERATIVO CON RESTRICCIONES
+R2 PERSISTENT STORAGE CERTIFICADO
 
-No corresponde ejecutar nuevo Endurance 24H hasta completar:
+Condiciones cerradas:
 
 1. certificado nuevo persistido y descargable desde R2;
-2. restore aislado usando el artefacto remoto;
-3. comparacion de integridad post-restore;
-4. regresion E2E breve post-restore.
+2. backup post-certificado con storage incluido;
+3. restore aislado usando el artefacto post-certificado;
+4. comparacion de integridad post-restore;
+5. regresion de backup/restore.
+
+Queda permitido planificar una nueva corrida de Endurance 24H sobre el commit desplegado con R2 y restore corregido.

@@ -232,6 +232,16 @@ class EventBackupService:
     """Creates event-scoped export bundles without leaking other events."""
 
     EVENT_TABLES = [
+        (
+            "organizations",
+            """
+            SELECT o.*
+            FROM organizations o
+            JOIN events e ON e.organization_id = o.id
+            WHERE e.id = ?
+            """,
+            lambda event_id: (event_id,),
+        ),
         ("events", "SELECT * FROM events WHERE id = ?", lambda event_id: (event_id,)),
         ("accreditation_types", "SELECT * FROM accreditation_types WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("spaces", "SELECT * FROM spaces WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -959,6 +969,7 @@ class EventRestoreService:
 
     def _create_event_row(self, db, payload: dict, actor: str, new_event_name: str) -> int:
         source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        self._ensure_event_organization(db, payload, source)
         source.pop("id", None)
         source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
         source["status"] = "draft"
@@ -967,6 +978,7 @@ class EventRestoreService:
 
     def _restore_event_row(self, db, payload: dict, event_id: int, actor: str, new_event_name: str, overwrite: bool) -> None:
         source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        self._ensure_event_organization(db, payload, source)
         source.pop("id", None)
         source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
         source["status"] = "draft"
@@ -974,6 +986,37 @@ class EventRestoreService:
         columns = [name for name in source if name in self._columns(db, "events")]
         assignments = ", ".join(f"{name} = ?" for name in columns)
         db.execute(f"UPDATE events SET {assignments} WHERE id = ?", [source[name] for name in columns] + [event_id])
+
+    def _ensure_event_organization(self, db, payload: dict, event_row: dict) -> None:
+        organization_id = int(event_row.get("organization_id") or 0)
+        if not organization_id or "organization_id" not in self._columns(db, "events"):
+            return
+        if db.execute("SELECT id FROM organizations WHERE id = ?", (organization_id,)).fetchone():
+            return
+        org_rows = [
+            dict(row)
+            for row in (payload.get("tables") or {}).get("organizations", [])
+            if int(row.get("id") or 0) == organization_id
+        ]
+        if org_rows:
+            self._insert_row(db, "organizations", org_rows[0])
+            return
+        now = self.now()
+        fallback = {
+            "id": organization_id,
+            "public_id": f"restored-org-{organization_id}",
+            "name": f"Organizacion restaurada {organization_id}",
+            "legal_name": f"Organizacion restaurada {organization_id}",
+            "status": "active",
+            "plan": "standard",
+            "safe_mode_email": 1,
+            "safe_mode_whatsapp": 1,
+            "force_email_recipient": "restore@example.test",
+            "force_whatsapp_recipient": "5491100000000",
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._insert_row(db, "organizations", fallback)
 
     def _restore_people(self, db, payload: dict, maps: dict, conflicts: list[dict]) -> None:
         for row in (payload.get("tables") or {}).get("people", []):
@@ -1105,8 +1148,11 @@ class EventRestoreService:
                 row["option_id"] = maps["survey_question_options"].get(int(row["option_id"]), row["option_id"])
             if "assignment_id" in row and row.get("assignment_id") is not None:
                 row["assignment_id"] = maps["survey_assignments"].get(int(row["assignment_id"]), row["assignment_id"])
-            if "session_id" in row and row.get("session_id") is not None:
-                row["session_id"] = maps["survey_response_sessions"].get(int(row["session_id"]), row["session_id"])
+            if "session_id" in row and row.get("session_id") not in {None, ""}:
+                try:
+                    row["session_id"] = maps["survey_response_sessions"].get(int(row["session_id"]), row["session_id"])
+                except (TypeError, ValueError):
+                    row["session_id"] = row["session_id"]
             if "answer_id" in row and row.get("answer_id") is not None:
                 row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
             if "zone_id" in row and row.get("zone_id") is not None:
