@@ -61,6 +61,9 @@ def load_secrets() -> dict:
         "S3_PREFIX",
         "S3_ACCESS_KEY_ID",
         "S3_SECRET_ACCESS_KEY",
+        "BITORA_NODE_BIN",
+        "BITORA_WRANGLER_COMMAND",
+        "BITORA_WRANGLER_PNPM",
     ):
         if os.environ.get(key):
             secrets[key] = os.environ[key]
@@ -149,6 +152,8 @@ class HttpClient:
 
 
 def r2_configured(secrets: dict) -> bool:
+    if secrets.get("R2_BUCKET") and wrangler_available():
+        return True
     endpoint = secrets.get("R2_ENDPOINT") or secrets.get("S3_ENDPOINT_URL") or secrets.get("R2_ACCOUNT_ID")
     bucket = secrets.get("R2_BUCKET") or secrets.get("S3_BUCKET")
     key = secrets.get("R2_ACCESS_KEY_ID") or secrets.get("S3_ACCESS_KEY_ID")
@@ -156,14 +161,43 @@ def r2_configured(secrets: dict) -> bool:
     return bool(endpoint and bucket and key and secret)
 
 
+def wrangler_available() -> bool:
+    return bool(os.environ.get("BITORA_WRANGLER_COMMAND") or os.environ.get("BITORA_WRANGLER_PNPM"))
+
+
+def wrangler_env() -> dict:
+    env = os.environ.copy()
+    node_bin = os.environ.get("BITORA_NODE_BIN")
+    if node_bin:
+        env["PATH"] = f"{node_bin}{os.pathsep}{env.get('PATH', '')}"
+    return env
+
+
+def wrangler_command() -> list[str]:
+    explicit = os.environ.get("BITORA_WRANGLER_COMMAND")
+    if explicit:
+        return explicit.split()
+    pnpm = os.environ.get("BITORA_WRANGLER_PNPM")
+    if pnpm:
+        return [pnpm, "dlx", "wrangler@latest"]
+    return ["wrangler"]
+
+
 def apply_r2_env(secrets: dict) -> None:
+    local_runtime_keys = {
+        "BITORA_NODE_BIN",
+        "BITORA_WRANGLER_COMMAND",
+        "BITORA_WRANGLER_PNPM",
+    }
     for key, value in secrets.items():
-        if key.startswith("R2_") or key.startswith("S3_") or key == "BITORA_STORAGE_PROVIDER":
+        if key.startswith("R2_") or key.startswith("S3_") or key == "BITORA_STORAGE_PROVIDER" or key in local_runtime_keys:
             os.environ[key] = str(value)
     os.environ["BITORA_STORAGE_PROVIDER"] = "r2"
 
 
 def r2_direct_check(run_id: str) -> dict:
+    if os.environ.get("R2_BUCKET") and wrangler_available():
+        return r2_direct_check_wrangler(run_id, os.environ["R2_BUCKET"])
     from backend.storage import StorageService
 
     storage = StorageService(Path(os.environ.get("TEMP", ".")) / "bitora-r2-unused", "r2")
@@ -185,6 +219,63 @@ def r2_direct_check(run_id: str) -> dict:
     }
 
 
+def r2_direct_check_wrangler(run_id: str, bucket: str) -> dict:
+    key = f"endurance/{run_id}/{utc_now().strftime('%Y%m%d%H%M%S')}.txt"
+    payload = f"BITORA ENDURANCE R2 {run_id} {iso()}".encode("utf-8")
+    checksum = hashlib.sha256(payload).hexdigest()
+    temp_dir = Path(os.environ.get("TEMP", ".")) / f"bitora-r2-{time.time_ns()}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    source = temp_dir / "payload.txt"
+    target = temp_dir / "downloaded.txt"
+    source.write_bytes(payload)
+    base = wrangler_command()
+    env = wrangler_env()
+
+    def run(args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            base + args,
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=120,
+        )
+
+    put = run(["r2", "object", "put", f"{bucket}/{key}", "--file", str(source)])
+    get = run(["r2", "object", "get", f"{bucket}/{key}", "--file", str(target)])
+    read_back = target.read_bytes() if target.exists() else b""
+    delete = run(["r2", "object", "delete", f"{bucket}/{key}"])
+    ok = put.returncode == 0 and get.returncode == 0 and read_back == payload and delete.returncode == 0
+    for path in (source, target):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    try:
+        temp_dir.rmdir()
+    except OSError:
+        pass
+    return {
+        "timestamp_utc": iso(),
+        "status": "PASSED" if ok else "FAILED",
+        "mode": "wrangler_oauth",
+        "write": put.returncode == 0,
+        "read": get.returncode == 0 and read_back == payload,
+        "checksum": hashlib.sha256(read_back).hexdigest() if read_back else "",
+        "expected_checksum": checksum,
+        "delete": delete.returncode == 0,
+        "bucket_hint": mask(bucket),
+        "key_hint": mask(key, 12),
+        "errors": {
+            "put": put.stderr[-300:] if put.returncode else "",
+            "get": get.stderr[-300:] if get.returncode else "",
+            "delete": delete.stderr[-300:] if delete.returncode else "",
+        },
+    }
+
+
 def inspect_backup(raw: bytes) -> dict:
     backup_path = Path(os.environ.get("TEMP", ".")) / f"bitora-backup-inspect-{time.time_ns()}.zip"
     backup_path.write_bytes(raw)
@@ -194,7 +285,7 @@ def inspect_backup(raw: bytes) -> dict:
             manifest_name = next((name for name in names if name.endswith("manifest.json")), "")
             manifest = json.loads(archive.read(manifest_name).decode("utf-8")) if manifest_name else {}
             text = "\n".join(names)
-        counts = manifest.get("counts") or {}
+        counts = manifest.get("counts") or manifest.get("tables") or {}
         return {
             "ok": bool(manifest_name),
             "manifest": manifest_name,
@@ -254,6 +345,8 @@ def restore_check(backup_record: dict, python_exe: str) -> dict:
         cwd=str(ROOT),
         env=env,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=240,
     )
@@ -345,6 +438,7 @@ def main() -> int:
     args = parser.parse_args()
 
     secrets = load_secrets()
+    apply_r2_env(secrets)
     missing = []
     if not secrets.get("BITORA_ENDURANCE_ADMIN_USER") or not secrets.get("BITORA_ENDURANCE_ADMIN_PASSWORD"):
         missing.append("BITORA_ENDURANCE_ADMIN_USER/BITORA_ENDURANCE_ADMIN_PASSWORD")
@@ -354,7 +448,6 @@ def main() -> int:
         print(json.dumps({"status": "BLOCKED", "missing": missing, "secret_file": str(local_secret_path())}, indent=2))
         return 2
 
-    apply_r2_env(secrets)
     start = utc_now()
     expected_end = start + timedelta(hours=args.hours)
     run_id = args.run_id or f"ENDURANCE-R2-FULL-24H-{start.strftime('%Y%m%d-%H%M%S')}"

@@ -10,6 +10,7 @@ env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.wrangler/
 
 # Base local y archivos transitorios de SQLite
 *.sqlite3
