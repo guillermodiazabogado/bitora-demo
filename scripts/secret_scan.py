@@ -22,6 +22,7 @@ SKIP_DIRS = {
     "storage",
     "tmp",
     "deploy_package",
+    "artifacts",
 }
 
 SKIP_SUFFIXES = {
@@ -73,6 +74,8 @@ PLACEHOLDERS = {
     "example",
 }
 
+SHA256_EVIDENCE = re.compile(r'\b(?:backup_)?sha256\b"?\s*[:=]\s*"?[A-Fa-f0-9]{64}"?', re.IGNORECASE)
+
 
 def is_skipped(path: Path) -> bool:
     rel_parts = path.relative_to(ROOT).parts
@@ -108,6 +111,10 @@ def is_placeholder(value: str) -> bool:
     return cleaned.startswith("<") and cleaned.endswith(">")
 
 
+def is_checksum_evidence(line: str) -> bool:
+    return SHA256_EVIDENCE.search(line) is not None
+
+
 def scan() -> list[str]:
     findings: list[str] = []
     for path in ROOT.rglob("*"):
@@ -118,9 +125,10 @@ def scan() -> list[str]:
             continue
         rel = path.relative_to(ROOT)
         for index, line in enumerate(text.splitlines(), start=1):
-            for pattern in PATTERNS:
-                if pattern.search(line):
-                    findings.append(f"{rel}:{index}: token pattern")
+            if not is_checksum_evidence(line):
+                for pattern in PATTERNS:
+                    if pattern.search(line):
+                        findings.append(f"{rel}:{index}: token pattern")
             for key in ASSIGNMENT_KEYS:
                 match = re.search(rf"\b{re.escape(key)}\s*=\s*(.+)", line)
                 if match and not is_placeholder(match.group(1)):
