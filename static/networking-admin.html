@@ -58,6 +58,20 @@
         <label>Datos recomendados de readiness
           <textarea id="readinessRecommended" rows="3" placeholder="Usar default del modo si queda vacio"></textarea>
         </label>
+        <div class="networking-two">
+          <label>Discovery
+            <select id="discoveryEnabled">
+              <option value="1">Habilitado</option>
+              <option value="0">Deshabilitado</option>
+            </select>
+          </label>
+          <label>Tarjetas por tanda
+            <input id="discoveryBatchSize" type="number" min="1" max="5" value="3">
+          </label>
+        </div>
+        <label>Exploracion cada N tarjetas
+          <input id="discoveryFrequency" type="number" min="2" max="12" value="4">
+        </label>
         <div class="participant-actions-row">
           <button id="loadConfigBtn" type="button" class="ghost">Leer config</button>
           <button id="saveConfigBtn" type="button">Guardar config</button>
@@ -135,6 +149,9 @@
         document.getElementById("profileMode").value = data.networking_profile_mode;
         document.getElementById("readinessRequired").value = (data.networking_readiness_required || []).join(", ");
         document.getElementById("readinessRecommended").value = (data.networking_readiness_recommended || []).join(", ");
+        document.getElementById("discoveryEnabled").value = data.networking_discovery_enabled ? "1" : "0";
+        document.getElementById("discoveryBatchSize").value = data.networking_discovery_batch_size || 3;
+        document.getElementById("discoveryFrequency").value = data.networking_discovery_exploration_frequency || 4;
         document.getElementById("eventId").value = eventId;
       }
     }
@@ -153,6 +170,9 @@
           networking_profile_mode: document.getElementById("profileMode").value,
           networking_readiness_required: splitKeys(document.getElementById("readinessRequired").value),
           networking_readiness_recommended: splitKeys(document.getElementById("readinessRecommended").value),
+          networking_discovery_enabled: document.getElementById("discoveryEnabled").value,
+          networking_discovery_batch_size: Number(document.getElementById("discoveryBatchSize").value || 3),
+          networking_discovery_exploration_frequency: Number(document.getElementById("discoveryFrequency").value || 4),
         }),
       });
       const data = await response.json();

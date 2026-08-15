@@ -37,6 +37,7 @@ SEMANTIC_SOURCES = {"SOURCE", "USER", "ADMIN", "SYSTEM"}
 SEMANTIC_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN", "ADMIN"}
 VOCABULARY_DIMENSIONS = {"INDUSTRY", "SPECIALTY", "OFFER", "SEEK", "INTEREST", "COMPANY_TYPE", "FUNCTION"}
 VOCABULARY_STATUSES = {"CONFIGURED", "CANONICAL", "CANDIDATE", "DISABLED"}
+DISCOVERY_MAX_BATCH = 5
 READINESS_DIMENSIONS = {
     "person.identity",
     "person.role",
@@ -283,6 +284,7 @@ class NetworkingService:
         self.ensure_v1_2_schema(db)
         self.ensure_v1_3_schema(db)
         self.ensure_discovery_schema(db)
+        self.ensure_v2_schema(db)
         self.ensure_taxonomy(db)
 
     def ensure_v1_1_schema(self, db) -> None:
@@ -392,6 +394,22 @@ class NetworkingService:
             """
         )
 
+    def ensure_v2_schema(self, db) -> None:
+        event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+        for column, ddl in {
+            "networking_discovery_enabled": "INTEGER NOT NULL DEFAULT 1",
+            "networking_discovery_exploration_frequency": "INTEGER NOT NULL DEFAULT 4",
+            "networking_discovery_batch_size": "INTEGER NOT NULL DEFAULT 3",
+        }.items():
+            if column not in event_columns:
+                db.execute(f"ALTER TABLE events ADD COLUMN {column} {ddl}")
+        db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_networking_interactions_actor_type
+            ON networking_interaction_events(event_id, actor_participation_id, event_type, target_participation_id)
+            """
+        )
+
     def ensure_taxonomy(self, db) -> None:
         for code in sorted(FUNCTIONS):
             db.execute(
@@ -405,7 +423,15 @@ class NetworkingService:
             )
 
     def get_event_config(self, db, event_id: int) -> dict:
-        row = db.execute("SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
+        row = db.execute(
+            """
+            SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended,
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
         if not row:
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
         readiness = self.readiness_config(row)
@@ -417,6 +443,9 @@ class NetworkingService:
             "networking_readiness_required": readiness["required"],
             "networking_readiness_recommended": readiness["recommended"],
             "networking_readiness_available": sorted(READINESS_DIMENSIONS),
+            "networking_discovery_enabled": bool(int(row["networking_discovery_enabled"] if "networking_discovery_enabled" in row.keys() else 1)),
+            "networking_discovery_exploration_frequency": max(2, int(row["networking_discovery_exploration_frequency"] if "networking_discovery_exploration_frequency" in row.keys() else 4)),
+            "networking_discovery_batch_size": max(1, min(DISCOVERY_MAX_BATCH, int(row["networking_discovery_batch_size"] if "networking_discovery_batch_size" in row.keys() else 3))),
             "semantic_taxonomy": self.event_taxonomy_payload(db, event_id).get("concepts", []),
         }
 
@@ -505,7 +534,15 @@ class NetworkingService:
         if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
         mode = self._presentation_mode(data.get("networking_profile_mode") or data.get("profile_mode") or data.get("mode"))
-        existing = db.execute("SELECT networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
+        existing = db.execute(
+            """
+            SELECT networking_readiness_required, networking_readiness_recommended,
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
         if "networking_readiness_required" in data or "readiness_required" in data:
             required = self._readiness_keys(data.get("networking_readiness_required") if "networking_readiness_required" in data else data.get("readiness_required"))
         else:
@@ -515,14 +552,48 @@ class NetworkingService:
         else:
             recommended = self._readiness_keys(existing["networking_readiness_recommended"] if existing else "")
         recommended = [key for key in recommended if key not in required]
+        if "networking_discovery_enabled" in data or "discovery_enabled" in data:
+            discovery_enabled = 1 if self._truthy(data.get("networking_discovery_enabled") if "networking_discovery_enabled" in data else data.get("discovery_enabled")) else 0
+        else:
+            discovery_enabled = int(existing["networking_discovery_enabled"] if existing and "networking_discovery_enabled" in existing.keys() else 1)
+        exploration_frequency = int(data.get("networking_discovery_exploration_frequency") or data.get("discovery_exploration_frequency") or (existing["networking_discovery_exploration_frequency"] if existing and "networking_discovery_exploration_frequency" in existing.keys() else 4) or 4)
+        exploration_frequency = max(2, min(12, exploration_frequency))
+        batch_size = int(data.get("networking_discovery_batch_size") or data.get("discovery_batch_size") or (existing["networking_discovery_batch_size"] if existing and "networking_discovery_batch_size" in existing.keys() else 3) or 3)
+        batch_size = max(1, min(DISCOVERY_MAX_BATCH, batch_size))
         db.execute(
-            "UPDATE events SET networking_profile_mode = ?, networking_readiness_required = ?, networking_readiness_recommended = ? WHERE id = ?",
-            (mode, ",".join(required), ",".join(recommended), event_id),
+            """
+            UPDATE events
+            SET networking_profile_mode = ?,
+                networking_readiness_required = ?,
+                networking_readiness_recommended = ?,
+                networking_discovery_enabled = ?,
+                networking_discovery_exploration_frequency = ?,
+                networking_discovery_batch_size = ?
+            WHERE id = ?
+            """,
+            (mode, ",".join(required), ",".join(recommended), discovery_enabled, exploration_frequency, batch_size, event_id),
         )
-        self.record_event(db, event_id, None, None, "event_config_updated", {"actor": actor, "networking_profile_mode": mode, "readiness_required": required, "readiness_recommended": recommended})
-        row = db.execute("SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
+        self.record_event(db, event_id, None, None, "event_config_updated", {"actor": actor, "networking_profile_mode": mode, "readiness_required": required, "readiness_recommended": recommended, "discovery_enabled": bool(discovery_enabled)})
+        row = db.execute(
+            """
+            SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended,
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
         readiness = self.readiness_config(row)
-        return {"ok": True, "event_id": event_id, "networking_profile_mode": mode, "networking_readiness_required": readiness["required"], "networking_readiness_recommended": readiness["recommended"]}
+        return {
+            "ok": True,
+            "event_id": event_id,
+            "networking_profile_mode": mode,
+            "networking_readiness_required": readiness["required"],
+            "networking_readiness_recommended": readiness["recommended"],
+            "networking_discovery_enabled": bool(int(row["networking_discovery_enabled"] if "networking_discovery_enabled" in row.keys() else 1)),
+            "networking_discovery_exploration_frequency": max(2, int(row["networking_discovery_exploration_frequency"] if "networking_discovery_exploration_frequency" in row.keys() else 4)),
+            "networking_discovery_batch_size": max(1, min(DISCOVERY_MAX_BATCH, int(row["networking_discovery_batch_size"] if "networking_discovery_batch_size" in row.keys() else 3))),
+        }
 
     def preview_import(self, db, event_id: int, rows: list[dict], source_system: str = "external") -> dict:
         event = db.execute("SELECT id, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
@@ -830,24 +901,9 @@ class NetworkingService:
             return {"ok": False, "error": "No podes agregarte a vos mismo", "status_code": 409}
         if target["participation_state"] != "ACTIVE":
             return {"ok": False, "error": "El perfil todavia no esta activo en Networking", "status_code": 409}
-        now = self.now()
-        existing = db.execute(
-            "SELECT * FROM networking_contacts WHERE owner_participation_id = ? AND target_participation_id = ?",
-            (owner["id"], target["id"]),
-        ).fetchone()
-        created = False
-        if existing:
-            db.execute("UPDATE networking_contacts SET status = 'ACTIVE', updated_at = ? WHERE id = ?", (now, existing["id"]))
-            contact_id = int(existing["id"])
-        else:
-            contact_id = int(db.execute(
-                """
-                INSERT INTO networking_contacts (event_id, owner_participation_id, target_participation_id, status, created_at, updated_at)
-                VALUES (?, ?, ?, 'ACTIVE', ?, ?)
-                """,
-                (owner["event_id"], owner["id"], target["id"], now, now),
-            ).lastrowid)
-            created = True
+        contact = self._create_or_refresh_contact(db, owner, target)
+        contact_id = contact["contact_id"]
+        created = contact["created"]
         self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(target["id"]), "scan_contact", {"created": created})
         return {"ok": True, "created": created, "contact_id": contact_id, "profile": self.participation_payload(db, int(target["id"]), viewer_id=int(owner["id"]), full=True)}
 
@@ -1158,7 +1214,19 @@ class NetworkingService:
             ),
         )
         self.record_event(db, event_id, participation_id, None, "discovery_onboarded", {"desired_functions": desired_functions, "desired_company_types": desired_company_types, "objectives": objectives})
-        return {"ok": True, "participation": self.participation_payload(db, participation_id, viewer_id=participation_id, full=True), "discovery": self.discovery_shell(db, owner_token)}
+        profile = self.participation_payload(db, participation_id, viewer_id=participation_id, full=True)
+        return {
+            "ok": True,
+            "participation": profile,
+            "discovery": {
+                "ok": True,
+                "status": profile.get("discovery", {}).get("status") or "READY",
+                "ready": bool(profile.get("discovery", {}).get("ready")),
+                "message": "Discovery listo. BITORA va a mostrar oportunidades una por una.",
+                "items": [],
+                "exhausted": False,
+            },
+        }
 
     def discovery_shell(self, db, owner_token: str) -> dict:
         participation = self.resolve_owner(db, owner_token)
@@ -1166,13 +1234,345 @@ class NetworkingService:
             return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
         profile = self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)
         discovery = profile.get("discovery") or {}
+        event_config = self.discovery_event_config(db, int(participation["event_id"]))
+        if not event_config["enabled"]:
+            return {
+                "ok": True,
+                "status": "DISABLED",
+                "ready": False,
+                "message": "Discovery no esta habilitado para este evento.",
+                "profile": profile,
+                "items": [],
+                "exhausted": True,
+            }
+        if discovery.get("ready"):
+            stream = self.discovery_stream(db, owner_token)
+            stream["profile"] = profile
+            return stream
         return {
             "ok": True,
             "status": discovery.get("status") or "NOT_CONFIGURED",
             "ready": bool(discovery.get("ready")),
-            "message": "Discovery esta listo. El motor de oportunidades se activa en la siguiente etapa." if discovery.get("ready") else "Completa el Golden Ticket para preparar Discovery.",
+            "message": "Completa el Golden Ticket para preparar Discovery.",
             "profile": profile,
+            "items": [],
+            "exhausted": False,
         }
+
+    def discovery_event_config(self, db, event_id: int) -> dict:
+        row = db.execute(
+            """
+            SELECT networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        return {
+            "enabled": bool(int(row["networking_discovery_enabled"] if row and "networking_discovery_enabled" in row.keys() else 1)),
+            "exploration_frequency": max(2, min(12, int(row["networking_discovery_exploration_frequency"] if row and "networking_discovery_exploration_frequency" in row.keys() else 4))),
+            "batch_size": max(1, min(DISCOVERY_MAX_BATCH, int(row["networking_discovery_batch_size"] if row and "networking_discovery_batch_size" in row.keys() else 3))),
+        }
+
+    def discovery_stream(self, db, owner_token: str, *, limit: int | None = None) -> dict:
+        owner = self.resolve_owner(db, owner_token)
+        if not owner:
+            return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
+        if owner["participation_state"] != "ACTIVE":
+            return {"ok": False, "error": "Activa tu credencial antes de usar Discovery", "status_code": 409}
+        config = self.discovery_event_config(db, int(owner["event_id"]))
+        if not config["enabled"]:
+            return {
+                "ok": True,
+                "status": "DISABLED",
+                "ready": False,
+                "message": "Discovery no esta habilitado para este evento.",
+                "items": [],
+                "exhausted": True,
+            }
+        owner_profile = self.participation_payload(db, int(owner["id"]), viewer_id=int(owner["id"]), full=True)
+        if not (owner_profile.get("discovery") or {}).get("ready"):
+            return {
+                "ok": True,
+                "status": "NOT_CONFIGURED",
+                "ready": False,
+                "message": "Completa el Golden Ticket para preparar Discovery.",
+                "items": [],
+                "exhausted": False,
+            }
+        batch_size = max(1, min(DISCOVERY_MAX_BATCH, int(limit or config["batch_size"])))
+        candidates = self._discovery_candidates(db, owner, owner_profile)
+        scored = [item for item in (self._score_discovery_candidate(owner_profile, candidate, config) for candidate in candidates) if item["relevance"] > 0 or owner_profile.get("discovery", {}).get("diversity")]
+        ordered = self._order_discovery_candidates(scored, owner_profile, config)
+        fresh = ordered[:batch_size]
+        for item in fresh[:1]:
+            self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(item["profile"]["participation_id"]), "discovery_shown", {"reasons": [reason["code"] for reason in item["reasons"]], "bucket": item["bucket"]})
+        public_items = [self._public_discovery_item(item) for item in fresh]
+        exhausted = not fresh
+        return {
+            "ok": True,
+            "status": "READY" if not exhausted else "EXHAUSTED",
+            "ready": True,
+            "message": "Estas viendo oportunidades del evento segun tus preferencias." if not exhausted else "Ya recorriste las oportunidades disponibles con tus preferencias actuales.",
+            "items": public_items,
+            "exhausted": exhausted,
+            "actions": {"empty": ["adjust_preferences", "return_credential"] if exhausted else []},
+        }
+
+    def discovery_action(self, db, owner_token: str, data: dict) -> dict:
+        owner = self.resolve_owner(db, owner_token, int(data.get("event_id") or 0) or None)
+        if not owner:
+            return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
+        if owner["participation_state"] != "ACTIVE":
+            return {"ok": False, "error": "Activa tu credencial antes de usar Discovery", "status_code": 409}
+        action = str(data.get("action") or "").strip().lower().replace("-", "_")
+        if action not in {"skip", "save", "open_profile", "channel_opened"}:
+            return {"ok": False, "error": "Accion Discovery invalida", "status_code": 400}
+        target = self._resolve_discovery_target(db, owner, data)
+        if not target:
+            return {"ok": False, "error": "Perfil Discovery no disponible", "status_code": 404}
+        event_type = {
+            "skip": "discovery_skipped",
+            "save": "discovery_saved",
+            "open_profile": "discovery_profile_opened",
+            "channel_opened": "discovery_channel_opened",
+        }[action]
+        payload = {"source": "discovery"}
+        result = {"ok": True, "action": action}
+        if action == "save":
+            contact = self._create_or_refresh_contact(db, owner, target)
+            payload["contact_id"] = contact["contact_id"]
+            payload["created"] = contact["created"]
+            result.update(contact)
+        self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(target["id"]), event_type, payload)
+        result["profile"] = self.participation_payload(db, int(target["id"]), viewer_id=int(owner["id"]), full=True)
+        result["next"] = self.discovery_stream(db, owner_token)
+        return result
+
+    def _discovery_candidates(self, db, owner, owner_profile: dict) -> list[dict]:
+        rows = db.execute(
+            """
+            SELECT nep.id
+            FROM networking_event_participations nep
+            JOIN networking_intents ni ON ni.participation_id = nep.id
+            WHERE nep.event_id = ?
+              AND nep.id != ?
+              AND nep.participation_state = 'ACTIVE'
+              AND ni.discoverable = 1
+              AND ni.profile_visible = 1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM networking_contacts c
+                  WHERE c.owner_participation_id = ? AND c.target_participation_id = nep.id AND c.status = 'ACTIVE'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM networking_interaction_events ie
+                  WHERE ie.event_id = nep.event_id
+                    AND ie.actor_participation_id = ?
+                    AND ie.target_participation_id = nep.id
+                    AND ie.event_type IN ('discovery_shown', 'discovery_skipped', 'discovery_saved')
+              )
+            ORDER BY nep.updated_at DESC, nep.id DESC
+            LIMIT 60
+            """,
+            (owner["event_id"], owner["id"], owner["id"], owner["id"]),
+        ).fetchall()
+        candidates = []
+        for row in rows:
+            profile = self.participation_payload(db, int(row["id"]), viewer_id=int(owner["id"]), full=True)
+            presentation = profile.get("presentation") or {}
+            primary = presentation.get("primary") or {}
+            meaningful = bool(primary.get("title") or profile.get("organization") or profile.get("name"))
+            if meaningful:
+                candidates.append(profile)
+        return candidates
+
+    def _score_discovery_candidate(self, owner_profile: dict, candidate_profile: dict, config: dict) -> dict:
+        reasons = []
+        score = 0
+        owner_seek = self._semantic_key_set(owner_profile, "seeks")
+        owner_offer = self._semantic_key_set(owner_profile, "offers", "organization_offers")
+        candidate_offer = self._semantic_key_set(candidate_profile, "offers", "organization_offers")
+        candidate_seek = self._semantic_key_set(candidate_profile, "seeks")
+        common = owner_seek & candidate_offer
+        if common:
+            score += 80
+            reasons.append(self._reason("SEEK_OFFER_MATCH", "Ofrece algo que estas buscando", candidate_profile, common, "offers", "organization_offers"))
+        reverse_common = owner_offer & candidate_seek
+        if reverse_common:
+            score += 50
+            reasons.append(self._reason("OFFER_SEEK_MATCH", "Busca algo que podes ofrecer", candidate_profile, reverse_common, "seeks"))
+
+        desired_company_types = self._preference_key_set((owner_profile.get("discovery") or {}).get("desired_company_types") or [])
+        candidate_sector = self._semantic_key_set(candidate_profile, "industries", "specialties")
+        candidate_sector.update(self._text_key_set([candidate_profile.get("organization_activity"), candidate_profile.get("organization_specialty")]))
+        sector_common = desired_company_types & candidate_sector
+        if sector_common:
+            score += 30
+            reasons.append(self._reason("PREFERRED_SECTOR", "Pertenece a un rubro que elegiste", candidate_profile, sector_common, "industries", "specialties"))
+
+        desired_functions = {str(value or "").strip().upper() for value in (owner_profile.get("discovery") or {}).get("desired_functions") or [] if value}
+        candidate_function = str(candidate_profile.get("function") or "").strip().upper()
+        if candidate_function and candidate_function in desired_functions:
+            score += 30
+            reasons.append({"code": "DESIRED_FUNCTION", "label": "Trabaja en un area que queres contactar", "supporting_label": candidate_function.replace("_", " ").title()})
+
+        objectives = self._preference_key_set((owner_profile.get("discovery") or {}).get("objectives") or [])
+        candidate_interests = self._semantic_key_set(candidate_profile, "interests")
+        interest_common = objectives & candidate_interests
+        if interest_common:
+            score += 18
+            reasons.append(self._reason("SHARED_OBJECTIVE", "Comparte un objetivo del evento", candidate_profile, interest_common, "interests"))
+
+        if not reasons:
+            if (owner_profile.get("discovery") or {}).get("diversity"):
+                score += 5
+                reasons.append({"code": "EXPLORATION", "label": "Oportunidad fuera de tus preferencias", "supporting_label": ""})
+            else:
+                reasons.append({"code": "GENERAL_EVENT", "label": "Perfil disponible en este evento", "supporting_label": ""})
+        return {
+            "profile": candidate_profile,
+            "reasons": reasons[:3],
+            "bucket": "aligned" if score >= 18 else "exploration",
+            "relevance": score,
+        }
+
+    def _order_discovery_candidates(self, scored: list[dict], owner_profile: dict, config: dict) -> list[dict]:
+        scored = sorted(scored, key=lambda item: (-int(item["relevance"]), self._canonical_key(item["profile"].get("public_profile_id") or "")))
+        aligned = [item for item in scored if item["bucket"] == "aligned"]
+        exploration = [item for item in scored if item["bucket"] != "aligned"]
+        if not (owner_profile.get("discovery") or {}).get("diversity"):
+            return aligned
+        frequency = max(2, int(config.get("exploration_frequency") or 4))
+        result = []
+        aligned_index = 0
+        exploration_index = 0
+        while aligned_index < len(aligned) or exploration_index < len(exploration):
+            if exploration_index < len(exploration) and result and len(result) % frequency == frequency - 1:
+                result.append(exploration[exploration_index])
+                exploration_index += 1
+            elif aligned_index < len(aligned):
+                result.append(aligned[aligned_index])
+                aligned_index += 1
+            elif exploration_index < len(exploration):
+                result.append(exploration[exploration_index])
+                exploration_index += 1
+        return self._avoid_adjacent_organization_repetition(result)
+
+    def _avoid_adjacent_organization_repetition(self, items: list[dict]) -> list[dict]:
+        result = []
+        pending = list(items)
+        last_org = None
+        while pending:
+            pick_index = 0
+            if last_org:
+                for index, item in enumerate(pending):
+                    org = item["profile"].get("organization") or ""
+                    if org != last_org:
+                        pick_index = index
+                        break
+            item = pending.pop(pick_index)
+            result.append(item)
+            last_org = item["profile"].get("organization") or ""
+        return result
+
+    def _public_discovery_item(self, item: dict) -> dict:
+        return {
+            "profile": item["profile"],
+            "reasons": item["reasons"],
+            "bucket": item["bucket"],
+        }
+
+    def _resolve_discovery_target(self, db, owner, data: dict):
+        public_id = str(data.get("public_profile_id") or data.get("profile_id") or "").strip().upper()
+        target_id = int(data.get("target_participation_id") or 0)
+        params = [owner["event_id"], owner["id"]]
+        selector = "nep.id = ?"
+        params.append(target_id)
+        if public_id:
+            selector = "nep.public_profile_id = ?"
+            params[-1] = public_id
+        if not public_id and not target_id:
+            return None
+        return db.execute(
+            f"""
+            SELECT nep.*
+            FROM networking_event_participations nep
+            JOIN networking_intents ni ON ni.participation_id = nep.id
+            WHERE nep.event_id = ?
+              AND nep.id != ?
+              AND {selector}
+              AND nep.participation_state = 'ACTIVE'
+              AND ni.discoverable = 1
+              AND ni.profile_visible = 1
+            """,
+            params,
+        ).fetchone()
+
+    def _create_or_refresh_contact(self, db, owner, target) -> dict:
+        now = self.now()
+        existing = db.execute(
+            "SELECT * FROM networking_contacts WHERE owner_participation_id = ? AND target_participation_id = ?",
+            (owner["id"], target["id"]),
+        ).fetchone()
+        if existing:
+            db.execute("UPDATE networking_contacts SET status = 'ACTIVE', updated_at = ? WHERE id = ?", (now, existing["id"]))
+            return {"created": False, "contact_id": int(existing["id"])}
+        contact_id = int(db.execute(
+            """
+            INSERT INTO networking_contacts (event_id, owner_participation_id, target_participation_id, status, created_at, updated_at)
+            VALUES (?, ?, ?, 'ACTIVE', ?, ?)
+            """,
+            (owner["event_id"], owner["id"], target["id"], now, now),
+        ).lastrowid)
+        return {"created": True, "contact_id": contact_id}
+
+    def _semantic_key_set(self, profile: dict, *groups: str) -> set[str]:
+        semantic = profile.get("semantic") or {}
+        keys: set[str] = set()
+        for group in groups:
+            for item in semantic.get(group) or []:
+                keys.update(self._text_key_set([item.get("code"), item.get("label"), item.get("text")]))
+        text_fields = {
+            "offers": [profile.get("offers")],
+            "organization_offers": [profile.get("offers")],
+            "seeks": [profile.get("seeks")],
+            "interests": [profile.get("interests")],
+            "industries": [profile.get("organization_activity")],
+            "specialties": [profile.get("organization_specialty")],
+        }
+        for group in groups:
+            keys.update(self._text_key_set(text_fields.get(group) or []))
+        return keys
+
+    def _preference_key_set(self, values: list) -> set[str]:
+        return self._text_key_set(values)
+
+    def _text_key_set(self, values: list) -> set[str]:
+        keys: set[str] = set()
+        for value in values or []:
+            for part in self._semantic_values(value):
+                keys.add(self._canonical_key(part))
+        return {key for key in keys if key}
+
+    def _reason(self, code: str, label: str, candidate_profile: dict, common_keys: set[str], *groups: str) -> dict:
+        supporting = ""
+        semantic = candidate_profile.get("semantic") or {}
+        for group in groups:
+            for item in semantic.get(group) or []:
+                item_keys = self._text_key_set([item.get("code"), item.get("label"), item.get("text")])
+                if common_keys & item_keys:
+                    supporting = item.get("label") or item.get("text") or ""
+                    break
+            if supporting:
+                break
+        if not supporting:
+            for value in [candidate_profile.get("organization_activity"), candidate_profile.get("organization_specialty"), candidate_profile.get("offers"), candidate_profile.get("seeks"), candidate_profile.get("interests")]:
+                if common_keys & self._text_key_set([value]):
+                    supporting = str(value or "").strip()
+                    break
+        return {"code": code, "label": label, "supporting_label": supporting}
 
     def visible_channels(self, db, participation_id: int, *, is_self: bool, is_contact: bool, representative_visible: bool = True, organization_visible: bool = True) -> list[dict]:
         channels = []

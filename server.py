@@ -7065,6 +7065,7 @@ def public_api_post(path: str) -> bool:
         "/api/networking/complete-profile",
         "/api/networking/scan",
         "/api/networking/discovery-onboarding",
+        "/api/networking/discovery-action",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
         "/api/waiting-room/join",
@@ -8338,8 +8339,9 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/networking/discovery":
                 token = query.get("token", [""])[0]
+                limit = int(query.get("limit", ["0"])[0] or 0) or None
                 with connect() as db:
-                    result = networking_service().discovery_shell(db, token)
+                    result = networking_service().discovery_stream(db, token, limit=limit)
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
@@ -12912,6 +12914,19 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().discovery_onboarding(db, token, data)
                     if result.get("ok"):
                         audit(db, "participant", "networking.discovery_onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery-action":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().discovery_action(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", f"networking.discovery_{data.get('action') or 'action'}", "networking_participation", result.get("profile", {}).get("participation_id"), {"contact_id": result.get("contact_id")})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")

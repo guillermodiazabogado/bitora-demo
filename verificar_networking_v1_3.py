@@ -233,7 +233,7 @@ def main() -> None:
         )
         assert_true(discovery["participation"]["discovery"]["status"] == "READY" and not discovery["participation"]["discovery"]["diversity"], "Golden Ticket no dejo Discovery listo por evento")
         discovery_shell = request(base, "GET", f"/api/networking/discovery?token={clara['token']}")
-        assert_true(discovery_shell["ready"] and "siguiente etapa" in discovery_shell["message"], "Discovery shell no es honesto o no esta listo")
+        assert_true(discovery_shell["ready"] and discovery_shell["status"] in {"READY", "EXHAUSTED"} and "score" not in json.dumps(discovery_shell).lower(), "Discovery no es honesto o no esta listo")
         person_live_vocab = request(base, "GET", f"/api/networking/live-vocabulary?event_id={person_event_id}&token={clara['token']}")
         company_type_labels = {item["label"] for item in person_live_vocab["vocabulary"]["COMPANY_TYPE"]}
         assert_true("Geotecnia aplicada" in company_type_labels, "categoria declarada por usuario no alimento vocabulario vivo")
