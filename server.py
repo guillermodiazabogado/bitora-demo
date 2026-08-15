@@ -8238,6 +8238,20 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(network_info(self))
                 return
 
+            if path == "/api/networking/config":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().get_event_config(db, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
             if path == "/api/networking/session":
                 token = query.get("token", [""])[0]
                 event_id = int(query.get("event_id", ["0"])[0] or 0) or None
@@ -12698,6 +12712,27 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().import_profiles(db, event_id, rows, str(data.get("source_system") or "BITORA"), actor)
                     audit(db, actor, "networking.imported", "event", event_id, {"summary": {key: result.get(key) for key in ("created", "updated", "errors")}})
                     db.execute("COMMIT")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/config":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_config(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 

@@ -38,6 +38,26 @@
         </div>
       </article>
       <article class="networking-panel">
+        <h2>Jerarquia visual</h2>
+        <div class="networking-two">
+          <label>Evento
+            <input id="configEventId" type="number" min="1" value="1">
+          </label>
+          <label>Presentacion
+            <select id="profileMode">
+              <option value="AUTO">Automatico/default</option>
+              <option value="ORGANIZATION_FIRST">Organizacion primero</option>
+              <option value="PERSON_FIRST">Persona primero</option>
+            </select>
+          </label>
+        </div>
+        <p class="networking-status">Organizacion primero destaca empresa/institucion; Persona primero destaca al profesional. La privacidad no cambia.</p>
+        <div class="participant-actions-row">
+          <button id="loadConfigBtn" type="button" class="ghost">Leer config</button>
+          <button id="saveConfigBtn" type="button">Guardar config</button>
+        </div>
+      </article>
+      <article class="networking-panel">
         <h2>Resultado</h2>
         <div id="summaryCards" class="networking-report-cards"></div>
         <pre id="adminOutput" class="networking-admin-output"></pre>
@@ -70,8 +90,32 @@
         cards.appendChild(card);
       });
     }
+    async function loadConfig() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo configuracion...";
+      const response = await fetch(`/api/networking/config?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        document.getElementById("profileMode").value = data.networking_profile_mode;
+        document.getElementById("eventId").value = eventId;
+      }
+    }
+    async function saveConfig() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Guardando configuracion...";
+      const response = await fetch("/api/networking/config", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({actor: "Admin", event_id: eventId, networking_profile_mode: document.getElementById("profileMode").value}),
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+    }
     document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
     document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
+    document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
+    document.getElementById("saveConfigBtn").addEventListener("click", () => saveConfig().catch((error) => output.textContent = error.message));
   </script>
 </body>
 </html>

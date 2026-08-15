@@ -1,0 +1,6 @@
+ALTER TABLE events ADD COLUMN IF NOT EXISTS networking_profile_mode TEXT NOT NULL DEFAULT 'AUTO';
+
+ALTER TABLE networking_organizations ADD COLUMN IF NOT EXISTS activity TEXT NOT NULL DEFAULT '';
+ALTER TABLE networking_organizations ADD COLUMN IF NOT EXISTS specialty TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE networking_contact_channels ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'PERSONAL';

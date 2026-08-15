@@ -28,6 +28,8 @@ DIRECTIONS = {"SEEKING", "OFFERING", "BOTH"}
 CONTACT_OPENNESS = {"DIRECT", "CONNECT_FIRST", "CORPORATE_ROUTE"}
 CHANNEL_TYPES = {"whatsapp", "phone", "email", "website", "instagram", "linkedin", "facebook", "tiktok", "x", "youtube", "other"}
 CHANNEL_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN"}
+PRESENTATION_MODES = {"ORGANIZATION_FIRST", "PERSON_FIRST", "AUTO"}
+CHANNEL_SCOPES = {"PERSONAL", "ORGANIZATION"}
 
 
 def networking_schema_sql() -> str:
@@ -36,6 +38,8 @@ def networking_schema_sql() -> str:
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         canonical_key TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
+        activity TEXT NOT NULL DEFAULT '',
+        specialty TEXT NOT NULL DEFAULT '',
         website TEXT NOT NULL DEFAULT '',
         logo_url TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL DEFAULT '',
@@ -97,6 +101,7 @@ def networking_schema_sql() -> str:
         value TEXT NOT NULL,
         url TEXT NOT NULL DEFAULT '',
         visibility TEXT NOT NULL DEFAULT 'CONTACTS',
+        scope TEXT NOT NULL DEFAULT 'PERSONAL',
         source TEXT NOT NULL DEFAULT 'import',
         updated_at TEXT NOT NULL,
         UNIQUE(participation_id, channel_type, value)
@@ -155,7 +160,21 @@ class NetworkingService:
 
     def ensure_schema(self, db) -> None:
         db.executescript(networking_schema_sql())
+        self.ensure_v1_1_schema(db)
         self.ensure_taxonomy(db)
+
+    def ensure_v1_1_schema(self, db) -> None:
+        event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+        if "networking_profile_mode" not in event_columns:
+            db.execute("ALTER TABLE events ADD COLUMN networking_profile_mode TEXT NOT NULL DEFAULT 'AUTO'")
+        org_columns = {row["name"] for row in db.execute("PRAGMA table_info(networking_organizations)").fetchall()}
+        if "activity" not in org_columns:
+            db.execute("ALTER TABLE networking_organizations ADD COLUMN activity TEXT NOT NULL DEFAULT ''")
+        if "specialty" not in org_columns:
+            db.execute("ALTER TABLE networking_organizations ADD COLUMN specialty TEXT NOT NULL DEFAULT ''")
+        channel_columns = {row["name"] for row in db.execute("PRAGMA table_info(networking_contact_channels)").fetchall()}
+        if "scope" not in channel_columns:
+            db.execute("ALTER TABLE networking_contact_channels ADD COLUMN scope TEXT NOT NULL DEFAULT 'PERSONAL'")
 
     def ensure_taxonomy(self, db) -> None:
         for code in sorted(FUNCTIONS):
@@ -168,6 +187,25 @@ class NetworkingService:
                 "INSERT OR IGNORE INTO networking_taxonomy_concepts (code, concept_type, label, taxonomy_version, active) VALUES (?, 'seniority', ?, 'v1', 1)",
                 (f"SENIORITY_{code}", code.replace("_", " ").title()),
             )
+
+    def get_event_config(self, db, event_id: int) -> dict:
+        row = db.execute("SELECT id, name, networking_profile_mode FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        return {
+            "ok": True,
+            "event_id": int(row["id"]),
+            "event_name": row["name"],
+            "networking_profile_mode": self._presentation_mode(row["networking_profile_mode"]),
+        }
+
+    def update_event_config(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
+        if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        mode = self._presentation_mode(data.get("networking_profile_mode") or data.get("profile_mode") or data.get("mode"))
+        db.execute("UPDATE events SET networking_profile_mode = ? WHERE id = ?", (mode, event_id))
+        self.record_event(db, event_id, None, None, "event_config_updated", {"actor": actor, "networking_profile_mode": mode})
+        return {"ok": True, "event_id": event_id, "networking_profile_mode": mode}
 
     def preview_import(self, db, event_id: int, rows: list[dict], source_system: str = "external") -> dict:
         event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
@@ -459,10 +497,14 @@ class NetworkingService:
         row = db.execute(
             """
             SELECT nep.*, p.first_name, p.last_name, p.email, p.phone, p.company,
-                   no.name AS organization_name, no.website AS organization_website, no.visibility AS organization_visibility,
+                   e.networking_profile_mode,
+                   no.name AS organization_name, no.activity AS organization_activity, no.specialty AS organization_specialty,
+                   no.website AS organization_website, no.logo_url AS organization_logo,
+                   no.description AS organization_description, no.visibility AS organization_visibility,
                    ni.modes_json, ni.direction, ni.contact_openness, ni.discoverable, ni.profile_visible,
                    ni.channels_visible_default, ni.representative_visible, ni.bio, ni.offers_text, ni.seeks_text, ni.interests_text
             FROM networking_event_participations nep
+            JOIN events e ON e.id = nep.event_id
             JOIN people p ON p.id = nep.person_id
             LEFT JOIN networking_organizations no ON no.id = nep.organization_id
             LEFT JOIN networking_intents ni ON ni.participation_id = nep.id
@@ -483,6 +525,13 @@ class NetworkingService:
         representative_visible = int(data.get("representative_visible") or 0) == 1 or is_self
         organization_visible = is_self or data.get("organization_visibility") != "HIDDEN"
         organization_name = data.get("organization_name") or data.get("company") or ""
+        person_bio = data.get("bio") or ""
+        person_seeks = data.get("seeks_text") or ""
+        person_interests = data.get("interests_text") or ""
+        organization_description = data.get("organization_description") or ""
+        organization_activity = data.get("organization_activity") or ""
+        organization_specialty = data.get("organization_specialty") or ""
+        organization_offers = data.get("offers_text") or ""
         profile = {
             "participation_id": participation_id if (is_self or full) else None,
             "public_profile_id": data["public_profile_id"],
@@ -496,32 +545,111 @@ class NetworkingService:
             "role": (data.get("title") or "") if representative_visible else "",
             "function": (data.get("normalized_function") or "OTHER") if representative_visible else "",
             "seniority": (data.get("normalized_seniority") or "PROFESSIONAL") if representative_visible else "",
-            "bio": data.get("bio") or "",
-            "offers": data.get("offers_text") or "",
-            "seeks": data.get("seeks_text") or "",
-            "interests": data.get("interests_text") or "",
+            "bio": person_bio if representative_visible else "",
+            "offers": organization_offers if organization_visible else "",
+            "seeks": person_seeks if representative_visible else "",
+            "interests": person_interests if representative_visible else "",
             "photo": (data.get("profile_photo_url") or "") if representative_visible else "",
-            "logo": (data.get("organization_logo_url") or "") if organization_visible else "",
+            "logo": (data.get("organization_logo_url") or data.get("organization_logo") or "") if organization_visible else "",
+            "organization_activity": organization_activity if organization_visible else "",
+            "organization_specialty": organization_specialty if organization_visible else "",
+            "organization_description": organization_description if organization_visible else "",
             "modes": json.loads(data.get("modes_json") or "[]"),
             "direction": data.get("direction") or "BOTH",
             "contact_openness": data.get("contact_openness") or "CONNECT_FIRST",
-            "channels": self.visible_channels(db, participation_id, is_self=is_self, is_contact=is_contact),
+            "channels": self.visible_channels(
+                db,
+                participation_id,
+                is_self=is_self,
+                is_contact=is_contact,
+                representative_visible=representative_visible,
+                organization_visible=organization_visible,
+            ),
         }
+        profile["presentation"] = self.presentation_payload(
+            profile,
+            requested_mode=data.get("networking_profile_mode") or "AUTO",
+            representative_visible=representative_visible,
+            organization_visible=organization_visible,
+        )
         if is_self:
             profile["owner_token_hint"] = data.get("owner_token_hint") or ""
             profile["email"] = data.get("email") or ""
         return profile
 
-    def visible_channels(self, db, participation_id: int, *, is_self: bool, is_contact: bool) -> list[dict]:
+    def visible_channels(self, db, participation_id: int, *, is_self: bool, is_contact: bool, representative_visible: bool = True, organization_visible: bool = True) -> list[dict]:
         channels = []
         for row in db.execute("SELECT * FROM networking_contact_channels WHERE participation_id = ? ORDER BY channel_type, id", (participation_id,)).fetchall():
             visibility = row["visibility"]
+            scope = row["scope"] if "scope" in row.keys() else "PERSONAL"
             if not is_self and visibility == "HIDDEN":
                 continue
             if not is_self and visibility == "CONTACTS" and not is_contact:
                 continue
-            channels.append({"type": row["channel_type"], "label": row["label"], "value": row["value"], "url": row["url"] or self._channel_url(row["channel_type"], row["value"]), "visibility": visibility if is_self else None})
+            if not is_self and scope != "ORGANIZATION" and not representative_visible:
+                continue
+            if not is_self and scope == "ORGANIZATION" and not organization_visible:
+                continue
+            channels.append({"type": row["channel_type"], "label": row["label"], "value": row["value"], "url": row["url"] or self._channel_url(row["channel_type"], row["value"]), "scope": scope, "visibility": visibility if is_self else None})
         return channels
+
+    def presentation_payload(self, profile: dict, *, requested_mode: str, representative_visible: bool, organization_visible: bool) -> dict:
+        mode = self._effective_presentation_mode(requested_mode, profile)
+        personal_channels = [channel for channel in profile.get("channels") or [] if channel.get("scope") != "ORGANIZATION"]
+        organization_channels = [channel for channel in profile.get("channels") or [] if channel.get("scope") == "ORGANIZATION"]
+        person = {
+            "visible": bool(representative_visible and (profile.get("name") or profile.get("role") or profile.get("photo"))),
+            "name": profile.get("name") or "",
+            "role": profile.get("role") or "",
+            "function": profile.get("function") or "",
+            "photo": profile.get("photo") or "",
+            "channels": personal_channels if representative_visible else [],
+        }
+        organization = {
+            "visible": bool(organization_visible and (profile.get("organization") or profile.get("logo"))),
+            "name": profile.get("organization") or "",
+            "logo": profile.get("logo") or "",
+            "activity": profile.get("organization_activity") or "",
+            "specialty": profile.get("organization_specialty") or "",
+            "description": profile.get("organization_description") or "",
+            "offers": profile.get("offers") or "",
+            "channels": organization_channels,
+        }
+        if mode == "ORGANIZATION_FIRST" and organization["visible"]:
+            primary = {
+                "kind": "organization",
+                "title": organization["name"],
+                "subtitle": " / ".join([part for part in [organization["activity"], organization["specialty"]] if part]),
+                "media": organization["logo"],
+                "description": organization["description"] or organization["offers"] or profile.get("bio") or "",
+                "actions": organization["channels"],
+            }
+            secondary = {
+                "kind": "representative",
+                "title": person["name"] if person["visible"] else "",
+                "subtitle": person["role"] if person["visible"] else "",
+                "media": person["photo"] if person["visible"] else "",
+                "description": profile.get("bio") if person["visible"] else "",
+                "actions": person["channels"] if person["visible"] else [],
+            }
+        else:
+            primary = {
+                "kind": "person",
+                "title": person["name"] or organization["name"] or "Oportunidad disponible",
+                "subtitle": " / ".join([part for part in [person["role"], organization["name"]] if part]),
+                "media": person["photo"] or organization["logo"],
+                "description": profile.get("bio") or profile.get("offers") or organization["description"] or "",
+                "actions": person["channels"],
+            }
+            secondary = {
+                "kind": "organization",
+                "title": organization["name"] if organization["visible"] else "",
+                "subtitle": " / ".join([part for part in [organization["activity"], organization["specialty"]] if part]),
+                "media": organization["logo"] if organization["visible"] else "",
+                "description": (organization["description"] or organization["offers"]) if organization["visible"] else "",
+                "actions": organization["channels"] if organization["visible"] else [],
+            }
+        return {"mode": mode, "primary": primary, "secondary": secondary, "person": person, "organization": organization}
 
     def resolve_owner(self, db, owner_token: str, event_id: int | None = None):
         token = str(owner_token or "").strip()
@@ -572,6 +700,8 @@ class NetworkingService:
             "dni": str(row.get("dni") or "").strip(),
             "company": str(row.get("company") or row.get("empresa") or row.get("organization") or row.get("organizacion") or "").strip(),
             "organization_visibility": self._organization_visibility(row),
+            "organization_activity": str(row.get("organization_activity") or row.get("activity") or row.get("actividad") or row.get("sector") or "").strip(),
+            "organization_specialty": str(row.get("organization_specialty") or row.get("specialty") or row.get("especialidad") or "").strip(),
             "organization_website": str(row.get("organization_website") or row.get("website") or "").strip(),
             "organization_description": str(row.get("organization_description") or "").strip(),
             "title": str(row.get("title") or row.get("position") or row.get("cargo") or "").strip(),
@@ -587,7 +717,8 @@ class NetworkingService:
         }
         for channel in CHANNEL_TYPES:
             if row.get(channel):
-                item["channels"].append({"type": channel, "value": str(row.get(channel)).strip()})
+                scope = "ORGANIZATION" if channel == "website" and item["company"] else "PERSONAL"
+                item["channels"].append({"type": channel, "value": str(row.get(channel)).strip(), "scope": scope})
         return item, ""
 
     def _upsert_person(self, db, item: dict) -> int:
@@ -622,13 +753,13 @@ class NetworkingService:
         row = db.execute("SELECT * FROM networking_organizations WHERE canonical_key = ?", (key,)).fetchone()
         if row:
             db.execute(
-                "UPDATE networking_organizations SET name = ?, visibility = COALESCE(NULLIF(?, ''), visibility), website = COALESCE(NULLIF(?, ''), website), logo_url = COALESCE(NULLIF(?, ''), logo_url), description = COALESCE(NULLIF(?, ''), description), updated_at = ? WHERE id = ?",
-                (name, item.get("organization_visibility", ""), item.get("organization_website", ""), item.get("organization_logo_url", ""), item.get("organization_description", ""), now, row["id"]),
+                "UPDATE networking_organizations SET name = ?, visibility = COALESCE(NULLIF(?, ''), visibility), activity = COALESCE(NULLIF(?, ''), activity), specialty = COALESCE(NULLIF(?, ''), specialty), website = COALESCE(NULLIF(?, ''), website), logo_url = COALESCE(NULLIF(?, ''), logo_url), description = COALESCE(NULLIF(?, ''), description), updated_at = ? WHERE id = ?",
+                (name, item.get("organization_visibility", ""), item.get("organization_activity", ""), item.get("organization_specialty", ""), item.get("organization_website", ""), item.get("organization_logo_url", ""), item.get("organization_description", ""), now, row["id"]),
             )
             return int(row["id"])
         return int(db.execute(
-            "INSERT INTO networking_organizations (canonical_key, name, visibility, website, logo_url, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (key, name, item.get("organization_visibility") or "PUBLIC", item.get("organization_website", ""), item.get("organization_logo_url", ""), item.get("organization_description", ""), now, now),
+            "INSERT INTO networking_organizations (canonical_key, name, visibility, activity, specialty, website, logo_url, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (key, name, item.get("organization_visibility") or "PUBLIC", item.get("organization_activity", ""), item.get("organization_specialty", ""), item.get("organization_website", ""), item.get("organization_logo_url", ""), item.get("organization_description", ""), now, now),
         ).lastrowid)
 
     def _upsert_channels(self, db, participation_id: int, item: dict, *, preserve_user_visibility: bool) -> None:
@@ -639,15 +770,16 @@ class NetworkingService:
             if channel_type not in CHANNEL_TYPES or not value:
                 continue
             visibility = self._choice(raw.get("visibility"), CHANNEL_VISIBILITY, "CONTACTS")
+            scope = self._choice(raw.get("scope"), CHANNEL_SCOPES, "PERSONAL")
             existing = db.execute(
                 "SELECT * FROM networking_contact_channels WHERE participation_id = ? AND channel_type = ? AND value = ?",
                 (participation_id, channel_type, value),
             ).fetchone()
             if existing:
                 if preserve_user_visibility:
-                    db.execute("UPDATE networking_contact_channels SET label = ?, url = COALESCE(NULLIF(?, ''), url), updated_at = ? WHERE id = ?", (str(raw.get("label") or ""), str(raw.get("url") or ""), now, existing["id"]))
+                    db.execute("UPDATE networking_contact_channels SET label = ?, url = COALESCE(NULLIF(?, ''), url), scope = COALESCE(NULLIF(?, ''), scope), updated_at = ? WHERE id = ?", (str(raw.get("label") or ""), str(raw.get("url") or ""), scope, now, existing["id"]))
                 else:
-                    db.execute("UPDATE networking_contact_channels SET label = ?, url = ?, visibility = ?, updated_at = ? WHERE id = ?", (str(raw.get("label") or ""), str(raw.get("url") or ""), visibility, now, existing["id"]))
+                    db.execute("UPDATE networking_contact_channels SET label = ?, url = ?, visibility = ?, scope = ?, updated_at = ? WHERE id = ?", (str(raw.get("label") or ""), str(raw.get("url") or ""), visibility, scope, now, existing["id"]))
             else:
                 if preserve_user_visibility:
                     prior = db.execute(
@@ -657,8 +789,8 @@ class NetworkingService:
                     if prior:
                         visibility = prior["visibility"]
                 db.execute(
-                    "INSERT INTO networking_contact_channels (participation_id, channel_type, label, value, url, visibility, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (participation_id, channel_type, str(raw.get("label") or ""), value, str(raw.get("url") or ""), visibility, str(raw.get("source") or "import"), now),
+                    "INSERT INTO networking_contact_channels (participation_id, channel_type, label, value, url, visibility, scope, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (participation_id, channel_type, str(raw.get("label") or ""), value, str(raw.get("url") or ""), visibility, scope, str(raw.get("source") or "import"), now),
                 )
 
     def _apply_channel_visibility_updates(self, db, participation_id: int, visibility_map: dict) -> None:
@@ -720,6 +852,17 @@ class NetworkingService:
         }
         value = aliases.get(value, value)
         return value if value in allowed else default
+
+    def _presentation_mode(self, raw) -> str:
+        return self._choice(raw, PRESENTATION_MODES, "AUTO")
+
+    def _effective_presentation_mode(self, raw, profile: dict) -> str:
+        mode = self._presentation_mode(raw)
+        if mode == "AUTO":
+            return "PERSON_FIRST"
+        if mode == "ORGANIZATION_FIRST" and not profile.get("organization"):
+            return "PERSON_FIRST"
+        return mode
 
     def _organization_visibility(self, row: dict) -> str:
         if "organization_visibility" in row:

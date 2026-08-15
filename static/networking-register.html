@@ -36,6 +36,17 @@
           <input name="title">
         </label>
       </div>
+      <div class="networking-two">
+        <label>Actividad / sector
+          <input name="organization_activity">
+        </label>
+        <label>Especialidad
+          <input name="organization_specialty">
+        </label>
+      </div>
+      <label>Descripcion de la organizacion
+        <textarea name="organization_description" rows="2"></textarea>
+      </label>
       <label>Descripcion breve
         <textarea name="bio" rows="3"></textarea>
       </label>
@@ -76,7 +87,11 @@
       const form = new FormData(event.currentTarget);
       const payload = Object.fromEntries(form.entries());
       payload.event_id = eventId;
-      payload.channels = ["whatsapp", "linkedin", "website"].map((type) => ({type, value: payload[type]})).filter((item) => item.value);
+      payload.channels = [
+        {type: "whatsapp", value: payload.whatsapp, scope: "PERSONAL"},
+        {type: "linkedin", value: payload.linkedin, scope: "PERSONAL"},
+        {type: "website", value: payload.website, scope: "ORGANIZATION"},
+      ].filter((item) => item.value);
       registerStatus.textContent = "Creando perfil...";
       const response = await fetch("/api/networking/external-register", {
         method: "POST",

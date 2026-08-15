@@ -364,6 +364,16 @@ button:hover,
   padding: 12px;
 }
 
+.networking-profile-card[data-primary="organization"] {
+  border-color: rgba(202, 166, 106, 0.38);
+}
+
+.networking-profile-card[data-primary="organization"] .networking-avatar {
+  background: #ffffff;
+  border: 1px solid rgba(202, 166, 106, 0.45);
+  color: var(--brand-dark);
+}
+
 .networking-avatar {
   align-items: center;
   background:
@@ -382,10 +392,16 @@ button:hover,
 
 .networking-role,
 .networking-bio,
+.networking-secondary,
 .networking-empty,
 .networking-status,
 .networking-muted-link {
   color: var(--muted);
+}
+
+.networking-secondary {
+  font-size: 13px;
+  margin: 8px 0 0;
 }
 
 .networking-actions {

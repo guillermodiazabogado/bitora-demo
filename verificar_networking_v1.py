@@ -172,7 +172,7 @@ def main() -> None:
         assert_true(scan["profile"]["organization"] == "Soluciones Live", "oportunidad de organizacion debe sobrevivir representante restringido")
         channels = channel_values(scan["profile"])
         assert_true("email" not in channels, "canal restringido fue expuesto")
-        assert_true("linkedin" in channels and "website" in channels, "canales permitidos no son accionables")
+        assert_true("website" in channels and "linkedin" not in channels, "jerarquia/privacidad de canales permitidos incorrecta")
 
         duplicate_scan = request(base, "POST", "/api/networking/scan", {"token": ana["token"], "public_profile_id": bruno_onboard["participation"]["public_profile_id"]})
         assert_true(duplicate_scan["ok"] and not duplicate_scan["created"], "scan repetido no debe duplicar contacto")

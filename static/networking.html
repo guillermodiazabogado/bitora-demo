@@ -152,22 +152,32 @@
       return {whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type;
     }
 
+    function profileTitle(profile) {
+      return profile?.presentation?.primary?.title || profile?.name || profile?.organization || "Mi perfil";
+    }
+
     function renderProfile(profile, targetId) {
       const template = $("profileCardTemplate").content.cloneNode(true);
       const card = template.querySelector(".networking-profile-card");
+      const presentation = profile.presentation || {};
+      const primary = presentation.primary || {};
+      const secondary = presentation.secondary || {};
       const avatar = template.querySelector(".networking-avatar");
-      const name = profile.name || profile.organization || "Oportunidad disponible";
+      const name = primary.title || profile.name || profile.organization || "Oportunidad disponible";
+      card.dataset.mode = presentation.mode || "PERSON_FIRST";
+      card.dataset.primary = primary.kind || "person";
       template.querySelector("h3").textContent = name;
-      template.querySelector(".networking-role").textContent = [profile.organization, profile.role].filter(Boolean).join(" · ");
-      template.querySelector(".networking-bio").textContent = profile.bio || profile.offers || profile.seeks || "";
-      if (profile.photo || profile.logo) {
-        avatar.style.backgroundImage = `url('${profile.photo || profile.logo}')`;
+      template.querySelector(".networking-role").textContent = [primary.subtitle, secondary.title].filter(Boolean).join(" / ");
+      template.querySelector(".networking-bio").textContent = primary.description || profile.bio || profile.offers || profile.seeks || "";
+      if (primary.media) {
+        avatar.style.backgroundImage = `url('${primary.media}')`;
         avatar.textContent = "";
       } else {
         avatar.textContent = name.slice(0, 1).toUpperCase();
       }
       const actions = template.querySelector(".networking-actions");
-      (profile.channels || []).forEach((channel) => {
+      const allActions = [...(primary.actions || []), ...(secondary.actions || [])];
+      allActions.forEach((channel) => {
         const link = document.createElement("a");
         link.href = channel.url || "#";
         link.target = "_blank";
@@ -175,7 +185,13 @@
         link.textContent = actionLabel(channel.type);
         actions.appendChild(link);
       });
-      if (!(profile.channels || []).length) {
+      if (secondary.title || secondary.subtitle || secondary.description) {
+        const detail = document.createElement("p");
+        detail.className = "networking-secondary";
+        detail.textContent = [secondary.title, secondary.subtitle, secondary.description].filter(Boolean).join(" / ");
+        actions.before(detail);
+      }
+      if (!allActions.length) {
         const empty = document.createElement("span");
         empty.textContent = "Sin canales visibles";
         actions.appendChild(empty);
@@ -195,12 +211,12 @@
       const eventId = params.get("event_id") || "";
       const session = await api(`/api/networking/session?token=${encodeURIComponent(token)}${eventId ? `&event_id=${encodeURIComponent(eventId)}` : ""}`);
       currentProfile = session.participation;
-      $("networkingTitle").textContent = currentProfile.active ? `Hola, ${currentProfile.name || currentProfile.organization}` : "Activa tu Networking";
+      $("networkingTitle").textContent = currentProfile.active ? profileTitle(currentProfile) : "Activa tu Networking";
       show("tokenPanel", false);
       show("onboardingPanel", currentProfile.requires_onboarding);
       show("activeApp", currentProfile.active);
       if (currentProfile.active) {
-        $("myName").textContent = currentProfile.name || currentProfile.organization || "Mi perfil";
+        $("myName").textContent = profileTitle(currentProfile);
         $("myProfileId").textContent = currentProfile.public_profile_id;
         $("myQr").src = `/api/networking/qr.svg?profile_id=${encodeURIComponent(currentProfile.public_profile_id)}`;
         await loadContacts();

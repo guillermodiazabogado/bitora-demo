@@ -81,3 +81,23 @@ Rollback tecnico: eliminar rutas Networking de `server.py`, servicio `backend/se
 - V1 no implementa recomendacion/matching.
 - `PAUSED` y `REVOKED` estan reservados conceptualmente, pero V1 verifica `PASSIVE` y `ACTIVE`.
 - Exportar a contactos del dispositivo depende del navegador/dispositivo; V1 deja canales accionables.
+
+## V1.1 Event Visual Hierarchy
+
+Checkpoint de arranque verificado: `8a05a2d`.
+
+ExecPlan aplicado:
+
+1. Persistir `events.networking_profile_mode` con default `AUTO`.
+2. Extender sin duplicar dominio: `networking_contact_channels.scope`, `networking_organizations.activity`, `networking_organizations.specialty`.
+3. Resolver jerarquia en backend mediante `profile.presentation`.
+4. Renderizar scan, Mi QR y Mis contactos desde el mismo view-model.
+5. Agregar configuracion en `/networking-admin.html`.
+6. Verificar V1.1 y regresar V1.
+
+Invariantes nuevas:
+
+- La jerarquia visual nunca cambia permisos.
+- `ORGANIZATION_FIRST` no muestra representante ni canales personales cuando `representative_visible=false`.
+- Organizacion oculta no se muestra aunque el evento priorice organizaciones.
+- Eventos distintos pueden tener modos distintos sin cambios de codigo.
