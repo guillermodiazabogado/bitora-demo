@@ -7210,6 +7210,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             return str(target)
         return str(LEGACY_STATIC_DIR / clean.lstrip("/"))
 
+    def list_directory(self, path: str):
+        self.send_error(HTTPStatus.NOT_FOUND, "Listado de directorio deshabilitado")
+        return None
+
     def do_GET(self) -> None:
         started = RUNTIME_METRICS.begin()
         self._response_status = 200
@@ -8275,6 +8279,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                     include_participants = query.get("include_participants", ["0"])[0] in {"1", "true", "TRUE", "si", "yes"}
                     result = networking_service().readiness_summary(db, event_id, include_participants=include_participants)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/taxonomy":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.taxonomy")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().event_taxonomy_payload(db, event_id)
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
@@ -12773,6 +12796,33 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().update_event_config(db, event_id, data, actor)
                     if result.get("ok"):
                         audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode"), "networking_readiness_required": result.get("networking_readiness_required"), "networking_readiness_recommended": result.get("networking_readiness_recommended")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/taxonomy":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.taxonomy")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_taxonomy(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.taxonomy_updated", "event", event_id, {"concepts": len(result.get("concepts") or [])})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")

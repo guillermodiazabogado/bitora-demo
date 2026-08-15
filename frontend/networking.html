@@ -73,6 +73,14 @@
         <label>Descripcion de organizacion
           <textarea name="organization_description" rows="2" placeholder="Breve contexto si el evento prioriza empresas"></textarea>
         </label>
+        <div class="networking-two">
+          <label>Ofertas estructuradas
+            <input name="offer_concepts" placeholder="Conceptos separados por coma">
+          </label>
+          <label>Busquedas estructuradas
+            <input name="seek_concepts" placeholder="Conceptos separados por coma">
+          </label>
+        </div>
         <button type="submit">Activar Networking</button>
       </form>
     </section>
@@ -131,6 +139,17 @@
           </div>
           <label>Descripcion de organizacion
             <textarea name="organization_description" rows="2"></textarea>
+          </label>
+          <div class="networking-two">
+            <label>Ofertas estructuradas
+              <input name="offer_concepts">
+            </label>
+            <label>Busquedas estructuradas
+              <input name="seek_concepts">
+            </label>
+          </div>
+          <label>Intereses / objetivos estructurados
+            <input name="interest_concepts">
           </label>
           <div class="networking-two">
             <label>Web corporativa
@@ -244,7 +263,8 @@
       card.dataset.primary = primary.kind || "person";
       template.querySelector("h3").textContent = name;
       template.querySelector(".networking-role").textContent = [primary.subtitle, secondary.title].filter(Boolean).join(" / ");
-      template.querySelector(".networking-bio").textContent = primary.description || profile.bio || profile.offers || profile.seeks || "";
+      const semanticSummary = profile.semantic?.summary || [];
+      template.querySelector(".networking-bio").textContent = [primary.description || profile.bio || profile.offers || profile.seeks || "", semanticSummary.join(" / ")].filter(Boolean).join(" · ");
       if (primary.media) {
         avatar.style.backgroundImage = `url('${primary.media}')`;
         avatar.textContent = "";

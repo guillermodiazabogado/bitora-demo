@@ -70,6 +70,21 @@
         <button id="loadReadinessBtn" type="button" class="ghost">Ver readiness</button>
       </article>
       <article class="networking-panel">
+        <h2>Vocabulario semantico</h2>
+        <p class="networking-status">Conceptos disponibles para este evento. Configura significado, no participantes.</p>
+        <textarea id="taxonomyInput" rows="12">[
+  {"type":"INDUSTRY","label":"Construccion","aliases":["construction"],"enabled":true},
+  {"type":"SPECIALTY","label":"Hormigon elaborado","aliases":["ready mix"],"enabled":true},
+  {"type":"OFFER","label":"Provision de hormigon elaborado","enabled":true},
+  {"type":"SEEK","label":"Constructoras","enabled":true},
+  {"type":"INTEREST","label":"Infraestructura","enabled":true}
+]</textarea>
+        <div class="participant-actions-row">
+          <button id="loadTaxonomyBtn" type="button" class="ghost">Leer vocabulario</button>
+          <button id="saveTaxonomyBtn" type="button">Guardar vocabulario</button>
+        </div>
+      </article>
+      <article class="networking-panel">
         <h2>Resultado</h2>
         <div id="summaryCards" class="networking-report-cards"></div>
         <pre id="adminOutput" class="networking-admin-output"></pre>
@@ -150,11 +165,34 @@
         readinessCards.appendChild(card);
       });
     }
+    async function loadTaxonomy() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo vocabulario...";
+      const response = await fetch(`/api/networking/taxonomy?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        document.getElementById("taxonomyInput").value = JSON.stringify(data.concepts || [], null, 2);
+      }
+    }
+    async function saveTaxonomy() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Guardando vocabulario...";
+      const response = await fetch("/api/networking/taxonomy", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({actor: "Admin", event_id: eventId, concepts: JSON.parse(document.getElementById("taxonomyInput").value || "[]")}),
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+    }
     document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
     document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
     document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
     document.getElementById("saveConfigBtn").addEventListener("click", () => saveConfig().catch((error) => output.textContent = error.message));
     document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
+    document.getElementById("loadTaxonomyBtn").addEventListener("click", () => loadTaxonomy().catch((error) => output.textContent = error.message));
+    document.getElementById("saveTaxonomyBtn").addEventListener("click", () => saveTaxonomy().catch((error) => output.textContent = error.message));
   </script>
 </body>
 </html>

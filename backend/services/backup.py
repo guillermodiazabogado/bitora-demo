@@ -313,6 +313,7 @@ class EventBackupService:
             lambda event_id: (event_id,),
         ),
         ("networking_taxonomy_concepts", "SELECT * FROM networking_taxonomy_concepts ORDER BY id", lambda event_id: ()),
+        ("networking_event_taxonomy_concepts", "SELECT * FROM networking_event_taxonomy_concepts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "networking_classifications",
             """
@@ -324,6 +325,7 @@ class EventBackupService:
             """,
             lambda event_id: (event_id,),
         ),
+        ("networking_semantic_classifications", "SELECT * FROM networking_semantic_classifications WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("networking_contacts", "SELECT * FROM networking_contacts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("networking_interaction_events", "SELECT * FROM networking_interaction_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_logs", "SELECT * FROM communication_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -673,11 +675,14 @@ class EventRestoreService:
         "speaker_documents",
         "speaker_access_tokens",
         "access_logs",
+        "networking_taxonomy_concepts",
         "networking_organizations",
+        "networking_event_taxonomy_concepts",
         "networking_event_participations",
         "networking_intents",
         "networking_contact_channels",
         "networking_classifications",
+        "networking_semantic_classifications",
         "networking_contacts",
         "networking_interaction_events",
         "communication_logs",
@@ -869,11 +874,14 @@ class EventRestoreService:
                     "speaker_activity_assignments": {},
                     "speaker_documents": {},
                     "speaker_access_tokens": {},
+                    "networking_taxonomy_concepts": {},
                     "networking_organizations": {},
+                    "networking_event_taxonomy_concepts": {},
                     "networking_event_participations": {},
                     "networking_intents": {},
                     "networking_contact_channels": {},
                     "networking_classifications": {},
+                    "networking_semantic_classifications": {},
                     "networking_contacts": {},
                     "networking_interaction_events": {},
                     "communication_v4_templates": {},
@@ -1141,6 +1149,14 @@ class EventRestoreService:
                 row["target_participation_id"] = maps["networking_event_participations"].get(int(row["target_participation_id"]), row["target_participation_id"])
             if table.startswith("networking_") and "actor_participation_id" in row and row.get("actor_participation_id") is not None:
                 row["actor_participation_id"] = maps["networking_event_participations"].get(int(row["actor_participation_id"]), row["actor_participation_id"])
+            if table == "networking_semantic_classifications" and row.get("owner_id") is not None:
+                owner_type = str(row.get("owner_type") or "").upper()
+                if owner_type == "ORGANIZATION":
+                    row["owner_id"] = maps["networking_organizations"].get(int(row["owner_id"]), row["owner_id"])
+                elif owner_type == "PERSON":
+                    row["owner_id"] = maps["people"].get(int(row["owner_id"]), row["owner_id"])
+                elif owner_type == "PARTICIPATION":
+                    row["owner_id"] = maps["networking_event_participations"].get(int(row["owner_id"]), row["owner_id"])
             if "participant_id" in row and row.get("participant_id") is not None:
                 row["participant_id"] = maps["people"].get(int(row["participant_id"]), row["participant_id"])
             if "candidate_person_id" in row and row.get("candidate_person_id") is not None:
@@ -1361,6 +1377,37 @@ class EventRestoreService:
                 if existing_preference:
                     if table in maps and old_id:
                         maps[table][old_id] = int(existing_preference["id"])
+                    continue
+            if table == "networking_taxonomy_concepts" and row.get("code"):
+                existing_concept = db.execute("SELECT id FROM networking_taxonomy_concepts WHERE code = ?", (row["code"],)).fetchone()
+                if existing_concept:
+                    update_values = {key: row[key] for key in row if key != "code" and key in self._columns(db, table)}
+                    if update_values:
+                        assignments = ", ".join(f"{key} = ?" for key in update_values)
+                        db.execute(f"UPDATE networking_taxonomy_concepts SET {assignments} WHERE id = ?", [*update_values.values(), int(existing_concept["id"])])
+                    if table in maps and old_id:
+                        maps[table][old_id] = int(existing_concept["id"])
+                    continue
+            if table == "networking_organizations" and row.get("canonical_key"):
+                existing_org = db.execute("SELECT id FROM networking_organizations WHERE canonical_key = ?", (row["canonical_key"],)).fetchone()
+                if existing_org:
+                    db.execute(
+                        """
+                        UPDATE networking_organizations
+                        SET name = COALESCE(NULLIF(?, ''), name),
+                            visibility = COALESCE(NULLIF(?, ''), visibility),
+                            activity = COALESCE(NULLIF(?, ''), activity),
+                            specialty = COALESCE(NULLIF(?, ''), specialty),
+                            website = COALESCE(NULLIF(?, ''), website),
+                            logo_url = COALESCE(NULLIF(?, ''), logo_url),
+                            description = COALESCE(NULLIF(?, ''), description),
+                            updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (row.get("name", ""), row.get("visibility", ""), row.get("activity", ""), row.get("specialty", ""), row.get("website", ""), row.get("logo_url", ""), row.get("description", ""), self.now(), int(existing_org["id"])),
+                    )
+                    if table in maps and old_id:
+                        maps[table][old_id] = int(existing_org["id"])
                     continue
             if table == "jobs":
                 row["status"] = "cancelled"

@@ -30,6 +30,10 @@ CHANNEL_TYPES = {"whatsapp", "phone", "email", "website", "instagram", "linkedin
 CHANNEL_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN"}
 PRESENTATION_MODES = {"ORGANIZATION_FIRST", "PERSON_FIRST", "AUTO"}
 CHANNEL_SCOPES = {"PERSONAL", "ORGANIZATION"}
+SEMANTIC_TYPES = {"INDUSTRY", "SPECIALTY", "OFFER", "SEEK", "INTEREST"}
+SEMANTIC_OWNER_TYPES = {"ORGANIZATION", "PERSON", "PARTICIPATION"}
+SEMANTIC_SOURCES = {"SOURCE", "USER", "ADMIN", "SYSTEM"}
+SEMANTIC_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN", "ADMIN"}
 READINESS_DIMENSIONS = {
     "person.identity",
     "person.role",
@@ -39,6 +43,10 @@ READINESS_DIMENSIONS = {
     "organization.description",
     "networking.intent",
     "networking.offers_seeks",
+    "semantic.offer",
+    "semantic.seek",
+    "semantic.specialty",
+    "semantic.interest",
     "contact.permitted_route",
     "contact.organization_route",
 }
@@ -51,6 +59,10 @@ READINESS_LABELS = {
     "organization.description": "descripcion de la organizacion",
     "networking.intent": "intencion de networking",
     "networking.offers_seeks": "ofertas o busquedas",
+    "semantic.offer": "oferta estructurada",
+    "semantic.seek": "busqueda estructurada",
+    "semantic.specialty": "especialidad estructurada",
+    "semantic.interest": "interes u objetivo estructurado",
     "contact.permitted_route": "canal de contacto permitido",
     "contact.organization_route": "ruta corporativa permitida",
 }
@@ -61,13 +73,14 @@ READINESS_DEFAULTS = {
             "organization.activity",
             "networking.intent",
             "networking.offers_seeks",
+            "semantic.offer",
             "contact.permitted_route",
         ],
-        "recommended": ["organization.description", "person.identity", "person.role", "contact.organization_route"],
+        "recommended": ["organization.description", "person.identity", "person.role", "semantic.specialty", "semantic.seek", "contact.organization_route"],
     },
     "PERSON_FIRST": {
         "required": ["person.identity", "person.role", "person.bio", "networking.intent", "contact.permitted_route"],
-        "recommended": ["organization.identity", "networking.offers_seeks"],
+        "recommended": ["organization.identity", "networking.offers_seeks", "semantic.offer", "semantic.seek", "semantic.interest"],
     },
 }
 
@@ -158,8 +171,23 @@ def networking_schema_sql() -> str:
         code TEXT NOT NULL UNIQUE,
         concept_type TEXT NOT NULL,
         label TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        parent_code TEXT NOT NULL DEFAULT '',
+        aliases_json TEXT NOT NULL DEFAULT '[]',
         taxonomy_version TEXT NOT NULL DEFAULT 'v1',
         active INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS networking_event_taxonomy_concepts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        concept_code TEXT NOT NULL REFERENCES networking_taxonomy_concepts(code) ON DELETE CASCADE,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        label_override TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(event_id, concept_code)
     );
 
     CREATE TABLE IF NOT EXISTS networking_classifications (
@@ -170,6 +198,23 @@ def networking_schema_sql() -> str:
         provenance TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         UNIQUE(participation_id, concept_code, source)
+    );
+
+    CREATE TABLE IF NOT EXISTS networking_semantic_classifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        owner_type TEXT NOT NULL,
+        owner_id INTEGER NOT NULL,
+        participation_id INTEGER REFERENCES networking_event_participations(id) ON DELETE CASCADE,
+        concept_code TEXT NOT NULL REFERENCES networking_taxonomy_concepts(code) ON DELETE RESTRICT,
+        semantic_role TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'USER',
+        provenance TEXT NOT NULL DEFAULT '',
+        visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+        free_text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(event_id, owner_type, owner_id, concept_code, semantic_role, source)
     );
 
     CREATE TABLE IF NOT EXISTS networking_contacts (
@@ -197,6 +242,9 @@ def networking_schema_sql() -> str:
     CREATE INDEX IF NOT EXISTS idx_networking_participations_public ON networking_event_participations(public_profile_id);
     CREATE INDEX IF NOT EXISTS idx_networking_channels_participation ON networking_contact_channels(participation_id);
     CREATE INDEX IF NOT EXISTS idx_networking_contacts_owner ON networking_contacts(owner_participation_id, status);
+    CREATE INDEX IF NOT EXISTS idx_networking_event_taxonomy_event ON networking_event_taxonomy_concepts(event_id, enabled);
+    CREATE INDEX IF NOT EXISTS idx_networking_semantic_owner ON networking_semantic_classifications(event_id, owner_type, owner_id);
+    CREATE INDEX IF NOT EXISTS idx_networking_semantic_participation ON networking_semantic_classifications(participation_id);
     """
 
 
@@ -208,6 +256,7 @@ class NetworkingService:
         db.executescript(networking_schema_sql())
         self.ensure_v1_1_schema(db)
         self.ensure_v1_2_schema(db)
+        self.ensure_v1_3_schema(db)
         self.ensure_taxonomy(db)
 
     def ensure_v1_1_schema(self, db) -> None:
@@ -241,6 +290,50 @@ class NetworkingService:
             if column not in intent_columns:
                 db.execute(f"ALTER TABLE networking_intents ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
 
+    def ensure_v1_3_schema(self, db) -> None:
+        concept_columns = {row["name"] for row in db.execute("PRAGMA table_info(networking_taxonomy_concepts)").fetchall()}
+        for column, ddl in {
+            "description": "TEXT NOT NULL DEFAULT ''",
+            "parent_code": "TEXT NOT NULL DEFAULT ''",
+            "aliases_json": "TEXT NOT NULL DEFAULT '[]'",
+        }.items():
+            if column not in concept_columns:
+                db.execute(f"ALTER TABLE networking_taxonomy_concepts ADD COLUMN {column} {ddl}")
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS networking_event_taxonomy_concepts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                concept_code TEXT NOT NULL REFERENCES networking_taxonomy_concepts(code) ON DELETE CASCADE,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                label_override TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(event_id, concept_code)
+            );
+            CREATE TABLE IF NOT EXISTS networking_semantic_classifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                owner_type TEXT NOT NULL,
+                owner_id INTEGER NOT NULL,
+                participation_id INTEGER REFERENCES networking_event_participations(id) ON DELETE CASCADE,
+                concept_code TEXT NOT NULL REFERENCES networking_taxonomy_concepts(code) ON DELETE RESTRICT,
+                semantic_role TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'USER',
+                provenance TEXT NOT NULL DEFAULT '',
+                visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+                free_text TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(event_id, owner_type, owner_id, concept_code, semantic_role, source)
+            );
+            CREATE INDEX IF NOT EXISTS idx_networking_event_taxonomy_event ON networking_event_taxonomy_concepts(event_id, enabled);
+            CREATE INDEX IF NOT EXISTS idx_networking_semantic_owner ON networking_semantic_classifications(event_id, owner_type, owner_id);
+            CREATE INDEX IF NOT EXISTS idx_networking_semantic_participation ON networking_semantic_classifications(participation_id);
+            """
+        )
+
     def ensure_taxonomy(self, db) -> None:
         for code in sorted(FUNCTIONS):
             db.execute(
@@ -266,7 +359,89 @@ class NetworkingService:
             "networking_readiness_required": readiness["required"],
             "networking_readiness_recommended": readiness["recommended"],
             "networking_readiness_available": sorted(READINESS_DIMENSIONS),
+            "semantic_taxonomy": self.event_taxonomy_payload(db, event_id).get("concepts", []),
         }
+
+    def event_taxonomy_payload(self, db, event_id: int) -> dict:
+        if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        rows = db.execute(
+            """
+            SELECT tc.code, tc.concept_type, tc.label, tc.description, tc.parent_code, tc.aliases_json,
+                   tc.taxonomy_version, tc.active, etc.enabled, etc.label_override, etc.sort_order
+            FROM networking_event_taxonomy_concepts etc
+            JOIN networking_taxonomy_concepts tc ON tc.code = etc.concept_code
+            WHERE etc.event_id = ?
+            ORDER BY tc.concept_type, etc.sort_order, COALESCE(NULLIF(etc.label_override, ''), tc.label)
+            """,
+            (event_id,),
+        ).fetchall()
+        concepts = []
+        for row in rows:
+            concepts.append({
+                "code": row["code"],
+                "type": row["concept_type"],
+                "label": row["label_override"] or row["label"],
+                "canonical_label": row["label"],
+                "description": row["description"],
+                "parent_code": row["parent_code"],
+                "aliases": json.loads(row["aliases_json"] or "[]"),
+                "taxonomy_version": row["taxonomy_version"],
+                "enabled": bool(row["enabled"]) and bool(row["active"]),
+                "sort_order": int(row["sort_order"] or 0),
+            })
+        return {"ok": True, "event_id": event_id, "concepts": concepts}
+
+    def update_event_taxonomy(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
+        if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        now = self.now()
+        changed = []
+        for raw in data.get("concepts") if isinstance(data.get("concepts"), list) else []:
+            concept_type = self._choice(raw.get("type") or raw.get("concept_type"), SEMANTIC_TYPES, "")
+            label = str(raw.get("label") or "").strip()
+            if not concept_type or not label:
+                continue
+            code = self._upsert_taxonomy_concept(
+                db,
+                concept_type,
+                label,
+                code=str(raw.get("code") or "").strip(),
+                explicit_code=bool(str(raw.get("code") or "").strip()),
+                description=str(raw.get("description") or "").strip(),
+                aliases=self._semantic_values(raw.get("aliases")),
+                parent_code=str(raw.get("parent_code") or "").strip(),
+            )
+            enabled = 1 if self._truthy(raw.get("enabled", True)) else 0
+            db.execute(
+                """
+                INSERT INTO networking_event_taxonomy_concepts (event_id, concept_code, enabled, label_override, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(event_id, concept_code) DO UPDATE SET
+                    enabled = excluded.enabled,
+                    label_override = excluded.label_override,
+                    sort_order = excluded.sort_order,
+                    updated_at = excluded.updated_at
+                """,
+                (event_id, code, enabled, str(raw.get("label_override") or "").strip(), int(raw.get("sort_order") or 0), now, now),
+            )
+            changed.append(code)
+        for code in self._semantic_values(data.get("disable")):
+            db.execute("UPDATE networking_event_taxonomy_concepts SET enabled = 0, updated_at = ? WHERE event_id = ? AND concept_code = ?", (now, event_id, code))
+            changed.append(code)
+        for code in self._semantic_values(data.get("enable")):
+            if db.execute("SELECT 1 FROM networking_taxonomy_concepts WHERE code = ?", (code,)).fetchone():
+                db.execute(
+                    """
+                    INSERT INTO networking_event_taxonomy_concepts (event_id, concept_code, enabled, created_at, updated_at)
+                    VALUES (?, ?, 1, ?, ?)
+                    ON CONFLICT(event_id, concept_code) DO UPDATE SET enabled = 1, updated_at = excluded.updated_at
+                    """,
+                    (event_id, code, now, now),
+                )
+                changed.append(code)
+        self.record_event(db, event_id, None, None, "taxonomy_config_updated", {"actor": actor, "changed": sorted(set(changed))})
+        return self.event_taxonomy_payload(db, event_id)
 
     def update_event_config(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
         if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
@@ -295,7 +470,7 @@ class NetworkingService:
         event = db.execute("SELECT id, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
         if not event:
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
-        summary = {"valid": 0, "errors": 0, "existing": 0, "complete": 0, "incomplete": 0, "common_missing": {}, "rows": []}
+        summary = {"valid": 0, "errors": 0, "existing": 0, "complete": 0, "incomplete": 0, "unknown_concepts": 0, "semantic_unknown_concepts": 0, "common_missing": {}, "rows": []}
         for index, row in enumerate(rows, start=1):
             item, error = self._normalize_import_row(row, source_system)
             if error:
@@ -304,6 +479,7 @@ class NetworkingService:
                 continue
             existing = self._find_existing_participation(db, event_id, item)
             readiness = self.evaluate_import_readiness(item, event)
+            semantic = self.semantic_import_diagnostics(db, event_id, item)
             summary["valid"] += 1
             summary["existing"] += 1 if existing else 0
             if readiness["status"] == "READY":
@@ -312,7 +488,10 @@ class NetworkingService:
                 summary["incomplete"] += 1
                 for key in readiness["missing_required"]:
                     summary["common_missing"][key] = int(summary["common_missing"].get(key, 0)) + 1
-            summary["rows"].append({"row": index, "ok": True, "email": item["email"], "existing": bool(existing), "readiness": readiness})
+            if semantic["unknown"]:
+                summary["unknown_concepts"] += len(semantic["unknown"])
+                summary["semantic_unknown_concepts"] = summary["unknown_concepts"]
+            summary["rows"].append({"row": index, "ok": True, "email": item["email"], "existing": bool(existing), "readiness": readiness, "semantic": semantic})
         summary["common_missing"] = dict(sorted(summary["common_missing"].items(), key=lambda item: (-item[1], item[0])))
         return {"ok": summary["errors"] == 0, **summary}
 
@@ -320,7 +499,8 @@ class NetworkingService:
         preview = self.preview_import(db, event_id, rows, source_system)
         if preview.get("status_code"):
             return preview
-        summary = {"created": 0, "updated": 0, "errors": 0, "rows": []}
+        preview_by_row = {int(item.get("row") or 0): item for item in preview.get("rows", []) if item.get("ok")}
+        summary = {"created": 0, "updated": 0, "errors": 0, "unknown_concepts": int(preview.get("unknown_concepts") or 0), "semantic_unknown_concepts": int(preview.get("semantic_unknown_concepts") or 0), "rows": []}
         for index, row in enumerate(rows, start=1):
             item, error = self._normalize_import_row(row, source_system)
             if error:
@@ -330,7 +510,8 @@ class NetworkingService:
             result = self.upsert_participation(db, event_id, item, actor=actor, activate=False)
             summary["created"] += 1 if result["created"] else 0
             summary["updated"] += 0 if result["created"] else 1
-            summary["rows"].append({"row": index, "ok": True, "participation_id": result["participation_id"], "state": result["state"], "created": result["created"]})
+            preview_row = preview_by_row.get(index) or {}
+            summary["rows"].append({"row": index, "ok": True, "participation_id": result["participation_id"], "state": result["state"], "created": result["created"], "semantic": preview_row.get("semantic") or {"known": [], "unknown": []}})
         self.record_event(db, event_id, None, None, "import", {"actor": actor, "source_system": source_system, "summary": summary})
         return {"ok": summary["errors"] == 0, **summary}
 
@@ -365,19 +546,19 @@ class NetworkingService:
             owner_token = self._new_owner_token()
             owner_hash = self._hash_token(owner_token)
             owner_hint = owner_token[-6:]
-        source_payload = self._safe_json(item)
+        source_payload = self._safe_source_payload(item)
         if existing:
             db.execute(
                 """
                 UPDATE networking_event_participations
                 SET accreditation_id = COALESCE(?, accreditation_id),
-                    organization_id = ?,
+                    organization_id = COALESCE(?, organization_id),
                     source_fingerprint = ?,
-                    title = ?,
-                    normalized_function = ?,
-                    normalized_seniority = ?,
-                    profile_photo_url = ?,
-                    organization_logo_url = ?,
+                    title = COALESCE(NULLIF(?, ''), title),
+                    normalized_function = CASE WHEN ? = 1 THEN ? ELSE normalized_function END,
+                    normalized_seniority = CASE WHEN ? = 1 THEN ? ELSE normalized_seniority END,
+                    profile_photo_url = COALESCE(NULLIF(?, ''), profile_photo_url),
+                    organization_logo_url = COALESCE(NULLIF(?, ''), organization_logo_url),
                     source_payload_json = ?,
                     imported_at = ?,
                     owner_token_hash = COALESCE(NULLIF(owner_token_hash, ''), ?),
@@ -390,7 +571,9 @@ class NetworkingService:
                     organization_id,
                     self._fingerprint(item),
                     item["title"],
+                    1 if item.get("function_declared") else 0,
                     item["function"],
+                    1 if item.get("seniority_declared") else 0,
                     item["seniority"],
                     item["photo_url"],
                     item["organization_logo_url"],
@@ -450,6 +633,7 @@ class NetworkingService:
         self._upsert_channels(db, participation_id, item, preserve_user_visibility=not created)
         self._upsert_classification(db, participation_id, f"FUNCTION_{item['function']}", "import")
         self._upsert_classification(db, participation_id, f"SENIORITY_{item['seniority']}", "import")
+        self._sync_semantic_classifications(db, event_id, participation_id, item, source="SOURCE", provenance=item["source_system"])
         self.record_event(db, event_id, participation_id, None, "profile_imported", {"actor": actor, "source_system": item["source_system"], "created": created})
         return {"ok": True, "participation_id": participation_id, "created": created, "state": "ACTIVE" if activate else (existing["participation_state"] if existing else "PASSIVE"), "owner_token": owner_token}
 
@@ -520,6 +704,7 @@ class NetworkingService:
             ),
         )
         self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
+        self._sync_semantic_classifications(db, int(participation["event_id"]), int(participation["id"]), data, source="USER", provenance="onboarding")
         self._apply_channel_visibility_updates(db, int(participation["id"]), data.get("channel_visibility") or {})
         self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "onboarded", {"modes": modes, "direction": direction, "contact_openness": openness})
         return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
@@ -561,6 +746,7 @@ class NetworkingService:
             ),
         )
         self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
+        self._sync_semantic_classifications(db, int(participation["event_id"]), int(participation["id"]), data, source="USER", provenance="completion")
         self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "profile_completed", {"missing_before": data.get("missing_required") or []})
         return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
 
@@ -740,6 +926,24 @@ class NetworkingService:
         readiness_profile["presentation"] = self.presentation_payload(
             readiness_profile,
             requested_mode=data.get("networking_profile_mode") or "AUTO",
+            representative_visible=external_representative_visible,
+            organization_visible=external_organization_visible,
+        )
+        profile["semantic"] = self.semantic_profile(
+            db,
+            int(data["event_id"]),
+            participation_id,
+            person_id=int(data["person_id"]),
+            organization_id=int(data["organization_id"]) if data.get("organization_id") else None,
+            representative_visible=representative_visible,
+            organization_visible=organization_visible,
+        )
+        readiness_profile["semantic"] = self.semantic_profile(
+            db,
+            int(data["event_id"]),
+            participation_id,
+            person_id=int(data["person_id"]),
+            organization_id=int(data["organization_id"]) if data.get("organization_id") else None,
             representative_visible=external_representative_visible,
             organization_visible=external_organization_visible,
         )
@@ -943,11 +1147,208 @@ class NetworkingService:
             completed.add("networking.intent")
         if profile.get("offers") or profile.get("seeks") or profile.get("interests"):
             completed.add("networking.offers_seeks")
+        semantic = profile.get("semantic") or {}
+        if (semantic.get("offers") or semantic.get("organization_offers")):
+            completed.add("semantic.offer")
+        if semantic.get("seeks"):
+            completed.add("semantic.seek")
+        if semantic.get("specialties"):
+            completed.add("semantic.specialty")
+        if semantic.get("interests"):
+            completed.add("semantic.interest")
         if channels:
             completed.add("contact.permitted_route")
         if any(channel.get("scope") == "ORGANIZATION" for channel in channels):
             completed.add("contact.organization_route")
         return completed
+
+    def semantic_import_diagnostics(self, db, event_id: int, item: dict) -> dict:
+        known = []
+        unknown = []
+        for entry in self._semantic_inputs(item):
+            for value in entry["values"]:
+                concept = self._resolve_event_concept(db, event_id, entry["type"], value)
+                if concept:
+                    known.append({"field": entry["field"], "value": value, "concept_code": concept["code"], "type": entry["type"], "role": entry["role"]})
+                else:
+                    unknown.append({"field": entry["field"], "value": value, "type": entry["type"], "role": entry["role"], "code": "UNKNOWN_CONCEPT", "reason": "UNKNOWN_CONCEPT"})
+        return {"known": known, "unknown": unknown}
+
+    def semantic_profile(self, db, event_id: int, participation_id: int, *, person_id: int, organization_id: int | None, representative_visible: bool, organization_visible: bool) -> dict:
+        clauses = []
+        params = [event_id]
+        if representative_visible:
+            clauses.append("(sc.owner_type = 'PARTICIPATION' AND sc.owner_id = ?)")
+            params.append(participation_id)
+        if representative_visible:
+            clauses.append("(sc.owner_type = 'PERSON' AND sc.owner_id = ?)")
+            params.append(person_id)
+        if organization_visible and organization_id:
+            clauses.append("(sc.owner_type = 'ORGANIZATION' AND sc.owner_id = ?)")
+            params.append(organization_id)
+        if not clauses:
+            return {"industries": [], "specialties": [], "organization_offers": [], "offers": [], "seeks": [], "interests": [], "summary": []}
+        rows = db.execute(
+            f"""
+            SELECT sc.owner_type, sc.semantic_role, sc.source, sc.free_text, tc.code, tc.concept_type,
+                   COALESCE(NULLIF(etc.label_override, ''), tc.label) AS label
+            FROM networking_semantic_classifications sc
+            JOIN networking_taxonomy_concepts tc ON tc.code = sc.concept_code
+            LEFT JOIN networking_event_taxonomy_concepts etc ON etc.event_id = sc.event_id AND etc.concept_code = sc.concept_code
+            WHERE sc.event_id = ? AND sc.visibility != 'HIDDEN' AND ({' OR '.join(clauses)})
+            ORDER BY sc.owner_type, sc.semantic_role, label
+            """,
+            params,
+        ).fetchall()
+        result = {"industries": [], "specialties": [], "organization_offers": [], "offers": [], "seeks": [], "interests": []}
+        for row in rows:
+            item = {"code": row["code"], "label": row["label"], "source": row["source"], "text": row["free_text"] or ""}
+            role = row["semantic_role"]
+            owner = row["owner_type"]
+            if role == "INDUSTRY":
+                result["industries"].append(item)
+            elif role == "SPECIALTY":
+                result["specialties"].append(item)
+            elif role == "OFFER" and owner == "ORGANIZATION":
+                result["organization_offers"].append(item)
+            elif role == "OFFER":
+                result["offers"].append(item)
+            elif role == "SEEK":
+                result["seeks"].append(item)
+            elif role == "INTEREST":
+                result["interests"].append(item)
+        result["summary"] = [item["label"] for key in ("industries", "specialties", "organization_offers", "offers", "seeks", "interests") for item in result[key]][:6]
+        return result
+
+    def _sync_semantic_classifications(self, db, event_id: int, participation_id: int, data: dict, *, source: str, provenance: str) -> None:
+        source = self._choice(source, SEMANTIC_SOURCES, "USER")
+        participation = db.execute("SELECT person_id, organization_id FROM networking_event_participations WHERE id = ?", (participation_id,)).fetchone()
+        if not participation:
+            return
+        inputs = self._semantic_inputs(data)
+        resolved = []
+        for entry in inputs:
+            for value in entry["values"]:
+                concept = self._resolve_event_concept(db, event_id, entry["type"], value)
+                if not concept:
+                    continue
+                owner_type, owner_id = self._semantic_owner(participation, entry["role"], source)
+                if not owner_id:
+                    owner_type, owner_id = "PARTICIPATION", participation_id
+                resolved.append((entry, concept, owner_type, owner_id))
+        if source == "SOURCE":
+            db.execute("DELETE FROM networking_semantic_classifications WHERE participation_id = ? AND source = 'SOURCE'", (participation_id,))
+        roles = sorted({entry["role"] for entry, _concept, _owner_type, _owner_id in resolved})
+        if source == "USER" and roles:
+            db.execute(
+                "DELETE FROM networking_semantic_classifications WHERE participation_id = ? AND source = 'USER' AND semantic_role IN ({})".format(",".join("?" for _ in roles)),
+                [participation_id, *roles],
+            )
+        for entry, concept, owner_type, owner_id in resolved:
+            now = self.now()
+            db.execute(
+                """
+                INSERT INTO networking_semantic_classifications (
+                    event_id, owner_type, owner_id, participation_id, concept_code, semantic_role,
+                    source, provenance, visibility, free_text, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PUBLIC', ?, ?, ?)
+                ON CONFLICT(event_id, owner_type, owner_id, concept_code, semantic_role, source)
+                DO UPDATE SET participation_id = excluded.participation_id,
+                              provenance = excluded.provenance,
+                              free_text = COALESCE(NULLIF(excluded.free_text, ''), networking_semantic_classifications.free_text),
+                              updated_at = excluded.updated_at
+                """,
+                (event_id, owner_type, owner_id, participation_id, concept["code"], entry["role"], source, provenance, str(data.get(entry.get("text_field", "")) or "").strip(), now, now),
+            )
+
+    def _semantic_owner(self, participation, role: str, source: str) -> tuple[str, int | None]:
+        organization_id = int(participation["organization_id"]) if participation["organization_id"] else None
+        person_id = int(participation["person_id"]) if participation["person_id"] else None
+        if role in {"INDUSTRY", "SPECIALTY"}:
+            return "ORGANIZATION", organization_id
+        if role == "OFFER" and organization_id:
+            return "ORGANIZATION", organization_id
+        if role == "INTEREST" and person_id:
+            return "PERSON", person_id
+        return "PARTICIPATION", None
+
+    def _semantic_inputs(self, data: dict) -> list[dict]:
+        return [
+            {"field": "organization_activity", "type": "INDUSTRY", "role": "INDUSTRY", "values": self._semantic_values(data.get("industry_concepts") or data.get("organization_activity_concepts") or data.get("organization_activity") or data.get("activity"))},
+            {"field": "organization_specialty", "type": "SPECIALTY", "role": "SPECIALTY", "values": self._semantic_values(data.get("specialty_concepts") or data.get("organization_specialty_concepts") or data.get("organization_specialties") or data.get("organization_specialty") or data.get("specialty"))},
+            {"field": "offer_concepts", "type": "OFFER", "role": "OFFER", "values": self._semantic_values(data.get("offer_concepts") or data.get("offers_concepts") or data.get("semantic_offers"))},
+            {"field": "seek_concepts", "type": "SEEK", "role": "SEEK", "values": self._semantic_values(data.get("seek_concepts") or data.get("seeks_concepts") or data.get("semantic_seeks"))},
+            {"field": "interest_concepts", "type": "INTEREST", "role": "INTEREST", "values": self._semantic_values(data.get("interest_concepts") or data.get("interests_concepts") or data.get("semantic_interests"))},
+        ]
+
+    def _resolve_event_concept(self, db, event_id: int, concept_type: str, value: str):
+        concept_type = self._choice(concept_type, SEMANTIC_TYPES, "")
+        clean = str(value or "").strip()
+        if not concept_type or not clean:
+            return None
+        clean_key = self._canonical_key(clean)
+        clean_code = clean.upper().replace(" ", "_").replace("-", "_")
+        rows = db.execute(
+            """
+            SELECT tc.*, etc.label_override
+            FROM networking_event_taxonomy_concepts etc
+            JOIN networking_taxonomy_concepts tc ON tc.code = etc.concept_code
+            WHERE etc.event_id = ? AND etc.enabled = 1 AND tc.active = 1 AND tc.concept_type = ?
+            """,
+            (event_id, concept_type),
+        ).fetchall()
+        for row in rows:
+            labels = [row["code"], row["label"], row["label_override"] or ""]
+            labels.extend(json.loads(row["aliases_json"] or "[]"))
+            if clean_code == str(row["code"]).upper() or clean_key in {self._canonical_key(label) for label in labels if label}:
+                return row
+        return None
+
+    def _upsert_taxonomy_concept(self, db, concept_type: str, label: str, *, code: str = "", explicit_code: bool = False, description: str = "", aliases: list[str] | None = None, parent_code: str = "") -> str:
+        concept_type = self._choice(concept_type, SEMANTIC_TYPES, "")
+        if not concept_type or not label:
+            return ""
+        generated = f"{concept_type}_{self._canonical_key(label).upper().replace('-', '_')}"
+        code = str(code or generated).strip().upper().replace(" ", "_").replace("-", "_")
+        existing = db.execute("SELECT code FROM networking_taxonomy_concepts WHERE code = ?", (code,)).fetchone()
+        aliases_json = self._safe_json(sorted(set(aliases or [])))
+        if existing:
+            db.execute(
+                """
+                UPDATE networking_taxonomy_concepts
+                SET concept_type = ?, label = COALESCE(NULLIF(?, ''), label),
+                    description = COALESCE(NULLIF(?, ''), description),
+                    parent_code = COALESCE(NULLIF(?, ''), parent_code),
+                    aliases_json = ?, active = 1
+                WHERE code = ?
+                """,
+                (concept_type, label, description, parent_code, aliases_json, code),
+            )
+            return code
+        same_label = db.execute("SELECT code FROM networking_taxonomy_concepts WHERE concept_type = ? AND lower(label) = lower(?)", (concept_type, label)).fetchone()
+        if same_label and not explicit_code:
+            return same_label["code"]
+        db.execute(
+            """
+            INSERT INTO networking_taxonomy_concepts (code, concept_type, label, description, parent_code, aliases_json, taxonomy_version, active)
+            VALUES (?, ?, ?, ?, ?, ?, 'v1', 1)
+            """,
+            (code, concept_type, label, description, parent_code, aliases_json),
+        )
+        return code
+
+    def _semantic_values(self, raw) -> list[str]:
+        if raw is None:
+            return []
+        if isinstance(raw, str):
+            raw = [part.strip() for part in re.split(r"[,;|]", raw)]
+        result = []
+        for value in raw or []:
+            clean = str(value or "").strip()
+            if clean and clean not in result:
+                result.append(clean)
+        return result
 
     def _completion_item(self, data: dict) -> dict:
         channels = data.get("channels") if isinstance(data.get("channels"), list) else []
@@ -1034,7 +1435,9 @@ class NetworkingService:
             "organization_website": str(row.get("organization_website") or row.get("website") or "").strip(),
             "organization_description": str(row.get("organization_description") or "").strip(),
             "title": str(row.get("title") or row.get("position") or row.get("cargo") or "").strip(),
+            "function_declared": "function" in row or "funcion" in row,
             "function": self._choice(row.get("function") or row.get("funcion"), FUNCTIONS, "OTHER"),
+            "seniority_declared": "seniority" in row or "senioridad" in row,
             "seniority": self._choice(row.get("seniority") or row.get("senioridad"), SENIORITIES, "PROFESSIONAL"),
             "photo_url": str(row.get("photo_url") or row.get("foto") or "").strip(),
             "organization_logo_url": str(row.get("organization_logo_url") or row.get("logo") or "").strip(),
@@ -1042,6 +1445,11 @@ class NetworkingService:
             "offers": str(row.get("offers") or row.get("offers_text") or "").strip(),
             "seeks": str(row.get("seeks") or row.get("seeks_text") or "").strip(),
             "interests": str(row.get("interests") or row.get("interests_text") or "").strip(),
+            "industry_concepts": row.get("industry_concepts") or row.get("organization_activity_concepts"),
+            "specialty_concepts": row.get("specialty_concepts") or row.get("organization_specialty_concepts") or row.get("organization_specialties"),
+            "offer_concepts": row.get("offer_concepts") or row.get("offers_concepts") or row.get("semantic_offers"),
+            "seek_concepts": row.get("seek_concepts") or row.get("seeks_concepts") or row.get("semantic_seeks"),
+            "interest_concepts": row.get("interest_concepts") or row.get("interests_concepts") or row.get("semantic_interests"),
             "channels": row.get("channels") if isinstance(row.get("channels"), list) else [],
         }
         visibility_map = row.get("channel_visibility") if isinstance(row.get("channel_visibility"), dict) else {}
@@ -1211,6 +1619,19 @@ class NetworkingService:
 
     def _safe_json(self, value) -> str:
         return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+    def _safe_source_payload(self, item: dict) -> str:
+        payload = {key: value for key, value in item.items() if key != "channels"}
+        payload["channels"] = [
+            {
+                "type": channel.get("type") or channel.get("channel_type"),
+                "scope": channel.get("scope") or "PERSONAL",
+                "visibility": channel.get("visibility") or "CONTACTS",
+                "source": channel.get("source") or item.get("source_system") or "import",
+            }
+            for channel in item.get("channels") or []
+        ]
+        return self._safe_json(payload)
 
     def _new_public_profile_id(self, db) -> str:
         value = "NET-" + secrets.token_urlsafe(12).replace("-", "").replace("_", "").upper()[:16]
