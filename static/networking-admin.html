@@ -84,6 +84,17 @@
         <button id="loadReadinessBtn" type="button" class="ghost">Ver readiness</button>
       </article>
       <article class="networking-panel">
+        <h2>Operaciones Networking</h2>
+        <p class="networking-status">Estado comercial y operativo del evento: preparacion, uso, Discovery, contactos y vocabulario. Solo agregados.</p>
+        <div id="operationsStatus" class="networking-status">Elegir evento y cargar operaciones.</div>
+        <div id="operationsWarnings" class="readiness-list"></div>
+        <div id="operationsCards" class="networking-report-cards"></div>
+        <div class="participant-actions-row">
+          <button id="loadOperationsBtn" type="button">Ver operaciones</button>
+          <button id="exportOperationsBtn" type="button" class="ghost">Exportar CSV</button>
+        </div>
+      </article>
+      <article class="networking-panel">
         <h2>Vocabulario semantico</h2>
         <p class="networking-status">Conceptos disponibles para este evento. Configura significado, no participantes.</p>
         <textarea id="taxonomyInput" rows="12">[
@@ -116,6 +127,9 @@
     const cards = document.getElementById("summaryCards");
     const readinessCards = document.getElementById("readinessCards");
     const liveVocabularyCards = document.getElementById("liveVocabularyCards");
+    const operationsCards = document.getElementById("operationsCards");
+    const operationsWarnings = document.getElementById("operationsWarnings");
+    const operationsStatus = document.getElementById("operationsStatus");
     function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
     function payload() {
       return {
@@ -192,6 +206,50 @@
         readinessCards.appendChild(card);
       });
     }
+    function addOperationsCard(label, value) {
+      const card = document.createElement("div");
+      card.className = "networking-report-card";
+      card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+      operationsCards.appendChild(card);
+    }
+    async function loadOperations() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo operaciones...";
+      operationsStatus.textContent = "Cargando...";
+      const response = await fetch(`/api/networking/operations?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      operationsCards.replaceChildren();
+      operationsWarnings.replaceChildren();
+      if (!data.ok) {
+        operationsStatus.textContent = data.error || "No se pudo leer operaciones.";
+        return;
+      }
+      operationsStatus.textContent = `${data.status_label}: ${data.event.name} · Discovery ${data.discovery.enabled ? "habilitado" : "deshabilitado"}`;
+      (data.warnings || []).forEach((warning) => {
+        const item = document.createElement("div");
+        item.className = `readiness-item ${warning.severity === "CRITICAL" ? "warn" : "ok"}`;
+        item.innerHTML = `<strong>${warning.severity}</strong><span>${warning.message}</span>`;
+        operationsWarnings.appendChild(item);
+      });
+      addOperationsCard("Participantes", data.participants.total);
+      addOperationsCard("Activos", data.participants.active);
+      addOperationsCard("Ready", data.participants.ready);
+      addOperationsCard("Incompletos", data.participants.incomplete);
+      addOperationsCard("Contactos", data.networking.contacts_total);
+      addOperationsCard("Contactos QR", data.networking.scan_contact_events);
+      addOperationsCard("Discovery listo", data.discovery.configured_participants);
+      addOperationsCard("Discovery usado", data.discovery.users);
+      addOperationsCard("Tarjetas vistas", data.discovery.profiles_shown);
+      addOperationsCard("Guardados Discovery", data.discovery.saved);
+      addOperationsCard("Agotamiento", data.discovery.exhausted_users);
+      addOperationsCard("Vocabulario activo", data.vocabulary.active_concepts);
+      addOperationsCard("Vocabulario pendiente", data.vocabulary.unresolved_candidates);
+    }
+    function exportOperations() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      window.location.href = `/api/networking/operations.csv?actor=Admin&event_id=${encodeURIComponent(eventId)}`;
+    }
     async function loadTaxonomy() {
       const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
       output.textContent = "Leyendo vocabulario...";
@@ -232,6 +290,8 @@
     document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
     document.getElementById("saveConfigBtn").addEventListener("click", () => saveConfig().catch((error) => output.textContent = error.message));
     document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
+    document.getElementById("loadOperationsBtn").addEventListener("click", () => loadOperations().catch((error) => output.textContent = error.message));
+    document.getElementById("exportOperationsBtn").addEventListener("click", exportOperations);
     document.getElementById("loadTaxonomyBtn").addEventListener("click", () => loadTaxonomy().catch((error) => output.textContent = error.message));
     document.getElementById("saveTaxonomyBtn").addEventListener("click", () => saveTaxonomy().catch((error) => output.textContent = error.message));
     document.getElementById("loadLiveVocabularyBtn").addEventListener("click", () => loadLiveVocabulary().catch((error) => output.textContent = error.message));

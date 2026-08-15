@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import csv
+import io
 import json
 import re
 import secrets
@@ -1321,6 +1323,7 @@ class NetworkingService:
             message = "Ya viste las oportunidades nuevas. Te mostramos algunas que quizas quieras reconsiderar."
         if exhausted:
             message = "Ya recorriste las oportunidades disponibles por ahora."
+            self._record_discovery_exhausted_once(db, int(owner["event_id"]), int(owner["id"]))
         return {
             "ok": True,
             "status": "READY" if stream_phase == "fresh" and not exhausted else ("RECYCLE" if stream_phase == "recycle" and not exhausted else "EXHAUSTED"),
@@ -1582,6 +1585,22 @@ class NetworkingService:
             (event_id, owner_id),
         ).fetchone()
         return row["last_at"] if row and row["last_at"] else ""
+
+    def _record_discovery_exhausted_once(self, db, event_id: int, owner_id: int) -> None:
+        preference_epoch = self._last_discovery_preference_at(db, event_id, owner_id)
+        exists = db.execute(
+            """
+            SELECT 1
+            FROM networking_interaction_events
+            WHERE event_id = ?
+              AND actor_participation_id = ?
+              AND event_type = 'discovery_exhausted'
+              AND created_at >= ?
+            """,
+            (event_id, owner_id, preference_epoch),
+        ).fetchone()
+        if not exists:
+            self.record_event(db, event_id, owner_id, None, "discovery_exhausted", {"preference_epoch": preference_epoch})
 
     def _recent_discovery_target_ids(self, db, event_id: int, owner_id: int, *, limit: int) -> set[int]:
         rows = db.execute(
@@ -1887,6 +1906,289 @@ class NetworkingService:
                 })
         summary["common_missing"] = dict(sorted(summary["common_missing"].items(), key=lambda item: (-item[1], item[0])))
         return {"ok": True, "event_id": event_id, **summary}
+
+    def operations_summary(self, db, event_id: int) -> dict:
+        event = db.execute(
+            """
+            SELECT id, name, status, networking_profile_mode,
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        if not event:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+
+        readiness = self.readiness_summary(db, event_id, include_participants=False)
+        state_rows = db.execute(
+            """
+            SELECT participation_state, COUNT(*) AS total
+            FROM networking_event_participations
+            WHERE event_id = ?
+            GROUP BY participation_state
+            """,
+            (event_id,),
+        ).fetchall()
+        states = {str(row["participation_state"] or "UNKNOWN").upper(): int(row["total"] or 0) for row in state_rows}
+        participants_total = int(readiness.get("total") or 0)
+
+        discovery_config = self.discovery_event_config(db, event_id)
+        discovery_counts = db.execute(
+            """
+            SELECT
+                COUNT(DISTINCT CASE WHEN ni.discovery_completed = 1 THEN nep.id END) AS configured,
+                COUNT(DISTINCT CASE WHEN ie.event_type IN (
+                    'discovery_shown', 'discovery_recycled', 'discovery_skipped', 'discovery_saved',
+                    'discovery_profile_opened', 'discovery_channel_opened', 'discovery_exhausted'
+                ) THEN ie.actor_participation_id END) AS users,
+                SUM(CASE WHEN ie.event_type IN ('discovery_shown', 'discovery_recycled') THEN 1 ELSE 0 END) AS shown,
+                SUM(CASE WHEN ie.event_type = 'discovery_skipped' THEN 1 ELSE 0 END) AS skipped,
+                SUM(CASE WHEN ie.event_type = 'discovery_saved' THEN 1 ELSE 0 END) AS saved,
+                SUM(CASE WHEN ie.event_type = 'discovery_exhausted' THEN 1 ELSE 0 END) AS exhausted_events,
+                COUNT(DISTINCT CASE WHEN ie.event_type = 'discovery_exhausted' THEN ie.actor_participation_id END) AS exhausted_users
+            FROM networking_event_participations nep
+            LEFT JOIN networking_intents ni ON ni.participation_id = nep.id
+            LEFT JOIN networking_interaction_events ie ON ie.event_id = nep.event_id AND ie.actor_participation_id = nep.id
+            WHERE nep.event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+
+        contact_counts = db.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                COUNT(DISTINCT owner_participation_id) AS owners,
+                COUNT(DISTINCT target_participation_id) AS targets
+            FROM networking_contacts
+            WHERE event_id = ? AND status = 'ACTIVE'
+            """,
+            (event_id,),
+        ).fetchone()
+        interaction_contact_counts = db.execute(
+            """
+            SELECT
+                SUM(CASE WHEN event_type = 'scan_contact' THEN 1 ELSE 0 END) AS scan_events,
+                SUM(CASE WHEN event_type = 'discovery_saved' THEN 1 ELSE 0 END) AS discovery_saved_events
+            FROM networking_interaction_events
+            WHERE event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+
+        pool = db.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN nep.participation_state = 'ACTIVE'
+                          AND COALESCE(ni.discoverable, 0) = 1
+                          AND COALESCE(ni.profile_visible, 0) = 1 THEN 1 ELSE 0 END) AS discoverable,
+                SUM(CASE WHEN nep.participation_state != 'ACTIVE'
+                          OR COALESCE(ni.discoverable, 0) = 0
+                          OR COALESCE(ni.profile_visible, 0) = 0 THEN 1 ELSE 0 END) AS blocked,
+                COUNT(DISTINCT CASE WHEN nep.participation_state = 'ACTIVE'
+                          AND COALESCE(ni.discoverable, 0) = 1
+                          AND COALESCE(ni.profile_visible, 0) = 1
+                          THEN COALESCE(CAST(nep.organization_id AS TEXT), NULLIF(TRIM(p.company), ''), 'person-' || nep.id) END) AS organizations
+            FROM networking_event_participations nep
+            JOIN people p ON p.id = nep.person_id
+            LEFT JOIN networking_intents ni ON ni.participation_id = nep.id
+            WHERE nep.event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+
+        vocabulary = db.execute(
+            """
+            SELECT
+                (SELECT COUNT(*)
+                 FROM networking_event_taxonomy_concepts etc
+                 JOIN networking_taxonomy_concepts tc ON tc.code = etc.concept_code
+                 WHERE etc.event_id = ? AND etc.enabled = 1 AND tc.active = 1) AS active_concepts,
+                (SELECT COUNT(DISTINCT concept_code)
+                 FROM networking_semantic_classifications
+                 WHERE event_id = ? AND concept_code IS NOT NULL) AS represented_concepts,
+                (SELECT COUNT(*)
+                 FROM networking_event_vocabulary_candidates
+                 WHERE event_id = ? AND status = 'CANDIDATE') AS unresolved_candidates,
+                (SELECT COUNT(*)
+                 FROM networking_event_vocabulary_candidates
+                 WHERE event_id = ? AND status = 'CANONICAL') AS canonical_candidates,
+                (SELECT COUNT(*)
+                 FROM networking_semantic_classifications
+                 WHERE event_id = ? AND semantic_role IN ('OFFER', 'ORG_OFFER')) AS offers,
+                (SELECT COUNT(*)
+                 FROM networking_semantic_classifications
+                 WHERE event_id = ? AND semantic_role = 'SEEK') AS seeks
+            """,
+            (event_id, event_id, event_id, event_id, event_id, event_id),
+        ).fetchone()
+
+        warnings = self._operations_warnings(
+            total=participants_total,
+            readiness=readiness,
+            discovery_enabled=bool(discovery_config["enabled"]),
+            discovery_configured=int(discovery_counts["configured"] or 0),
+            active=int(states.get("ACTIVE", 0)),
+            discoverable=int(pool["discoverable"] or 0),
+            vocabulary=vocabulary,
+        )
+        status = "READY"
+        if any(item["severity"] == "CRITICAL" for item in warnings):
+            status = "NOT_READY"
+        elif any(item["severity"] == "WARNING" for item in warnings):
+            status = "NEEDS_ATTENTION"
+
+        summary = {
+            "ok": True,
+            "event": {
+                "id": int(event["id"]),
+                "name": event["name"],
+                "status": event["status"],
+            },
+            "status": status,
+            "status_label": {"READY": "Listo", "NEEDS_ATTENTION": "Necesita atencion", "NOT_READY": "No listo"}[status],
+            "configuration": {
+                "profile_mode": event["networking_profile_mode"],
+                "discovery_enabled": bool(discovery_config["enabled"]),
+                "discovery_batch_size": int(discovery_config["batch_size"]),
+                "discovery_exploration_frequency": int(discovery_config["exploration_frequency"]),
+            },
+            "participants": {
+                "total": participants_total,
+                "passive": int(states.get("PASSIVE", 0)),
+                "active": int(states.get("ACTIVE", 0)),
+                "paused": int(states.get("PAUSED", 0)),
+                "revoked": int(states.get("REVOKED", 0)),
+                "ready": int(readiness.get("ready") or 0),
+                "incomplete": int(readiness.get("incomplete") or 0),
+                "common_missing": readiness.get("common_missing") or {},
+            },
+            "networking": {
+                "contacts_total": int(contact_counts["total"] or 0),
+                "contact_owners": int(contact_counts["owners"] or 0),
+                "contact_targets": int(contact_counts["targets"] or 0),
+                "scan_contact_events": int(interaction_contact_counts["scan_events"] or 0),
+                "discovery_saved_events": int(interaction_contact_counts["discovery_saved_events"] or 0),
+            },
+            "discovery": {
+                "enabled": bool(discovery_config["enabled"]),
+                "configured_participants": int(discovery_counts["configured"] or 0),
+                "users": int(discovery_counts["users"] or 0),
+                "profiles_shown": int(discovery_counts["shown"] or 0),
+                "skips": int(discovery_counts["skipped"] or 0),
+                "saved": int(discovery_counts["saved"] or 0),
+                "exhausted_users": int(discovery_counts["exhausted_users"] or 0),
+                "exhausted_events": int(discovery_counts["exhausted_events"] or 0),
+                "pool": {
+                    "participants_total": int(pool["total"] or 0),
+                    "discoverable_participants": int(pool["discoverable"] or 0),
+                    "blocked_by_state_or_privacy": int(pool["blocked"] or 0),
+                    "organizations_represented": int(pool["organizations"] or 0),
+                },
+            },
+            "vocabulary": {
+                "active_concepts": int(vocabulary["active_concepts"] or 0),
+                "represented_concepts": int(vocabulary["represented_concepts"] or 0),
+                "unresolved_candidates": int(vocabulary["unresolved_candidates"] or 0),
+                "canonical_candidates": int(vocabulary["canonical_candidates"] or 0),
+                "offers": int(vocabulary["offers"] or 0),
+                "seeks": int(vocabulary["seeks"] or 0),
+            },
+            "warnings": warnings,
+            "funnel": {
+                "imported": participants_total,
+                "active": int(states.get("ACTIVE", 0)),
+                "basic_ready": int(readiness.get("ready") or 0),
+                "discovery_configured": int(discovery_counts["configured"] or 0),
+                "discovery_used": int(discovery_counts["users"] or 0),
+                "contacts_created": int(contact_counts["total"] or 0),
+            },
+            "definitions": self._operations_metric_definitions(),
+        }
+        return summary
+
+    def operations_export_csv(self, db, event_id: int) -> str:
+        summary = self.operations_summary(db, event_id)
+        if not summary.get("ok"):
+            return ""
+        output = io.StringIO()
+        headers = [
+            "event_id", "event_name", "status", "participants_total", "participants_active",
+            "profiles_ready", "profiles_incomplete", "discovery_enabled", "discovery_configured",
+            "discovery_users", "discovery_profiles_shown", "discovery_skips", "discovery_saved",
+            "discovery_exhausted_users", "contacts_total", "scan_contact_events",
+            "discovery_saved_events", "active_vocabulary_concepts", "unresolved_vocabulary_candidates",
+            "warning_count", "critical_warning_count",
+        ]
+        writer = csv.DictWriter(output, fieldnames=headers)
+        writer.writeheader()
+        writer.writerow({
+            "event_id": summary["event"]["id"],
+            "event_name": summary["event"]["name"],
+            "status": summary["status"],
+            "participants_total": summary["participants"]["total"],
+            "participants_active": summary["participants"]["active"],
+            "profiles_ready": summary["participants"]["ready"],
+            "profiles_incomplete": summary["participants"]["incomplete"],
+            "discovery_enabled": int(bool(summary["discovery"]["enabled"])),
+            "discovery_configured": summary["discovery"]["configured_participants"],
+            "discovery_users": summary["discovery"]["users"],
+            "discovery_profiles_shown": summary["discovery"]["profiles_shown"],
+            "discovery_skips": summary["discovery"]["skips"],
+            "discovery_saved": summary["discovery"]["saved"],
+            "discovery_exhausted_users": summary["discovery"]["exhausted_users"],
+            "contacts_total": summary["networking"]["contacts_total"],
+            "scan_contact_events": summary["networking"]["scan_contact_events"],
+            "discovery_saved_events": summary["networking"]["discovery_saved_events"],
+            "active_vocabulary_concepts": summary["vocabulary"]["active_concepts"],
+            "unresolved_vocabulary_candidates": summary["vocabulary"]["unresolved_candidates"],
+            "warning_count": len(summary["warnings"]),
+            "critical_warning_count": sum(1 for item in summary["warnings"] if item["severity"] == "CRITICAL"),
+        })
+        return output.getvalue()
+
+    def _operations_warnings(self, *, total: int, readiness: dict, discovery_enabled: bool, discovery_configured: int, active: int, discoverable: int, vocabulary, ) -> list[dict]:
+        warnings = []
+        if total == 0:
+            warnings.append({"severity": "WARNING", "code": "NO_PARTICIPANTS", "message": "Importa participantes para comenzar la preparacion de Networking."})
+            return warnings
+        incomplete = int(readiness.get("incomplete") or 0)
+        if incomplete:
+            warnings.append({"severity": "WARNING", "code": "INCOMPLETE_PROFILES", "message": f"{incomplete} perfiles necesitan completar datos obligatorios para Networking."})
+        if active == 0:
+            warnings.append({"severity": "INFO", "code": "NO_ACTIVE_PARTICIPANTS", "message": "Todavia no hay participantes activos. Es esperable antes del evento."})
+        if discovery_enabled:
+            if discoverable < 2 and total > 1:
+                warnings.append({"severity": "WARNING", "code": "DISCOVERY_SMALL_POOL", "message": "Discovery tiene muy pocas oportunidades disponibles con el estado actual."})
+            if discovery_configured == 0 and active > 0:
+                warnings.append({"severity": "INFO", "code": "DISCOVERY_NOT_USED_YET", "message": "Discovery esta habilitado, pero aun nadie completo el Golden Ticket."})
+            if int(vocabulary["active_concepts"] or 0) == 0 and int(vocabulary["represented_concepts"] or 0) == 0:
+                warnings.append({"severity": "WARNING", "code": "DISCOVERY_EMPTY_VOCABULARY", "message": "Discovery esta activo pero el vocabulario del evento todavia no tiene conceptos utiles."})
+            if int(vocabulary["offers"] or 0) == 0:
+                warnings.append({"severity": "WARNING", "code": "DISCOVERY_NO_OFFERS", "message": "Discovery esta activo pero casi no hay ofertas estructuradas para alimentar oportunidades."})
+            if int(vocabulary["seeks"] or 0) == 0:
+                warnings.append({"severity": "INFO", "code": "DISCOVERY_NO_SEEKS", "message": "Aun hay pocas busquedas declaradas; el Golden Ticket puede mejorar la demanda del evento."})
+        else:
+            warnings.append({"severity": "INFO", "code": "DISCOVERY_DISABLED", "message": "Discovery esta deshabilitado. La credencial, QR y contactos siguen disponibles."})
+        unresolved = int(vocabulary["unresolved_candidates"] or 0)
+        if unresolved:
+            warnings.append({"severity": "INFO", "code": "VOCABULARY_UNRESOLVED", "message": f"Hay {unresolved} valores de vocabulario vivo pendientes de normalizar."})
+        return warnings
+
+    def _operations_metric_definitions(self) -> dict:
+        return {
+            "participants.total": "EventParticipations del evento.",
+            "participants.active": "EventParticipations con estado ACTIVE; no equivale a READY.",
+            "participants.ready": "Perfiles READY segun el evaluador de readiness V1.2.",
+            "discovery.configured_participants": "Participantes con preferencias Discovery completadas.",
+            "discovery.users": "Participantes con interacciones Discovery registradas.",
+            "discovery.profiles_shown": "Eventos discovery_shown y discovery_recycled.",
+            "networking.contacts_total": "Contactos canonicos ACTIVE del evento.",
+            "networking.discovery_saved_events": "Acciones Discovery Guardar registradas; historico segun eventos disponibles.",
+            "vocabulary.unresolved_candidates": "Valores vivos CANDIDATE pendientes de normalizacion.",
+        }
 
     def _completed_readiness_dimensions(self, profile: dict) -> set[str]:
         completed = set()

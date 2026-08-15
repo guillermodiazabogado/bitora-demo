@@ -8287,6 +8287,49 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
+            if path == "/api/networking/operations":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.operations")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().operations_summary(db, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/operations.csv":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.operations_export")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    summary = networking_service().operations_summary(db, event_id)
+                    if not summary.get("ok"):
+                        self.send_json(summary, int(summary.pop("status_code", 200)))
+                        return
+                    csv_body = networking_service().operations_export_csv(db, event_id)
+                    audit(db, actor, "networking.operations_exported", "event", event_id, {"format": "csv"})
+                send_download(self, f"networking-operaciones-evento-{event_id}.csv", "text/csv; charset=utf-8", csv_body.encode("utf-8"))
+                return
+
             if path == "/api/networking/taxonomy":
                 actor = query.get("actor", ["Admin"])[0]
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
