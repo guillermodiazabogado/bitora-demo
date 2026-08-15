@@ -1301,21 +1301,34 @@ class NetworkingService:
                 "exhausted": False,
             }
         batch_size = max(1, min(DISCOVERY_MAX_BATCH, int(limit or config["batch_size"])))
-        candidates = self._discovery_candidates(db, owner, owner_profile)
+        recent_targets = self._recent_discovery_target_ids(db, int(owner["event_id"]), int(owner["id"]), limit=3)
+        recent_orgs = self._recent_discovery_organizations(db, int(owner["event_id"]), int(owner["id"]), limit=4)
+        candidates = self._discovery_candidates(db, owner, owner_profile, mode="fresh", recent_target_ids=recent_targets)
+        stream_phase = "fresh"
+        if not candidates:
+            candidates = self._discovery_candidates(db, owner, owner_profile, mode="recycle", recent_target_ids=recent_targets)
+            stream_phase = "recycle" if candidates else "exhausted"
         scored = [item for item in (self._score_discovery_candidate(owner_profile, candidate, config) for candidate in candidates) if item["relevance"] > 0 or owner_profile.get("discovery", {}).get("diversity")]
-        ordered = self._order_discovery_candidates(scored, owner_profile, config)
+        ordered = self._order_discovery_candidates(scored, owner_profile, config, recent_orgs=recent_orgs)
         fresh = ordered[:batch_size]
         for item in fresh[:1]:
-            self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(item["profile"]["participation_id"]), "discovery_shown", {"reasons": [reason["code"] for reason in item["reasons"]], "bucket": item["bucket"]})
-        public_items = [self._public_discovery_item(item) for item in fresh]
+            event_type = "discovery_recycled" if stream_phase == "recycle" else "discovery_shown"
+            self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(item["profile"]["participation_id"]), event_type, {"reasons": [reason["code"] for reason in item["reasons"]], "bucket": item["bucket"], "phase": stream_phase})
+        public_items = [self._public_discovery_item(item, phase=stream_phase) for item in fresh]
         exhausted = not fresh
+        message = "Estas viendo oportunidades nuevas del evento segun tus preferencias."
+        if stream_phase == "recycle" and not exhausted:
+            message = "Ya viste las oportunidades nuevas. Te mostramos algunas que quizas quieras reconsiderar."
+        if exhausted:
+            message = "Ya recorriste las oportunidades disponibles por ahora."
         return {
             "ok": True,
-            "status": "READY" if not exhausted else "EXHAUSTED",
+            "status": "READY" if stream_phase == "fresh" and not exhausted else ("RECYCLE" if stream_phase == "recycle" and not exhausted else "EXHAUSTED"),
             "ready": True,
-            "message": "Estas viendo oportunidades del evento segun tus preferencias." if not exhausted else "Ya recorriste las oportunidades disponibles con tus preferencias actuales.",
+            "message": message,
             "items": public_items,
             "exhausted": exhausted,
+            "phase": stream_phase,
             "actions": {"empty": ["adjust_preferences", "return_credential"] if exhausted else []},
         }
 
@@ -1344,14 +1357,84 @@ class NetworkingService:
             payload["contact_id"] = contact["contact_id"]
             payload["created"] = contact["created"]
             result.update(contact)
-        self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(target["id"]), event_type, payload)
+        should_record = True
+        if action == "skip":
+            should_record = not bool(db.execute(
+                """
+                SELECT 1
+                FROM networking_interaction_events
+                WHERE event_id = ? AND actor_participation_id = ? AND target_participation_id = ? AND event_type = 'discovery_skipped'
+                """,
+                (owner["event_id"], owner["id"], target["id"]),
+            ).fetchone())
+        if should_record:
+            self.record_event(db, int(owner["event_id"]), int(owner["id"]), int(target["id"]), event_type, payload)
         result["profile"] = self.participation_payload(db, int(target["id"]), viewer_id=int(owner["id"]), full=True)
         result["next"] = self.discovery_stream(db, owner_token)
         return result
 
-    def _discovery_candidates(self, db, owner, owner_profile: dict) -> list[dict]:
-        rows = db.execute(
+    def _discovery_candidates(self, db, owner, owner_profile: dict, *, mode: str, recent_target_ids: set[int]) -> list[dict]:
+        preference_epoch = self._last_discovery_preference_at(db, int(owner["event_id"]), int(owner["id"]))
+        recent_clause = ""
+        params: list = [owner["event_id"], owner["id"], owner["id"]]
+        if recent_target_ids:
+            recent_clause = "AND nep.id NOT IN ({})".format(",".join("?" for _ in recent_target_ids))
+            params.extend(sorted(recent_target_ids))
+        if mode == "fresh":
+            history_clause = """
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM networking_interaction_events ie
+                  WHERE ie.event_id = nep.event_id
+                    AND ie.actor_participation_id = ?
+                    AND ie.target_participation_id = nep.id
+                    AND ie.event_type IN ('discovery_shown', 'discovery_recycled', 'discovery_skipped', 'discovery_saved')
+              )
             """
+            params.append(owner["id"])
+            order_clause = "ORDER BY nep.updated_at DESC, nep.id DESC"
+        else:
+            history_clause = """
+              AND EXISTS (
+                  SELECT 1
+                  FROM networking_interaction_events skipped
+                  WHERE skipped.event_id = nep.event_id
+                    AND skipped.actor_participation_id = ?
+                    AND skipped.target_participation_id = nep.id
+                    AND skipped.event_type = 'discovery_skipped'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM networking_interaction_events saved
+                  WHERE saved.event_id = nep.event_id
+                    AND saved.actor_participation_id = ?
+                    AND saved.target_participation_id = nep.id
+                    AND saved.event_type = 'discovery_saved'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM networking_interaction_events recycled
+                  WHERE recycled.event_id = nep.event_id
+                    AND recycled.actor_participation_id = ?
+                    AND recycled.target_participation_id = nep.id
+                    AND recycled.event_type = 'discovery_recycled'
+                    AND recycled.created_at >= ?
+              )
+            """
+            params.extend([owner["id"], owner["id"], owner["id"], preference_epoch])
+            order_clause = """
+            ORDER BY (
+                SELECT MIN(skipped.created_at)
+                FROM networking_interaction_events skipped
+                WHERE skipped.event_id = nep.event_id
+                  AND skipped.actor_participation_id = ?
+                  AND skipped.target_participation_id = nep.id
+                  AND skipped.event_type = 'discovery_skipped'
+            ) ASC, nep.id ASC
+            """
+            params.append(owner["id"])
+        rows = db.execute(
+            f"""
             SELECT nep.id
             FROM networking_event_participations nep
             JOIN networking_intents ni ON ni.participation_id = nep.id
@@ -1365,18 +1448,12 @@ class NetworkingService:
                   FROM networking_contacts c
                   WHERE c.owner_participation_id = ? AND c.target_participation_id = nep.id AND c.status = 'ACTIVE'
               )
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM networking_interaction_events ie
-                  WHERE ie.event_id = nep.event_id
-                    AND ie.actor_participation_id = ?
-                    AND ie.target_participation_id = nep.id
-                    AND ie.event_type IN ('discovery_shown', 'discovery_skipped', 'discovery_saved')
-              )
-            ORDER BY nep.updated_at DESC, nep.id DESC
+              {recent_clause}
+              {history_clause}
+            {order_clause}
             LIMIT 60
             """,
-            (owner["event_id"], owner["id"], owner["id"], owner["id"]),
+            params,
         ).fetchall()
         candidates = []
         for row in rows:
@@ -1438,8 +1515,18 @@ class NetworkingService:
             "relevance": score,
         }
 
-    def _order_discovery_candidates(self, scored: list[dict], owner_profile: dict, config: dict) -> list[dict]:
+    def _order_discovery_candidates(self, scored: list[dict], owner_profile: dict, config: dict, *, recent_orgs: list[str]) -> list[dict]:
         scored = sorted(scored, key=lambda item: (-int(item["relevance"]), self._canonical_key(item["profile"].get("public_profile_id") or "")))
+        recent_org_keys = {self._canonical_key(org) for org in recent_orgs if org}
+        if recent_org_keys and any(self._canonical_key(item["profile"].get("organization") or "") not in recent_org_keys for item in scored):
+            scored = sorted(
+                scored,
+                key=lambda item: (
+                    1 if self._canonical_key(item["profile"].get("organization") or "") in recent_org_keys else 0,
+                    -int(item["relevance"]),
+                    self._canonical_key(item["profile"].get("public_profile_id") or ""),
+                ),
+            )
         aligned = [item for item in scored if item["bucket"] == "aligned"]
         exploration = [item for item in scored if item["bucket"] != "aligned"]
         if not (owner_profile.get("discovery") or {}).get("diversity"):
@@ -1477,12 +1564,64 @@ class NetworkingService:
             last_org = item["profile"].get("organization") or ""
         return result
 
-    def _public_discovery_item(self, item: dict) -> dict:
+    def _public_discovery_item(self, item: dict, *, phase: str) -> dict:
         return {
             "profile": item["profile"],
             "reasons": item["reasons"],
             "bucket": item["bucket"],
+            "phase": phase,
         }
+
+    def _last_discovery_preference_at(self, db, event_id: int, owner_id: int) -> str:
+        row = db.execute(
+            """
+            SELECT MAX(created_at) AS last_at
+            FROM networking_interaction_events
+            WHERE event_id = ? AND actor_participation_id = ? AND event_type = 'discovery_onboarded'
+            """,
+            (event_id, owner_id),
+        ).fetchone()
+        return row["last_at"] if row and row["last_at"] else ""
+
+    def _recent_discovery_target_ids(self, db, event_id: int, owner_id: int, *, limit: int) -> set[int]:
+        rows = db.execute(
+            """
+            SELECT target_participation_id
+            FROM networking_interaction_events
+            WHERE event_id = ?
+              AND actor_participation_id = ?
+              AND target_participation_id IS NOT NULL
+              AND event_type IN ('discovery_shown', 'discovery_recycled', 'discovery_skipped')
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (event_id, owner_id, max(1, int(limit))),
+        ).fetchall()
+        return {int(row["target_participation_id"]) for row in rows if row["target_participation_id"]}
+
+    def _recent_discovery_organizations(self, db, event_id: int, owner_id: int, *, limit: int) -> list[str]:
+        rows = db.execute(
+            """
+            SELECT COALESCE(no.name, p.company, '') AS organization
+            FROM networking_interaction_events ie
+            JOIN networking_event_participations nep ON nep.id = ie.target_participation_id
+            JOIN people p ON p.id = nep.person_id
+            LEFT JOIN networking_organizations no ON no.id = nep.organization_id
+            WHERE ie.event_id = ?
+              AND ie.actor_participation_id = ?
+              AND ie.target_participation_id IS NOT NULL
+              AND ie.event_type IN ('discovery_shown', 'discovery_recycled', 'discovery_skipped')
+            ORDER BY ie.id DESC
+            LIMIT ?
+            """,
+            (event_id, owner_id, max(1, int(limit))),
+        ).fetchall()
+        result = []
+        for row in rows:
+            org = str(row["organization"] or "").strip()
+            if org and org not in result:
+                result.append(org)
+        return result
 
     def _resolve_discovery_target(self, db, owner, data: dict):
         public_id = str(data.get("public_profile_id") or data.get("profile_id") or "").strip().upper()

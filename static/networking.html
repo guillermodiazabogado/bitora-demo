@@ -38,12 +38,17 @@
     .discovery-stream-card {display: grid; gap: 14px;}
     .discovery-reason {padding: 10px 12px; border-radius: 10px; background: #fff7df; color: #624309; font-weight: 700;}
     .discovery-actions {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
-    .discovery-actions button {min-height: 46px;}
+    .discovery-actions button {min-height: 48px; touch-action: manipulation;}
     .discovery-empty {display: grid; gap: 10px;}
+    .discovery-notice {min-height: 22px; color: #516070; font-weight: 700;}
+    .discovery-loading {opacity: .68; pointer-events: none;}
+    .discovery-stream-card .networking-profile-card {overflow-wrap: anywhere;}
     @media (max-width: 560px) {
       .credential-main {grid-template-columns: 1fr; justify-items: start;}
       .credential-qr {width: min(56vw, 210px);}
       .credential-actions {grid-template-columns: 1fr;}
+      .discovery-actions {grid-template-columns: 1fr;}
+      .discovery-card {min-height: calc(100vh - 36px);}
     }
   </style>
 </head>
@@ -214,6 +219,7 @@
         <span class="networking-kicker">Discovery</span>
         <h2 id="discoveryStreamTitle">Discovery listo</h2>
         <p id="discoveryStreamMessage">BITORA te muestra, uno por uno, contactos y empresas del evento que pueden resultarte utiles.</p>
+        <div id="discoveryNotice" class="discovery-notice" aria-live="polite"></div>
         <div id="discoveryStream"></div>
         <div class="discovery-actions">
           <button id="editDiscoveryBtn" type="button" class="ghost">Editar preferencias</button>
@@ -261,6 +267,7 @@
     let discoveryStep = 0;
     let discoveryItems = [];
     let activeDiscoveryItem = null;
+    let discoveryBusy = false;
     const discoveryAnswers = {};
     const returnProfile = params.get("return_profile") || params.get("profile_id") || "";
     const steps = [
@@ -333,16 +340,21 @@
       holder.replaceChildren();
       discoveryItems = stream.items || [];
       activeDiscoveryItem = discoveryItems[0] || null;
+      $("discoveryNotice").textContent = stream.phase === "recycle" ? "Estas revisando oportunidades que ya habias pasado." : "";
       if (!activeDiscoveryItem) {
         const empty = document.createElement("div");
         empty.className = "discovery-empty";
         empty.innerHTML = "<p>No hay una tarjeta nueva para mostrar ahora.</p>";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "Volver a intentar";
+        retry.addEventListener("click", () => loadDiscoveryStream().catch((error) => $("discoveryNotice").textContent = error.message));
         const adjust = document.createElement("button");
         adjust.type = "button";
         adjust.className = "ghost";
         adjust.textContent = "Ajustar preferencias";
         adjust.addEventListener("click", openDiscoveryEditor);
-        empty.appendChild(adjust);
+        empty.append(retry, adjust);
         holder.appendChild(empty);
         return;
       }
@@ -356,6 +368,11 @@
       reasonBox.textContent = [reason.label || "Podria interesarte en este evento", reason.supporting_label].filter(Boolean).join(": ");
       const actions = document.createElement("div");
       actions.className = "discovery-actions";
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "ghost";
+      open.textContent = "Ver perfil";
+      open.addEventListener("click", () => discoveryAction("open_profile", {stay: true}).catch((error) => $("discoveryNotice").textContent = error.message));
       const save = document.createElement("button");
       save.type = "button";
       save.textContent = "Guardar contacto";
@@ -365,26 +382,53 @@
       next.className = "ghost";
       next.textContent = "Siguiente";
       next.addEventListener("click", () => discoveryAction("skip").catch((error) => alert(error.message)));
-      actions.append(save, next);
+      actions.append(open, save, next);
       card.append(reasonBox, profileHolder, actions);
       holder.appendChild(card);
       renderProfile(activeDiscoveryItem.profile, profileHolder.id);
     }
 
-    async function loadDiscoveryStream() {
-      const stream = await api(`/api/networking/discovery?token=${encodeURIComponent(token)}&limit=3`);
-      renderDiscoveryStream(stream);
-      show("discoveryShell", true);
-      return stream;
+    function setDiscoveryBusy(value, text = null) {
+      discoveryBusy = !!value;
+      $("discoveryShell").classList.toggle("discovery-loading", discoveryBusy);
+      if (text !== null) $("discoveryNotice").textContent = text;
+      document.querySelectorAll("#discoveryShell button").forEach((button) => button.disabled = discoveryBusy);
     }
 
-    async function discoveryAction(action) {
-      if (!activeDiscoveryItem?.profile?.public_profile_id) return;
-      const result = await api("/api/networking/discovery-action", {method: "POST", body: JSON.stringify({token, action, public_profile_id: activeDiscoveryItem.profile.public_profile_id})});
-      if (action === "save") {
-        await loadContacts();
+    async function loadDiscoveryStream() {
+      try {
+        setDiscoveryBusy(true, "Buscando oportunidades...");
+        const stream = await api(`/api/networking/discovery?token=${encodeURIComponent(token)}&limit=3`);
+        renderDiscoveryStream(stream);
+        show("discoveryShell", true);
+        return stream;
+      } finally {
+        setDiscoveryBusy(false);
       }
-      renderDiscoveryStream(result.next || {items: [], exhausted: true, message: "Ya recorriste las oportunidades disponibles con tus preferencias actuales."});
+    }
+
+    async function discoveryAction(action, options = {}) {
+      if (discoveryBusy || !activeDiscoveryItem?.profile?.public_profile_id) return;
+      try {
+        setDiscoveryBusy(true, action === "save" ? "Guardando contacto..." : (action === "skip" ? "Buscando siguiente..." : "Abriendo perfil..."));
+        const result = await api("/api/networking/discovery-action", {method: "POST", body: JSON.stringify({token, action, public_profile_id: activeDiscoveryItem.profile.public_profile_id})});
+        if (action === "save") {
+          await loadContacts();
+          $("discoveryNotice").textContent = "Guardado en Mis Contactos";
+        }
+        if (options.stay) {
+          $("discoveryNotice").textContent = "Perfil abierto. Podes guardarlo o seguir descubriendo.";
+          return result;
+        }
+        renderDiscoveryStream(result.next || {items: [], exhausted: true, message: "Ya recorriste las oportunidades disponibles por ahora."});
+        if (action === "save") $("discoveryNotice").textContent = "Guardado en Mis Contactos. Segui descubriendo.";
+        return result;
+      } catch (error) {
+        $("discoveryNotice").textContent = `${error.message}. Volve a intentar.`;
+        throw error;
+      } finally {
+        setDiscoveryBusy(false);
+      }
     }
 
     function renderCredential(profile) {
