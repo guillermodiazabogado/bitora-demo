@@ -140,6 +140,75 @@ Invariantes V2.3:
 - Discovery puede estar deshabilitado con Networking live.
 - No hay CSS/HTML arbitrario ni codigo event-specific.
 
+## V2.4 Production Certification & Event Pilot Hardening
+
+Checkpoint de arranque verificado: `d585a63`.
+
+ExecPlan aplicado:
+
+1. Reentry, baseline y fallas heredadas
+   - Verificar branch, HEAD, worktree, docs V1-V2.3, migraciones hasta `033`, QR publico, auth, Discovery, operaciones, launch, backup/restore e import.
+   - Preservar `R2_RESTORE_ISOLATED_VALIDATION.json`.
+   - Clasificar fallas heredadas de `verificar_integridad_bitora.py` y `verificar_mvp.py`.
+
+2. Certification harness
+   - Crear `verificar_networking_v2_4.py`.
+   - Cubrir QR/auth, prelaunch, launch/disable, event isolation, privacy mutation, revocation, races de scan/save/skip, reimport, external registration, exhaustion recovery, export CSV seguro, restore poblado, init idempotente y anti-directory.
+
+3. Pilot/load runner
+   - Crear `verificar_networking_pilot.py`.
+   - Generar fixture deterministico con 501 EventParticipations, 500 candidatos y aproximadamente 80 organizaciones.
+   - Ejecutar concurrencia acotada en credencial, perfil publico, Discovery y guardado por QR.
+
+4. Security/QR hardening
+   - Reconfirmar que public profile token `NET-*` no autentica owner.
+   - Verificar perfiles publicos malformed/random/prelaunch/disabled.
+   - Confirmar deep link por `NetworkingService.public_profile_link`.
+   - Clasificar QR anticipado heredado como legacy accreditation/access QR, no Networking QR.
+
+5. Concurrency/idempotency
+   - Probar duplicados concurrentes de scan QR.
+   - Probar convergencia QR + Discovery save en contacto canonico.
+   - Probar doble skip concurrente sin historia dañina ni repeticion inmediata.
+   - Documentar SQLite WAL/busy timeout y DB_LOCK de mutaciones.
+
+6. State integrity/degradation
+   - Verificar privacidad y revocacion actuales sobre historial viejo.
+   - Verificar disable/re-enable de Networking no destructivo.
+   - Verificar disable de Discovery preservando credencial/QR/contactos.
+   - Verificar reimport live preservando contactos/historia.
+
+7. Backup/restore/upgrade
+   - Certificar backup/restore poblado sobre evento pequeño pero completo.
+   - Verificar `server.init_db()` idempotente sobre DB poblada.
+   - No agregar migracion V2.4; el upgrade V2.3 -> V2.4 es schema-neutral.
+
+8. Pilot operations
+   - Crear `BITORA_NETWORKING_V2_4.md`.
+   - Documentar matriz manual, runbook de piloto, incident playbook, core critico y degradacion por capas.
+
+9. Regression/certification decision
+   - Ejecutar V2.4, pilot, V2.3-V1 regression, backup/auth/landing checks, py_compile y diff check.
+   - Mantener manual gates separados de automated PASS.
+
+Rollback/recovery:
+
+- Revertir `verificar_networking_v2_4.py`, `verificar_networking_pilot.py`, doc V2.4 y el guard de CSV si se necesitara rollback.
+- No hay migracion ni cambio destructivo de datos.
+- La unica modificacion runtime es neutralizacion CSV de textos peligrosos para planillas; rollback no afecta estado de eventos.
+
+Invariantes V2.4:
+
+- Mutaciones criticas toleran retry seguro en contacto/scan/save/skip.
+- Contactos canonicos no se duplican bajo concurrencia testeada.
+- Privacidad/estado actual vence historial de Discovery.
+- Backup/restore preserva estado operativo significativo.
+- Fresh/init migration idempotente sobre DB poblada.
+- QR publico Networking sigue sin autenticar owner.
+- Redirect/return se mantiene en rutas internas sin redirect externo server-side.
+- Certificacion distingue automated PASS y manual required.
+- No se agrega AI/ML, directorio, scoring publico ni nuevo matching.
+
 ## V1.1 Event Visual Hierarchy
 
 Checkpoint de arranque verificado: `8a05a2d`.

@@ -2358,10 +2358,10 @@ class NetworkingService:
         writer.writeheader()
         writer.writerow({
             "event_id": summary["event"]["id"],
-            "event_name": summary["event"]["name"],
-            "status": summary["status"],
-            "launch_state": (summary.get("launch") or {}).get("launch_state") or summary.get("configuration", {}).get("networking_launch_state", "DRAFT"),
-            "launch_status": (summary.get("launch") or {}).get("status") or "",
+            "event_name": self._csv_safe(summary["event"]["name"]),
+            "status": self._csv_safe(summary["status"]),
+            "launch_state": self._csv_safe((summary.get("launch") or {}).get("launch_state") or summary.get("configuration", {}).get("networking_launch_state", "DRAFT")),
+            "launch_status": self._csv_safe((summary.get("launch") or {}).get("status") or ""),
             "participants_total": summary["participants"]["total"],
             "participants_active": summary["participants"]["active"],
             "profiles_ready": summary["participants"]["ready"],
@@ -2382,6 +2382,13 @@ class NetworkingService:
             "critical_warning_count": sum(1 for item in summary["warnings"] if item["severity"] == "CRITICAL"),
         })
         return output.getvalue()
+
+    def _csv_safe(self, value) -> str:
+        text = str(value if value is not None else "")
+        stripped = text.lstrip()
+        if stripped.startswith(("=", "+", "-", "@")):
+            return "'" + text
+        return text
 
     def _operations_warnings(self, *, total: int, readiness: dict, discovery_enabled: bool, discovery_configured: int, active: int, discoverable: int, vocabulary, ) -> list[dict]:
         warnings = []
