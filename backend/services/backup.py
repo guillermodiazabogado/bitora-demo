@@ -314,6 +314,7 @@ class EventBackupService:
         ),
         ("networking_taxonomy_concepts", "SELECT * FROM networking_taxonomy_concepts ORDER BY id", lambda event_id: ()),
         ("networking_event_taxonomy_concepts", "SELECT * FROM networking_event_taxonomy_concepts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("networking_event_vocabulary_candidates", "SELECT * FROM networking_event_vocabulary_candidates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         (
             "networking_classifications",
             """
@@ -678,6 +679,7 @@ class EventRestoreService:
         "networking_taxonomy_concepts",
         "networking_organizations",
         "networking_event_taxonomy_concepts",
+        "networking_event_vocabulary_candidates",
         "networking_event_participations",
         "networking_intents",
         "networking_contact_channels",
@@ -877,6 +879,7 @@ class EventRestoreService:
                     "networking_taxonomy_concepts": {},
                     "networking_organizations": {},
                     "networking_event_taxonomy_concepts": {},
+                    "networking_event_vocabulary_candidates": {},
                     "networking_event_participations": {},
                     "networking_intents": {},
                     "networking_contact_channels": {},

@@ -85,6 +85,12 @@
         </div>
       </article>
       <article class="networking-panel">
+        <h2>Vocabulario vivo</h2>
+        <p class="networking-status">Valores configurados y candidatos reales declarados en el evento. No lista participantes.</p>
+        <div id="liveVocabularyCards" class="networking-report-cards"></div>
+        <button id="loadLiveVocabularyBtn" type="button" class="ghost">Ver vocabulario vivo</button>
+      </article>
+      <article class="networking-panel">
         <h2>Resultado</h2>
         <div id="summaryCards" class="networking-report-cards"></div>
         <pre id="adminOutput" class="networking-admin-output"></pre>
@@ -95,6 +101,7 @@
     const output = document.getElementById("adminOutput");
     const cards = document.getElementById("summaryCards");
     const readinessCards = document.getElementById("readinessCards");
+    const liveVocabularyCards = document.getElementById("liveVocabularyCards");
     function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
     function payload() {
       return {
@@ -186,6 +193,20 @@
       const data = await response.json();
       output.textContent = JSON.stringify(data, null, 2);
     }
+    async function loadLiveVocabulary() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo vocabulario vivo...";
+      const response = await fetch(`/api/networking/live-vocabulary?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      liveVocabularyCards.replaceChildren();
+      Object.entries(data.vocabulary || {}).forEach(([dimension, options]) => {
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${dimension}</span><strong>${options.length}</strong>`;
+        liveVocabularyCards.appendChild(card);
+      });
+    }
     document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
     document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
     document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
@@ -193,6 +214,7 @@
     document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
     document.getElementById("loadTaxonomyBtn").addEventListener("click", () => loadTaxonomy().catch((error) => output.textContent = error.message));
     document.getElementById("saveTaxonomyBtn").addEventListener("click", () => saveTaxonomy().catch((error) => output.textContent = error.message));
+    document.getElementById("loadLiveVocabularyBtn").addEventListener("click", () => loadLiveVocabulary().catch((error) => output.textContent = error.message));
   </script>
 </body>
 </html>

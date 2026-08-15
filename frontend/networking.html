@@ -6,6 +6,41 @@
   <title>BITORA Networking</title>
   <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
   <script src="/html5-qrcode.min.js"></script>
+  <style>
+    .credential-home {display: grid; gap: 14px;}
+    .event-credential {position: relative; overflow: hidden; border-radius: 18px; padding: 18px; color: #162033; background: linear-gradient(145deg, #ffffff 0%, #f4f7fb 55%, #dfe8f5 100%); box-shadow: 0 20px 52px rgba(21, 31, 50, .18); border: 1px solid rgba(22, 32, 51, .08);}
+    .event-credential::before {content: ""; display: block; width: 72px; height: 10px; border-radius: 999px; background: #18253a; margin: 0 auto 16px;}
+    .credential-band {position: absolute; inset: 0 auto 0 0; width: 10px; background: linear-gradient(#13243a, #d7a63f);}
+    .credential-top {display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-left: 10px;}
+    .credential-event {font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; font-weight: 800;}
+    .credential-id {font-size: .78rem; color: #64748b;}
+    .credential-main {display: grid; grid-template-columns: 1fr 120px; gap: 16px; align-items: center; margin: 18px 0 10px 10px;}
+    .credential-photo {width: 72px; height: 72px; border-radius: 16px; background: #172238; color: #fff; display: grid; place-items: center; font-size: 1.8rem; font-weight: 800; background-size: cover; background-position: center;}
+    .credential-name {margin: 10px 0 2px; font-size: clamp(1.45rem, 7vw, 2.15rem); line-height: 1; overflow-wrap: anywhere;}
+    .credential-role, .credential-org {margin: 0; color: #475569; overflow-wrap: anywhere;}
+    .credential-qr {width: 120px; aspect-ratio: 1; border-radius: 10px; padding: 8px; background: #fff; border: 1px solid #dbe3ef;}
+    .credential-actions {display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-left: 10px;}
+    .credential-actions button, .golden-ticket {min-height: 46px;}
+    .golden-ticket {margin: 14px 0 0 10px; width: calc(100% - 10px); border: 0; border-radius: 999px; color: #251700; font-weight: 900; background: linear-gradient(135deg, #fff0a8, #d79b24 48%, #8d5c0f); box-shadow: 0 14px 34px rgba(151, 104, 25, .32);}
+    .golden-ticket.ready {background: linear-gradient(135deg, #eaffd9, #8ed46d 48%, #2f7b4b); color: #092414;}
+    .public-link {font-size: .78rem; color: #64748b; overflow-wrap: anywhere; margin: 8px 0 0 10px;}
+    .discovery-overlay {position: fixed; inset: 0; z-index: 20; background: #07111f; color: #fff; display: grid; place-items: center; padding: 18px;}
+    .discovery-card {width: min(680px, 100%); min-height: min(680px, calc(100vh - 36px)); display: grid; grid-template-rows: auto 1fr auto; gap: 18px;}
+    .discovery-progress {height: 7px; background: rgba(255,255,255,.18); border-radius: 999px; overflow: hidden;}
+    .discovery-progress span {display: block; height: 100%; width: 0; background: #d7a63f;}
+    .discovery-question h2 {font-size: clamp(2rem, 8vw, 4rem); line-height: 1; margin: 16px 0;}
+    .chip-grid {display: flex; flex-wrap: wrap; gap: 10px;}
+    .chip-grid button {border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: 12px 15px; min-height: 44px;}
+    .chip-grid button.selected {background: #d7a63f; color: #241600; border-color: #d7a63f; font-weight: 800;}
+    .discovery-controls {display: flex; gap: 10px; align-items: center;}
+    .discovery-controls button {flex: 1;}
+    .discovery-manual {width: 100%; margin-top: 14px; min-height: 46px;}
+    @media (max-width: 560px) {
+      .credential-main {grid-template-columns: 1fr; justify-items: start;}
+      .credential-qr {width: min(56vw, 210px);}
+      .credential-actions {grid-template-columns: 1fr;}
+    }
+  </style>
 </head>
 <body class="networking-body">
   <main class="networking-app-shell" aria-label="BITORA Networking">
@@ -14,8 +49,8 @@
         <img src="/assets/bitora-logo.svg" alt="BITORA">
         <span>Networking</span>
       </div>
-      <h1 id="networkingTitle">Conexiones utiles, sin ruido</h1>
-      <p id="networkingSubtitle">Escanea, guarda contactos y conserva solo los canales permitidos.</p>
+      <h1 id="networkingTitle">Tu credencial digital</h1>
+      <p id="networkingSubtitle">Mostra tu QR, escanea contactos y activa Discovery cuando quieras.</p>
     </header>
 
     <section id="tokenPanel" class="networking-panel">
@@ -29,7 +64,7 @@
 
     <section id="onboardingPanel" class="networking-panel hidden">
       <span class="networking-kicker">Primer uso</span>
-      <h2>Configura como queres conectar</h2>
+      <h2>Activemos tu credencial</h2>
       <form id="onboardingForm" class="networking-form">
         <fieldset>
           <legend>Modo</legend>
@@ -52,40 +87,40 @@
           </select>
         </label>
         <label>Descripcion breve
-          <textarea name="bio" rows="3" placeholder="Que haces y que oportunidades queres encontrar"></textarea>
+          <textarea name="bio" rows="2" placeholder="Una linea sobre vos o tu organizacion"></textarea>
         </label>
-        <div class="networking-two">
-          <label>Ofrezco
-            <input name="offers" placeholder="Soluciones, servicios, productos">
-          </label>
-          <label>Busco
-            <input name="seeks" placeholder="Aliados, proveedores, clientes">
-          </label>
-        </div>
-        <div class="networking-two">
-          <label>Actividad / sector
-            <input name="organization_activity" placeholder="Rubro principal">
-          </label>
-          <label>Especialidad
-            <input name="organization_specialty" placeholder="Area concreta">
-          </label>
-        </div>
-        <label>Descripcion de organizacion
-          <textarea name="organization_description" rows="2" placeholder="Breve contexto si el evento prioriza empresas"></textarea>
-        </label>
-        <div class="networking-two">
-          <label>Ofertas estructuradas
-            <input name="offer_concepts" placeholder="Conceptos separados por coma">
-          </label>
-          <label>Busquedas estructuradas
-            <input name="seek_concepts" placeholder="Conceptos separados por coma">
-          </label>
-        </div>
-        <button type="submit">Activar Networking</button>
+        <button type="submit">Entrar a mi credencial</button>
       </form>
     </section>
 
-    <section id="activeApp" class="hidden">
+    <section id="activeApp" class="hidden credential-home">
+      <section class="event-credential" aria-label="Credencial digital">
+        <div class="credential-band"></div>
+        <div class="credential-top">
+          <div>
+            <div class="credential-event" id="credentialEvent">Evento</div>
+            <div class="credential-id" id="credentialId">NET</div>
+          </div>
+          <img src="/assets/bitora-logo.svg" alt="BITORA" style="width:72px;height:auto">
+        </div>
+        <div class="credential-main">
+          <div>
+            <div id="credentialPhoto" class="credential-photo">B</div>
+            <h2 id="credentialName" class="credential-name">Participante</h2>
+            <p id="credentialRole" class="credential-role"></p>
+            <p id="credentialOrg" class="credential-org"></p>
+          </div>
+          <img id="myQr" class="credential-qr" alt="QR publico de Networking">
+        </div>
+        <div class="credential-actions">
+          <button type="button" data-tab="scan">Escanear</button>
+          <button type="button" data-tab="contacts">Contactos</button>
+          <button type="button" data-tab="profile">Perfil</button>
+        </div>
+        <button id="goldenTicketBtn" type="button" class="golden-ticket">Golden Ticket: Activar Discovery</button>
+        <p id="publicProfileLink" class="public-link"></p>
+      </section>
+
       <section id="readinessPanel" class="networking-panel hidden">
         <div class="networking-panel-head">
           <div>
@@ -97,9 +132,7 @@
         <p id="readinessText" class="networking-status"></p>
         <form id="completionForm" class="networking-form hidden">
           <div class="networking-two">
-            <label>Cargo / rol
-              <input name="title">
-            </label>
+            <label>Cargo / rol <input name="title"></label>
             <label>Funcion
               <select name="function">
                 <option value="">Sin cambio</option>
@@ -118,97 +151,83 @@
               </select>
             </label>
           </div>
-          <label>Descripcion breve
-            <textarea name="bio" rows="2"></textarea>
-          </label>
+          <label>Descripcion breve <textarea name="bio" rows="2"></textarea></label>
           <div class="networking-two">
-            <label>Ofrezco
-              <input name="offers">
-            </label>
-            <label>Busco
-              <input name="seeks">
-            </label>
+            <label>Ofrezco <input name="offers"></label>
+            <label>Busco <input name="seeks"></label>
           </div>
           <div class="networking-two">
-            <label>Actividad / sector
-              <input name="organization_activity">
-            </label>
-            <label>Especialidad
-              <input name="organization_specialty">
-            </label>
+            <label>Actividad / sector <input name="organization_activity"></label>
+            <label>Especialidad <input name="organization_specialty"></label>
           </div>
-          <label>Descripcion de organizacion
-            <textarea name="organization_description" rows="2"></textarea>
-          </label>
+          <label>Descripcion de organizacion <textarea name="organization_description" rows="2"></textarea></label>
           <div class="networking-two">
-            <label>Ofertas estructuradas
-              <input name="offer_concepts">
-            </label>
-            <label>Busquedas estructuradas
-              <input name="seek_concepts">
-            </label>
+            <label>Ofertas estructuradas <input name="offer_concepts"></label>
+            <label>Busquedas estructuradas <input name="seek_concepts"></label>
           </div>
-          <label>Intereses / objetivos estructurados
-            <input name="interest_concepts">
-          </label>
+          <label>Intereses / objetivos estructurados <input name="interest_concepts"></label>
           <div class="networking-two">
-            <label>Web corporativa
-              <input name="website">
-            </label>
-            <label>Email
-              <input name="email" type="email">
-            </label>
+            <label>Web corporativa <input name="website"></label>
+            <label>Email <input name="email" type="email"></label>
           </div>
           <button type="submit">Guardar datos faltantes</button>
         </form>
       </section>
+
       <nav class="networking-tabs" aria-label="Navegacion Networking">
-        <button class="active" type="button" data-tab="scan">Scan</button>
-        <button type="button" data-tab="qr">Mi QR</button>
+        <button class="active" type="button" data-tab="credential">Credencial</button>
+        <button type="button" data-tab="scan">Scan</button>
         <button type="button" data-tab="contacts">Mis contactos</button>
       </nav>
 
-      <section id="scanTab" class="networking-tab-panel">
+      <section id="scanTab" class="networking-tab-panel hidden">
         <article class="networking-panel">
           <div class="networking-panel-head">
-            <div>
-              <span class="networking-kicker">Scan</span>
-              <h2>Lee un QR Networking</h2>
-            </div>
+            <div><span class="networking-kicker">Scan</span><h2>Lee un QR Networking</h2></div>
             <button id="continueScanBtn" type="button" class="ghost">Continuar</button>
           </div>
           <div id="reader" class="networking-reader"></div>
           <div class="networking-token-row">
-            <input id="manualProfileInput" placeholder="NET-...">
-            <button id="manualScanBtn" type="button">Resolver</button>
+            <input id="manualProfileInput" placeholder="NET-... o link /n/NET-...">
+            <button id="manualScanBtn" type="button">Guardar</button>
           </div>
           <div id="scanResult" class="networking-result"></div>
-        </article>
-      </section>
-
-      <section id="qrTab" class="networking-tab-panel hidden">
-        <article class="networking-panel networking-qr-panel">
-          <span class="networking-kicker">Mi QR</span>
-          <h2 id="myName">Tu perfil publico</h2>
-          <img id="myQr" alt="QR publico de Networking">
-          <p id="myProfileId"></p>
         </article>
       </section>
 
       <section id="contactsTab" class="networking-tab-panel hidden">
         <article class="networking-panel">
           <div class="networking-panel-head">
-            <div>
-              <span class="networking-kicker">Mis contactos</span>
-              <h2>Galeria guardada</h2>
-            </div>
+            <div><span class="networking-kicker">Mis contactos</span><h2>Galeria guardada</h2></div>
             <button id="refreshContactsBtn" type="button" class="ghost">Actualizar</button>
           </div>
           <div id="contactsGrid" class="networking-card-grid"></div>
         </article>
       </section>
+
+      <section id="discoveryShell" class="networking-panel hidden">
+        <span class="networking-kicker">Discovery</span>
+        <h2>Discovery listo</h2>
+        <p>Tu Golden Ticket ya esta configurado. El stream de oportunidades se activara en la siguiente etapa.</p>
+      </section>
     </section>
   </main>
+
+  <section id="discoveryOverlay" class="discovery-overlay hidden" aria-label="Golden Ticket Discovery">
+    <div class="discovery-card">
+      <div class="discovery-progress"><span id="discoveryProgress"></span></div>
+      <div class="discovery-question">
+        <span class="networking-kicker">Golden Ticket</span>
+        <h2 id="discoveryQuestion">Discovery</h2>
+        <div id="chipGrid" class="chip-grid"></div>
+        <input id="discoveryManual" class="discovery-manual" placeholder="Agregar otro">
+      </div>
+      <div class="discovery-controls">
+        <button id="discoveryBackBtn" type="button" class="ghost">Volver</button>
+        <button id="discoveryNextBtn" type="button">Continuar</button>
+      </div>
+    </div>
+  </section>
 
   <template id="profileCardTemplate">
     <article class="networking-profile-card">
@@ -223,33 +242,39 @@
   </template>
 
   <script>
+    const debugPresentationPath = "profile.presentation";
     const params = new URLSearchParams(location.search);
     let token = params.get("token") || localStorage.getItem("bitoraNetworkingToken") || "";
     let currentProfile = null;
     let scanner = null;
+    let vocabulary = {};
+    let discoveryStep = 0;
+    const discoveryAnswers = {};
+    const returnProfile = params.get("return_profile") || params.get("profile_id") || "";
+    const steps = [
+      {key: "seeks", question: "Que estas buscando en este evento?", dimension: "SEEK"},
+      {key: "offers", question: "Que tenes para ofrecer?", dimension: "OFFER"},
+      {key: "company_types", question: "Que tipo de empresas te interesa conocer?", dimension: "COMPANY_TYPE"},
+      {key: "functions", question: "Con que areas queres vincularte?", dimension: "FUNCTION"},
+      {key: "interests", question: "Que objetivos te importan?", dimension: "INTEREST"},
+      {key: "diversity", question: "Mostrar oportunidades fuera de tus preferencias?", dimension: "DIVERSITY"},
+    ];
 
     const $ = (id) => document.getElementById(id);
     const api = async (path, options = {}) => {
-      const response = await fetch(path, {
-        ...options,
-        headers: {"Content-Type": "application/json", ...(options.headers || {})},
-      });
+      const response = await fetch(path, {...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}});
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) throw new Error(data.error || "No se pudo completar la accion");
       return data;
     };
-
-    function show(id, visible) {
-      $(id).classList.toggle("hidden", !visible);
-    }
-
-    function actionLabel(type) {
-      return {whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type;
-    }
-
-    function profileTitle(profile) {
-      return profile?.presentation?.primary?.title || profile?.name || profile?.organization || "Mi perfil";
-    }
+    const show = (id, visible) => $(id).classList.toggle("hidden", !visible);
+    const splitManual = (value) => String(value || "").split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
+    const actionLabel = (type) => ({whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type);
+    const profileTitle = (profile) => profile?.presentation?.primary?.title || profile?.name || profile?.organization || "Mi perfil";
+    const profileIdFrom = (value) => {
+      const match = String(value || "").match(/NET-[A-Z0-9]+/i);
+      return match ? match[0].toUpperCase() : "";
+    };
 
     function renderProfile(profile, targetId) {
       const template = $("profileCardTemplate").content.cloneNode(true);
@@ -264,7 +289,7 @@
       template.querySelector("h3").textContent = name;
       template.querySelector(".networking-role").textContent = [primary.subtitle, secondary.title].filter(Boolean).join(" / ");
       const semanticSummary = profile.semantic?.summary || [];
-      template.querySelector(".networking-bio").textContent = [primary.description || profile.bio || profile.offers || profile.seeks || "", semanticSummary.join(" / ")].filter(Boolean).join(" · ");
+      template.querySelector(".networking-bio").textContent = [primary.description || profile.bio || profile.offers || profile.seeks || "", semanticSummary.join(" / ")].filter(Boolean).join(" - ");
       if (primary.media) {
         avatar.style.backgroundImage = `url('${primary.media}')`;
         avatar.textContent = "";
@@ -281,18 +306,30 @@
         link.textContent = actionLabel(channel.type);
         actions.appendChild(link);
       });
-      if (secondary.title || secondary.subtitle || secondary.description) {
-        const detail = document.createElement("p");
-        detail.className = "networking-secondary";
-        detail.textContent = [secondary.title, secondary.subtitle, secondary.description].filter(Boolean).join(" / ");
-        actions.before(detail);
-      }
       if (!allActions.length) {
         const empty = document.createElement("span");
         empty.textContent = "Sin canales visibles";
         actions.appendChild(empty);
       }
       $(targetId).replaceChildren(card);
+    }
+
+    function renderCredential(profile) {
+      const primary = profile.presentation?.primary || {};
+      const secondary = profile.presentation?.secondary || {};
+      const title = profileTitle(profile);
+      $("credentialEvent").textContent = profile.event_name || "Evento BITORA";
+      $("credentialId").textContent = profile.public_profile_id;
+      $("credentialName").textContent = title;
+      $("credentialRole").textContent = primary.subtitle || profile.role || "";
+      $("credentialOrg").textContent = secondary.title || profile.organization || "";
+      $("publicProfileLink").textContent = `${location.origin}/n/${profile.public_profile_id}`;
+      $("myQr").src = `/api/networking/qr.svg?profile_id=${encodeURIComponent(profile.public_profile_id)}`;
+      const photo = primary.media || profile.photo || profile.logo || "";
+      $("credentialPhoto").style.backgroundImage = photo ? `url('${photo}')` : "";
+      $("credentialPhoto").textContent = photo ? "" : title.slice(0, 1).toUpperCase();
+      $("goldenTicketBtn").textContent = profile.discovery?.ready ? "Golden Ticket: Discovery listo" : "Golden Ticket: Activar Discovery";
+      $("goldenTicketBtn").classList.toggle("ready", !!profile.discovery?.ready);
     }
 
     function renderReadiness(profile) {
@@ -302,10 +339,14 @@
       $("readinessTitle").textContent = readiness.status === "READY" ? "Perfil listo para Networking" : "Faltan datos para dejarlo listo";
       $("readinessPercent").textContent = `${readiness.percentage || 0}%`;
       const missing = readiness.missing_required || [];
-      $("readinessText").textContent = missing.length
-        ? `Te falta completar ${missing.length} dato${missing.length === 1 ? "" : "s"}: ${(readiness.next_actions || []).join(", ")}.`
-        : "Tu perfil tiene los datos minimos configurados para este evento.";
+      $("readinessText").textContent = missing.length ? `Te falta completar ${missing.length} dato${missing.length === 1 ? "" : "s"}: ${(readiness.next_actions || []).join(", ")}.` : "Tu perfil tiene los datos minimos para credencial y contacto.";
       show("completionForm", readiness.status !== "READY");
+    }
+
+    async function loadVocabulary() {
+      if (!currentProfile) return;
+      const result = await api(`/api/networking/live-vocabulary?event_id=${encodeURIComponent(currentProfile.event_id)}&token=${encodeURIComponent(token)}`);
+      vocabulary = result.vocabulary || {};
     }
 
     async function loadSession() {
@@ -320,47 +361,48 @@
       const eventId = params.get("event_id") || "";
       const session = await api(`/api/networking/session?token=${encodeURIComponent(token)}${eventId ? `&event_id=${encodeURIComponent(eventId)}` : ""}`);
       currentProfile = session.participation;
-      $("networkingTitle").textContent = currentProfile.active ? profileTitle(currentProfile) : "Activa tu Networking";
+      $("networkingTitle").textContent = currentProfile.active ? "Tu credencial digital" : "Activa tu credencial";
       show("tokenPanel", false);
       show("onboardingPanel", currentProfile.requires_onboarding);
       show("activeApp", currentProfile.active);
       renderReadiness(currentProfile);
       if (currentProfile.active) {
-        $("myName").textContent = profileTitle(currentProfile);
-        $("myProfileId").textContent = currentProfile.public_profile_id;
-        $("myQr").src = `/api/networking/qr.svg?profile_id=${encodeURIComponent(currentProfile.public_profile_id)}`;
+        renderCredential(currentProfile);
+        await loadVocabulary();
         await loadContacts();
-        startScanner();
+        if (returnProfile) {
+          await scanProfile(returnProfile);
+          switchTab("scan");
+        }
       }
     }
 
     async function submitOnboarding(event) {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      const modes = form.getAll("modes");
       const payload = Object.fromEntries(form.entries());
-      payload.modes = modes;
+      payload.modes = form.getAll("modes");
       payload.token = token;
-      const result = await api("/api/networking/onboarding", {method: "POST", body: JSON.stringify(payload)});
-      currentProfile = result.participation;
+      await api("/api/networking/onboarding", {method: "POST", body: JSON.stringify(payload)});
       await loadSession();
     }
 
     async function submitCompletion(event) {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
-      const payload = Object.fromEntries(form.entries());
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
       payload.token = token;
       payload.event_id = currentProfile.event_id;
       payload.missing_required = currentProfile.readiness?.missing_required || [];
       const result = await api("/api/networking/complete-profile", {method: "POST", body: JSON.stringify(payload)});
       currentProfile = result.participation;
       renderReadiness(currentProfile);
-      $("networkingTitle").textContent = profileTitle(currentProfile);
+      renderCredential(currentProfile);
+      await loadVocabulary();
     }
 
     async function scanProfile(value) {
-      if (!value) return;
+      const profileId = profileIdFrom(value);
+      if (!profileId) return;
       $("scanResult").textContent = "Resolviendo perfil...";
       const result = await api("/api/networking/scan", {method: "POST", body: JSON.stringify({token, qr_payload: value})});
       renderProfile(result.profile, "scanResult");
@@ -385,7 +427,9 @@
 
     function switchTab(tab) {
       document.querySelectorAll(".networking-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
-      ["scan", "qr", "contacts"].forEach((name) => show(`${name}Tab`, name === tab));
+      show("scanTab", tab === "scan");
+      show("contactsTab", tab === "contacts");
+      show("readinessPanel", tab === "profile" || tab === "credential");
       if (tab === "scan") startScanner();
     }
 
@@ -399,25 +443,92 @@
       }
     }
 
-    $("saveTokenBtn").addEventListener("click", () => {
-      token = $("tokenInput").value.trim();
-      loadSession().catch((error) => alert(error.message));
-    });
+    function selectedValues(step) {
+      return discoveryAnswers[step.key] || [];
+    }
+
+    function renderDiscoveryStep() {
+      const step = steps[discoveryStep];
+      $("discoveryQuestion").textContent = step.question;
+      $("discoveryProgress").style.width = `${((discoveryStep + 1) * 100) / steps.length}%`;
+      $("chipGrid").replaceChildren();
+      $("discoveryManual").value = "";
+      $("discoveryManual").classList.toggle("hidden", step.key === "diversity");
+      let options = [];
+      if (step.key === "diversity") {
+        options = [{value: "yes", label: "Si, mostrar oportunidades nuevas"}, {value: "no", label: "No, solo mis preferencias"}];
+      } else {
+        options = (vocabulary[step.dimension] || (step.dimension === "COMPANY_TYPE" ? vocabulary.INDUSTRY : []) || []).slice(0, 18);
+      }
+      const selected = new Set(selectedValues(step));
+      options.forEach((option) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = option.label;
+        button.className = selected.has(option.value) ? "selected" : "";
+        button.addEventListener("click", () => {
+          if (step.key === "diversity") {
+            discoveryAnswers[step.key] = [option.value];
+          } else {
+            const values = new Set(selectedValues(step));
+            values.has(option.value) ? values.delete(option.value) : values.add(option.value);
+            discoveryAnswers[step.key] = [...values];
+          }
+          renderDiscoveryStep();
+        });
+        $("chipGrid").appendChild(button);
+      });
+    }
+
+    async function finishDiscovery() {
+      const payload = {
+        token,
+        event_id: currentProfile.event_id,
+        seeks: [...(discoveryAnswers.seeks || []), ...splitManual($("discoveryManual").value)],
+        offers: discoveryAnswers.offers || [],
+        company_types: discoveryAnswers.company_types || [],
+        desired_functions: discoveryAnswers.functions || [],
+        objectives: discoveryAnswers.interests || [],
+        discovery_diversity: (discoveryAnswers.diversity || ["yes"])[0] !== "no",
+      };
+      const result = await api("/api/networking/discovery-onboarding", {method: "POST", body: JSON.stringify(payload)});
+      currentProfile = result.participation;
+      show("discoveryOverlay", false);
+      renderCredential(currentProfile);
+      show("discoveryShell", true);
+    }
+
+    $("saveTokenBtn").addEventListener("click", () => { token = $("tokenInput").value.trim(); loadSession().catch((error) => alert(error.message)); });
     $("onboardingForm").addEventListener("submit", (event) => submitOnboarding(event).catch((error) => alert(error.message)));
     $("completionForm").addEventListener("submit", (event) => submitCompletion(event).catch((error) => alert(error.message)));
     $("manualScanBtn").addEventListener("click", () => scanProfile($("manualProfileInput").value.trim()).catch((error) => $("scanResult").textContent = error.message));
-    $("continueScanBtn").addEventListener("click", () => {
-      $("manualProfileInput").value = "";
-      $("scanResult").replaceChildren();
-      startScanner();
-    });
+    $("continueScanBtn").addEventListener("click", () => {$("manualProfileInput").value = ""; $("scanResult").replaceChildren(); startScanner();});
     $("refreshContactsBtn").addEventListener("click", () => loadContacts().catch((error) => alert(error.message)));
-    document.querySelectorAll(".networking-tabs button").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
-    loadSession().catch((error) => {
-      show("tokenPanel", true);
-      $("tokenInput").value = token;
-      alert(error.message);
+    document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+    $("goldenTicketBtn").addEventListener("click", async () => {
+      if (currentProfile?.discovery?.ready) {
+        const shell = await api(`/api/networking/discovery?token=${encodeURIComponent(token)}`);
+        $("discoveryShell").querySelector("p").textContent = shell.message;
+        show("discoveryShell", true);
+        return;
+      }
+      await loadVocabulary();
+      discoveryStep = 0;
+      show("discoveryOverlay", true);
+      renderDiscoveryStep();
     });
+    $("discoveryBackBtn").addEventListener("click", () => {
+      if (discoveryStep === 0) show("discoveryOverlay", false);
+      else { discoveryStep -= 1; renderDiscoveryStep(); }
+    });
+    $("discoveryNextBtn").addEventListener("click", () => {
+      const step = steps[discoveryStep];
+      const manual = splitManual($("discoveryManual").value);
+      if (manual.length) discoveryAnswers[step.key] = [...new Set([...(discoveryAnswers[step.key] || []), ...manual])];
+      if (discoveryStep >= steps.length - 1) finishDiscovery().catch((error) => alert(error.message));
+      else { discoveryStep += 1; renderDiscoveryStep(); }
+    });
+    loadSession().catch((error) => { show("tokenPanel", true); $("tokenInput").value = token; alert(error.message); });
   </script>
 </body>
 </html>

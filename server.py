@@ -7021,6 +7021,7 @@ def public_static_path(path: str) -> bool:
         "/web",
         "/networking.html",
         "/networking-register.html",
+        "/networking-public.html",
         "/e.html",
         "/p.html",
         "/styles.css",
@@ -7028,7 +7029,7 @@ def public_static_path(path: str) -> bool:
         "/app.js",
         "/jsQR.min.js",
         "/html5-qrcode.min.js",
-    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/api/")
+    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
 
 
 def public_api_get(path: str) -> bool:
@@ -7038,7 +7039,7 @@ def public_api_get(path: str) -> bool:
         return True
     if path.startswith("/api/public/speakers/"):
         return True
-    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook", "/api/networking/session", "/api/networking/contacts", "/api/networking/profile", "/api/networking/qr.svg"}
+    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook", "/api/networking/session", "/api/networking/contacts", "/api/networking/profile", "/api/networking/qr.svg", "/api/networking/live-vocabulary", "/api/networking/discovery"}
 
 
 def public_api_post(path: str) -> bool:
@@ -7063,6 +7064,7 @@ def public_api_post(path: str) -> bool:
         "/api/networking/onboarding",
         "/api/networking/complete-profile",
         "/api/networking/scan",
+        "/api/networking/discovery-onboarding",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
         "/api/waiting-room/join",
@@ -7205,6 +7207,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             return str(STATIC_DIR / "reports-display.html")
         if clean.startswith("/p/"):
             return str(STATIC_DIR / "p.html")
+        if clean.startswith("/n/"):
+            return str(STATIC_DIR / "networking-public.html")
         target = STATIC_DIR / clean.lstrip("/")
         if target.exists():
             return str(target)
@@ -8309,6 +8313,36 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
+            if path == "/api/networking/live-vocabulary":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                token = query.get("token", [""])[0]
+                actor = query.get("actor", [""])[0] or "public"
+                include_candidates = False
+                if not event_id and token:
+                    with connect() as db:
+                        owner = networking_service().resolve_owner(db, token)
+                        event_id = int(owner["event_id"]) if owner else 0
+                        include_candidates = bool(owner)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if token:
+                        owner = networking_service().resolve_owner(db, token, event_id)
+                        include_candidates = include_candidates or bool(owner)
+                    elif actor != "public":
+                        include_candidates = can_actor(db, actor, CONFIG_ROLES)
+                    result = networking_service().live_vocabulary(db, event_id, include_candidates=include_candidates)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery":
+                token = query.get("token", [""])[0]
+                with connect() as db:
+                    result = networking_service().discovery_shell(db, token)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
             if path == "/api/networking/contacts":
                 token = query.get("token", [""])[0]
                 with connect() as db:
@@ -8334,7 +8368,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if not exists:
                     self.send_error(HTTPStatus.NOT_FOUND, "Perfil Networking inexistente")
                     return
-                body = qr_svg(f"BITORA-NET:{profile_id}").encode("utf-8")
+                body = qr_svg(absolute_url(f"/n/{profile_id}", self)).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -12865,6 +12899,19 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().complete_profile(db, token, data)
                     if result.get("ok"):
                         audit(db, "participant", "networking.profile_completed", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery-onboarding":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().discovery_onboarding(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.discovery_onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")

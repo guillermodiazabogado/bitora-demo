@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perfil BITORA Networking</title>
+  <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
+  <style>
+    .public-networking-shell {min-height: 100vh; display: grid; align-content: center; gap: 16px; padding: 18px; max-width: 680px; margin: 0 auto;}
+    .public-profile-hero {display: grid; gap: 14px;}
+    .public-profile-actions {display: grid; gap: 10px;}
+    .public-token-box {display: grid; gap: 8px;}
+    .public-token-box .networking-token-row {display: grid; grid-template-columns: 1fr auto; gap: 8px;}
+  </style>
+</head>
+<body class="networking-body">
+  <main class="public-networking-shell">
+    <header class="networking-hero">
+      <div class="networking-brand-row">
+        <img src="/assets/bitora-logo.svg" alt="BITORA">
+        <span>Networking</span>
+      </div>
+      <h1>Perfil publico</h1>
+      <p>Informacion permitida por privacidad.</p>
+    </header>
+
+    <section id="profileHolder" class="public-profile-hero"></section>
+
+    <section class="networking-panel public-profile-actions">
+      <button id="saveContactBtn" type="button">Guardar en mis contactos</button>
+      <div class="public-token-box">
+        <label for="tokenInput">Mi codigo Networking</label>
+        <div class="networking-token-row">
+          <input id="tokenInput" autocomplete="one-time-code" placeholder="NETOWN... o token del evento">
+          <button id="useTokenBtn" type="button">Usar</button>
+        </div>
+      </div>
+      <a id="openCredentialLink" class="networking-muted-link" href="/networking.html">Entrar a mi credencial</a>
+      <a id="registerLink" class="networking-muted-link" href="/networking-register.html">Inscribirme como visitante</a>
+      <p id="status" class="networking-status"></p>
+    </section>
+  </main>
+
+  <template id="profileCardTemplate">
+    <article class="networking-profile-card">
+      <div class="networking-avatar"></div>
+      <div>
+        <h3></h3>
+        <p class="networking-role"></p>
+        <p class="networking-bio"></p>
+        <div class="networking-actions"></div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const pathMatch = location.pathname.match(/NET-[A-Z0-9]+/i);
+    const params = new URLSearchParams(location.search);
+    const profileId = (params.get("profile_id") || (pathMatch ? pathMatch[0] : "")).toUpperCase();
+    let token = params.get("token") || localStorage.getItem("bitoraNetworkingToken") || "";
+    let publicProfile = null;
+
+    const api = async (path, options = {}) => {
+      const response = await fetch(path, {...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || "No se pudo completar la accion");
+      return data;
+    };
+    const actionLabel = (type) => ({whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type);
+
+    function renderProfile(profile) {
+      const template = $("profileCardTemplate").content.cloneNode(true);
+      const presentation = profile.presentation || {};
+      const primary = presentation.primary || {};
+      const secondary = presentation.secondary || {};
+      const avatar = template.querySelector(".networking-avatar");
+      const title = primary.title || profile.name || profile.organization || "Perfil disponible";
+      template.querySelector("h3").textContent = title;
+      template.querySelector(".networking-role").textContent = [primary.subtitle, secondary.title].filter(Boolean).join(" / ");
+      template.querySelector(".networking-bio").textContent = [primary.description, (profile.semantic?.summary || []).join(" / ")].filter(Boolean).join(" - ");
+      if (primary.media) {
+        avatar.style.backgroundImage = `url('${primary.media}')`;
+        avatar.textContent = "";
+      } else {
+        avatar.textContent = title.slice(0, 1).toUpperCase();
+      }
+      const actions = template.querySelector(".networking-actions");
+      [...(primary.actions || []), ...(secondary.actions || [])].forEach((channel) => {
+        const link = document.createElement("a");
+        link.href = channel.url || "#";
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = actionLabel(channel.type);
+        actions.appendChild(link);
+      });
+      $("profileHolder").replaceChildren(template);
+    }
+
+    async function loadProfile() {
+      $("tokenInput").value = token;
+      const result = await api(`/api/networking/profile?profile_id=${encodeURIComponent(profileId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`);
+      publicProfile = result.profile;
+      renderProfile(publicProfile);
+      $("openCredentialLink").href = `/networking.html?return_profile=${encodeURIComponent(profileId)}${publicProfile.event_id ? `&event_id=${encodeURIComponent(publicProfile.event_id)}` : ""}`;
+      $("registerLink").href = `/networking-register.html?event_id=${encodeURIComponent(publicProfile.event_id || "")}&return_profile=${encodeURIComponent(profileId)}`;
+    }
+
+    async function saveContact() {
+      const value = $("tokenInput").value.trim() || token;
+      if (!value) {
+        $("status").textContent = "Ingresa tu codigo Networking para guardar este contacto.";
+        return;
+      }
+      token = value;
+      localStorage.setItem("bitoraNetworkingToken", token);
+      const result = await api("/api/networking/scan", {method: "POST", body: JSON.stringify({token, qr_payload: location.href})});
+      $("status").textContent = result.created ? "Contacto guardado." : "Este contacto ya estaba guardado.";
+      renderProfile(result.profile);
+    }
+
+    $("useTokenBtn").addEventListener("click", () => { token = $("tokenInput").value.trim(); localStorage.setItem("bitoraNetworkingToken", token); loadProfile().catch((error) => $("status").textContent = error.message); });
+    $("saveContactBtn").addEventListener("click", () => saveContact().catch((error) => $("status").textContent = error.message));
+    loadProfile().catch((error) => $("status").textContent = error.message);
+  </script>
+</body>
+</html>

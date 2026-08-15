@@ -172,13 +172,22 @@ def main() -> None:
         bruno_active = request(base, "POST", "/api/networking/complete-profile", {"token": bruno["token"], "event_id": org_event_id, "offer_concepts": ["Provision de hormigon elaborado"], "interest_concepts": ["Infraestructura"]})
         bruno_profile = bruno_active["participation"]
         bruno_semantic = bruno_profile["semantic"]
+        assert_true(bruno_profile["credential"]["public_path"] == f"/n/{bruno_profile['public_profile_id']}" and bruno_profile["credential"]["qr_kind"] == "HTTPS_DEEP_LINK", "credencial digital no expone deep link publico")
+        assert_true(bruno_profile["discovery"]["status"] == "NOT_CONFIGURED" and bruno_profile["active"], "Discovery incompleto no debe bloquear credencial activa")
         assert_true("OFFER_READY_MIX_SUPPLY" in concept_codes(bruno_semantic["organization_offers"]), "offer organizacional no se persistio")
         assert_true("SEEK_CONSTRUCTION_COMPANIES" in concept_codes(bruno_semantic["seeks"]), "seek event-specific no se persistio")
         assert_true("OFFER_READY_MIX_SUPPLY" not in concept_codes(bruno_semantic["seeks"]), "offers y seeks fueron colapsados")
         assert_true(bruno_profile["role"] == "Gerente comercial" and bruno_profile["function"] == "COMMERCIAL", "title y funcion normalizada no coexisten")
         assert_true(bruno_profile["seniority"] == "MANAGEMENT", "seniority normalizada no persistio")
+        qr_body, qr_content_type = request(base, "GET", f"/api/networking/qr.svg?profile_id={bruno_profile['public_profile_id']}", parse_json=False)
+        assert_true(b"<svg" in qr_body and "image/svg+xml" in qr_content_type, "QR de credencial invalido")
+        public_page, _ = request(base, "GET", f"/n/{bruno_profile['public_profile_id']}", parse_json=False)
+        assert_true(b"Perfil BITORA Networking" in public_page and b"Guardar en mis contactos" in public_page, "deep link publico no muestra landing Networking")
+        public_profile = request(base, "GET", f"/api/networking/profile?profile_id={bruno_profile['public_profile_id']}")
+        assert_true(public_profile["profile"]["public_profile_id"] == bruno_profile["public_profile_id"], "camara normal no resuelve perfil publico")
+        assert_true(public_profile["profile"]["participation_id"] is None, "perfil publico logged-out expuso id interno")
 
-        scan = request(base, "POST", "/api/networking/scan", {"token": ana["token"], "public_profile_id": bruno_profile["public_profile_id"]})
+        scan = request(base, "POST", "/api/networking/scan", {"token": ana["token"], "qr_payload": f"{base}/n/{bruno_profile['public_profile_id']}"})
         assert_true(scan["created"], "scan inicial debe crear contacto")
         scanned_semantic = scan["profile"]["semantic"]
         assert_true("OFFER_READY_MIX_SUPPLY" in concept_codes(scanned_semantic["organization_offers"]), "organization-first no mostro offer permitido")
@@ -187,6 +196,12 @@ def main() -> None:
         duplicate_scan = request(base, "POST", "/api/networking/scan", {"token": ana["token"], "public_profile_id": bruno_profile["public_profile_id"]})
         assert_true(not duplicate_scan["created"], "scan repetido duplico contacto")
         request(base, "GET", f"/api/networking/session?token={bruno_profile['public_profile_id']}&event_id={org_event_id}", expect=404)
+        public_vocab = request(base, "GET", f"/api/networking/live-vocabulary?event_id={org_event_id}")
+        public_specialty_labels = {item["label"] for item in public_vocab["vocabulary"]["SPECIALTY"]}
+        assert_true("Hormigon premium" not in public_specialty_labels, "vocabulario publico anonimo expuso candidato no curado")
+        live_vocab = request(base, "GET", f"/api/networking/live-vocabulary?event_id={org_event_id}&token={ana['token']}")
+        specialty_labels = {item["label"] for item in live_vocab["vocabulary"]["SPECIALTY"]}
+        assert_true("Hormigon premium" in specialty_labels, "categoria importada desconocida no quedo disponible en vocabulario vivo")
 
         person_row = {
             "source_external_id": "clara-v13",
@@ -201,6 +216,27 @@ def main() -> None:
         clara_active = request(base, "POST", "/api/networking/onboarding", {"token": clara["token"], "event_id": person_event_id, "modes": ["BUSINESS_ALLIANCES"], "direction": "BOTH", "contact_openness": "DIRECT"})
         assert_true("SEEK_INVESTORS" in concept_codes(clara_active["participation"]["semantic"]["seeks"]), "seek event-specific de persona no se persistio")
         request(base, "POST", "/api/networking/complete-profile", {"token": clara["token"], "event_id": person_event_id, "offer_concepts": ["Consultoria BIM"], "interest_concepts": ["Digitalizacion"], "bio": "Ayudo a equipos de obra a digitalizar procesos.", "linkedin": "https://linkedin.example/clara"})
+        discovery = request(
+            base,
+            "POST",
+            "/api/networking/discovery-onboarding",
+            {
+                "token": clara["token"],
+                "event_id": person_event_id,
+                "seeks": ["Inversores"],
+                "offers": ["Consultoria BIM"],
+                "company_types": ["Geotecnia aplicada"],
+                "desired_functions": ["PROCUREMENT", "TECHNOLOGY"],
+                "objectives": ["Digitalizacion"],
+                "discovery_diversity": False,
+            },
+        )
+        assert_true(discovery["participation"]["discovery"]["status"] == "READY" and not discovery["participation"]["discovery"]["diversity"], "Golden Ticket no dejo Discovery listo por evento")
+        discovery_shell = request(base, "GET", f"/api/networking/discovery?token={clara['token']}")
+        assert_true(discovery_shell["ready"] and "siguiente etapa" in discovery_shell["message"], "Discovery shell no es honesto o no esta listo")
+        person_live_vocab = request(base, "GET", f"/api/networking/live-vocabulary?event_id={person_event_id}&token={clara['token']}")
+        company_type_labels = {item["label"] for item in person_live_vocab["vocabulary"]["COMPANY_TYPE"]}
+        assert_true("Geotecnia aplicada" in company_type_labels, "categoria declarada por usuario no alimento vocabulario vivo")
         request(base, "POST", "/api/networking/complete-profile", {"token": clara["token"], "event_id": person_event_id, "offer_concepts": ["Concepto inexistente"]})
         clara_after_typo = request(base, "GET", f"/api/networking/session?token={clara['token']}&event_id={person_event_id}")
         assert_true("OFFER_BIM_CONSULTING" in concept_codes(clara_after_typo["participation"]["semantic"]["offers"]), "typo desconocido borro oferta user-owned existente")
@@ -209,6 +245,7 @@ def main() -> None:
         assert_true("OFFER_BIM_CONSULTING" in concept_codes(clara_after_reimport["participation"]["semantic"]["offers"]), "seleccion semantica de usuario no sobrevivio reimport")
         assert_true("INTEREST_DIGITALIZATION" in concept_codes(clara_after_reimport["participation"]["semantic"]["interests"]), "interes user-owned no sobrevivio reimport")
         assert_true("SEEK_INVESTORS" in concept_codes(clara_after_reimport["participation"]["semantic"]["seeks"]), "seek source-owned no sobrevivio reimport")
+        assert_true(clara_after_reimport["participation"]["discovery"]["status"] == "READY" and "PROCUREMENT" in clara_after_reimport["participation"]["discovery"]["desired_functions"], "reimport destruyo preferencias Discovery user-owned")
 
         with server.connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -247,6 +284,7 @@ def main() -> None:
         with server.connect() as db:
             original_semantic = db.execute("SELECT COUNT(*) AS c FROM networking_semantic_classifications WHERE event_id = ?", (org_event_id,)).fetchone()["c"]
             original_vocab = db.execute("SELECT COUNT(*) AS c FROM networking_event_taxonomy_concepts WHERE event_id = ?", (org_event_id,)).fetchone()["c"]
+            original_candidates = db.execute("SELECT COUNT(*) AS c FROM networking_event_vocabulary_candidates WHERE event_id = ?", (org_event_id,)).fetchone()["c"]
         backup_service = EventBackupService(server.BACKUP_DIR, server.connect, server.DB_LOCK, app_version="test")
         restore_service = EventRestoreService(server.connect, server.DB_LOCK, token_factory(), server.now_iso, app_version="test", backup_service=backup_service)
         bundle = backup_service.create_event_bundle(org_event_id, "QA")
@@ -255,7 +293,8 @@ def main() -> None:
         with server.connect() as db:
             restored_semantic = db.execute("SELECT COUNT(*) AS c FROM networking_semantic_classifications WHERE event_id = ?", (restored_event_id,)).fetchone()["c"]
             restored_vocab = db.execute("SELECT COUNT(*) AS c FROM networking_event_taxonomy_concepts WHERE event_id = ?", (restored_event_id,)).fetchone()["c"]
-        assert_true(restored_semantic == original_semantic and restored_vocab == original_vocab, "backup/restore no preservo semantica V1.3 con conteos exactos")
+            restored_candidates = db.execute("SELECT COUNT(*) AS c FROM networking_event_vocabulary_candidates WHERE event_id = ?", (restored_event_id,)).fetchone()["c"]
+        assert_true(restored_semantic == original_semantic and restored_vocab == original_vocab and restored_candidates == original_candidates, "backup/restore no preservo semantica/vocabulario vivo V1.3 con conteos exactos")
 
         request(base, "GET", "/assets/", expect=404, parse_json=False)
         request(base, "GET", "/api/networking/directory", expect=404)
@@ -263,10 +302,11 @@ def main() -> None:
 
         networking_html, _ = request(base, "GET", "/networking.html", parse_json=False)
         admin_html, _ = request(base, "GET", "/networking-admin.html", parse_json=False)
+        public_html, _ = request(base, "GET", "/networking-public.html", parse_json=False)
         register_html, _ = request(base, "GET", f"/networking-register.html?event_id={org_event_id}", parse_json=False)
-        assert_true(b"offer_concepts" in networking_html and b"Vocabulario semantico" in admin_html and b"interest_concepts" in register_html, "UI semantica V1.3 incompleta")
+        assert_true(b"Golden Ticket" in networking_html and b"event-credential" in networking_html and b"Vocabulario vivo" in admin_html and b"Guardar en mis contactos" in public_html and b"interest_concepts" in register_html, "UI credencial/discovery V1.3 incompleta")
 
-        print("OK: BITORA Networking V1.3 semantic profile/routing foundation")
+        print("OK: BITORA Networking V1.3 credential/live-vocabulary/discovery foundation")
     finally:
         if httpd:
             httpd.shutdown()

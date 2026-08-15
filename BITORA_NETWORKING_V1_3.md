@@ -1,220 +1,160 @@
-# BITORA Networking V1.3 - Semantic Profile & Routing Foundation
+# BITORA Networking V1.3 - Digital Credential, Live Event Vocabulary & Discovery Foundation
 
 ## Reentry factual
 
 - Starting branch: `chore/final-endurance-certification`.
-- Starting HEAD: `4044da2 - feat: add networking profile readiness and completion`.
+- Expected checkpoint in superseding spec: `4044da2 - feat: add networking profile readiness and completion`.
+- Actual starting HEAD: `7ca7fe9 - feat: add networking semantic profile foundation`.
 - Working tree at reentry: clean.
-- Expected V1.2 checkpoint matched HEAD.
-- Baseline PASS before edits:
-  - Python compile for `server.py`, `backend/services/networking.py`, V1/V1.1/V1.2 verifiers.
-  - `verificar_networking_v1_2.py`.
-- Baseline known failure before and after V1.3:
-  - `verificar_mvp.py` fails with `FALLO: La inscripcion publica no genero portal`.
-- Additional broad check:
-  - `verificar_integridad_bitora.py` fails at `QR anticipado no fue rechazado correctamente` on both V1.3 working tree and the clean `4044da2` worktree, so it is classified as pre-existing.
+- No `AGENTS.md` found.
+- No `package.json` found; no repository-native frontend build/lint/typecheck command available.
 
-## Objective
+Baseline before new edits:
 
-V1.3 adds structured semantic profile data and routing foundations without recommendation, matching, candidate generation, participant search or directory browsing.
+- PASS `py_compile` for Networking/server/backup modules.
+- PASS `verificar_networking_v1_3.py` from the earlier semantic V1.3.
+- PASS `verificar_networking_v1_2.py`.
+- PRE_EXISTING FAIL `verificar_mvp.py`: `FALLO: La inscripcion publica no genero portal`.
 
-The system must represent:
+## Product decision
 
-- organization activity/industry;
-- specialties;
+This file documents the superseding V1.3 scope:
+
+`DIGITAL CREDENTIAL -> CONTACT EXCHANGE -> DISCOVERY`
+
+V1.3 does not implement a final recommendation engine, ranking, compatibility score, public directory, participant browser, swipes, chat, meetings or AI/ML inference.
+
+## Architecture
+
+### Digital Credential
+
+- The participant home in `networking.html` is now a mobile event credential.
+- The credential shows event identity, participant/organization hierarchy, public Networking QR and Level 1 actions.
+- It respects V1.1 presentation hierarchy and V1 privacy filtering.
+- Credential/contact exchange does not require Discovery onboarding.
+
+### Public QR and deep link
+
+- `/api/networking/qr.svg?profile_id=NET-...` now encodes an absolute web link to `/n/NET-...`.
+- `/n/NET-...` serves `networking-public.html`.
+- The public page resolves `/api/networking/profile` and shows only permitted data.
+- Public profile token remains non-authenticating; owner access still requires owner token/accreditation token.
+- Authenticated users can save the scanned profile through the existing `/api/networking/scan` path.
+- Logged-out users can view the public profile and continue to login/registration while preserving `return_profile`.
+
+### Golden Ticket
+
+- The credential includes a distinctive Golden Ticket button.
+- First use opens progressive Discovery onboarding.
+- Completed state opens a truthful Discovery shell: no fake recommendations.
+- Discovery state is stored separately from ACTIVE/PASSIVE and basic profile readiness.
+
+### Discovery preferences
+
+Stored in `networking_intents`:
+
+- `discovery_completed`
+- `discovery_diversity`
+- `desired_functions_json`
+- `desired_company_types_json`
+- `discovery_objectives_json`
+
+This keeps Discovery preferences event-specific.
+
+### Live Event Vocabulary
+
+V1.3 reuses the earlier semantic foundation:
+
+- `networking_taxonomy_concepts`
+- `networking_event_taxonomy_concepts`
+- `networking_semantic_classifications`
+
+It adds:
+
+- `networking_event_vocabulary_candidates`
+
+The live vocabulary is built from:
+
+- configured event taxonomy;
+- source import declarations;
+- external registration declarations;
+- user onboarding/completion declarations;
+- Discovery onboarding declarations.
+
+Raw/new values are preserved as event candidates. They are not silently mapped to unrelated canonical concepts. Deterministic normalization trims/cases and removes accents for obvious duplicates.
+
+Anonymous users can only see configured vocabulary. Live candidates are returned only with participant token context or admin actor context, so raw market intent is not exposed publicly.
+
+## Semantic ownership
+
+- Organization: industry/activity, specialty, organization offers.
+- Person: function, seniority, person interests.
+- EventParticipation: event-specific seeks and Discovery preferences.
+
+Offer and seek remain directionally distinct.
+
+## Admin operations
+
+`networking-admin.html` now exposes:
+
+- configured semantic vocabulary;
+- live vocabulary counts by dimension;
+- import readiness diagnostics.
+
+It does not expose participant roster browsing.
+
+## Final review repairs
+
+- Live vocabulary candidates were restricted from anonymous access.
+- Public profile now honors `profile_visible` for non-owner viewers.
+- Discovery company-type step now uses `COMPANY_TYPE` with industry fallback.
+- The verifier asserts that anonymous vocabulary does not expose uncurated candidates.
+
+Commercial review outcome:
+
+- PASS: the story is explainable as `credential -> contact exchange -> Golden Ticket`.
+- PASS: no fake recommendations or heavy matching were introduced.
+- PARTIAL: admin taxonomy setup still uses JSON and readiness keys; this is acceptable for foundation but should be simplified with presets in a later commercial polish.
+- PARTIAL: owner tokens can still appear in post-registration URLs as inherited architecture; QR public links are separated from owner tokens, but token handling can be improved in a later security polish.
+
+## Migrations
+
+- `030_networking_semantic_profile.sql`: semantic taxonomy/classification foundation from earlier V1.3.
+- `031_networking_discovery_foundation.sql`: Discovery preference columns and event vocabulary candidates.
+
+Runtime schema guards were added for existing SQLite databases.
+
+## Future V2 Discovery contract
+
+A future simple Discovery engine may consume:
+
+- event id;
+- participant id;
+- person id;
+- organization id;
+- presentation mode;
+- basic readiness;
+- discovery readiness;
 - offers;
 - seeks;
-- interests/objectives;
-- normalized function;
-- normalized seniority;
-- ownership/provenance;
-- event-enabled vocabularies.
-
-## Architecture decision
-
-- Reuse `networking_taxonomy_concepts` as the stable concept catalog.
-- Extend concept metadata with description, parent concept and aliases.
-- Add `networking_event_taxonomy_concepts` for event-enabled vocabularies.
-- Add `networking_semantic_classifications` for explicit classifications.
-- Keep ownership explicit:
-  - `ORGANIZATION` semantics for activity/specialty/corporate offers.
-  - `PERSON` semantics for professional function/interests where needed.
-  - `PARTICIPATION` semantics for event-specific offers/seeks/interests.
-- V1 legacy `networking_classifications` remains compatible for function/seniority history; V1.3 semantic routing uses the new explicit table.
-- Expose one authorized per-event taxonomy API:
-  - `GET /api/networking/taxonomy`
-  - `POST /api/networking/taxonomy`
-- Directory listing from the static server is disabled; `/assets/` returns 404 instead of exposing a file listing.
-
-## Controlled families
-
-- `INDUSTRY`
-- `SPECIALTY`
-- `OFFER`
-- `SEEK`
-- `INTEREST`
-
-Function and seniority remain compact normalized values in the existing participation model and are also available as seeded taxonomy concepts.
-
-## ExecPlan
-
-### Milestone 1 - Semantic schema and ownership
-
-Goal: add stable semantic catalog extensions, event vocabulary and explicit classifications.
-
-Visible outcome: repository can store semantic concepts without mixing person, organization and event participation meaning.
-
-Boundary: `backend/services/networking.py`, migration `030`, backup table lists.
-
-Invariants: stable identity != label, offer != seek, person semantics != organization semantics != participation semantics.
-
-Tests: migration execution, V1.3 verifier.
-
-PASS: concepts and classifications persist with owner/provenance.
-
-Rollback: remove new tables/columns before consumers depend on them.
-
-### Milestone 2 - Event vocabulary/configuration
-
-Goal: enable different vocabularies per event.
-
-Visible outcome: admin/API can enable concepts for Event A without affecting Event B.
-
-Boundary: backend config/service plus small admin controls.
-
-Invariants: new event uses data/configuration, not code.
-
-Tests: event isolation and duplicate prevention.
-
-PASS: same concept catalog can be scoped per event and disabled without deletion.
-
-Rollback: remove event vocabulary endpoints/UI.
-
-### Milestone 3 - Import normalization
-
-Goal: resolve structured semantic import values deterministically.
-
-Visible outcome: known values classify; unknown values produce diagnostics and are not silently mapped.
-
-Boundary: import preview/import normalization only.
-
-Invariants: valid import may be semantically incomplete, unknown concept is explicit, reimport is safe.
-
-Tests: known concept, unknown concept, import twice, source update.
-
-PASS: no duplicate classifications and no typo-based auto-classification.
-
-Rollback: keep existing free-text import while removing semantic assignment hooks.
-
-### Milestone 4 - Participant semantic completion
-
-Goal: extend V1.2 completion with event-enabled semantic selections.
-
-Visible outcome: participant can declare offers/seeks/interests and function with controlled values plus concise text.
-
-Boundary: completion endpoint and Networking UI.
-
-Invariants: user-declared semantic state survives source reimport.
-
-Tests: completion, reimport preservation, readiness recalculation.
-
-PASS: USER classifications remain after SOURCE reimport.
-
-Rollback: remove semantic fields from completion while preserving stored data.
-
-### Milestone 5 - Presentation/readiness integration
-
-Goal: expose concise semantic facts and allow readiness keys to use structured concepts.
-
-Visible outcome: profile cards show a small useful subset without becoming taxonomy dumps.
-
-Boundary: profile payload, presentation, readiness evaluator.
-
-Invariants: hidden organization/representative do not leak semantics.
-
-Tests: Organization First, Person First, hidden org, restricted rep.
-
-PASS: cards use permitted semantics only.
-
-Rollback: stop rendering semantic summaries; keep storage.
-
-### Milestone 6 - Regression/future contract
-
-Goal: verify V1.3 and document V2 input contract.
-
-Visible outcome: semantic profile projection is available per authorized profile, not as roster.
-
-Boundary: docs/tests only unless critical fix required.
-
-Invariants: no directory, no matching, QR/scan/contact unchanged, backup/restore safe.
-
-PASS: broad regression and final adversarial review pass.
-
-## Future V2 input contract
-
-A future discovery engine may consume per-profile context:
-
-- `event_id`
-- `person_id`
-- `organization_id`
-- `participation_id`
-- `function`
-- `seniority`
-- `offers`
-- `seeks`
-- `interests`
-- `organization_activity`
-- `specialties`
-- `networking intent`
-- `contact openness`
-- privacy-filtered route availability
+- organization activity/industry;
+- specialties;
+- desired company types;
+- desired functions;
+- objectives/interests;
+- function;
+- seniority;
+- contact openness;
+- privacy-filtered route availability;
+- diversity preference.
 
 V1.3 does not generate candidates from this data.
 
-## Plan review notes
-
-- Semantic routing is a soft signal, never a hard exclusion rule.
-- Unknown imports are diagnostics, not fuzzy matches.
-- Participant-facing taxonomy controls must not expose event population.
-- Admin tooling may configure vocabulary but must not become a public directory.
-
-## Implemented behavior
-
-- Event vocabularies are configured as data by enabling taxonomy concepts per event.
-- Concept identity is the stable `code`; labels can change without changing identity.
-- Explicit concept codes are not collapsed by duplicate labels; label-based reuse is only used for generated codes.
-- Import preview resolves known semantic values deterministically and reports unknown values with `UNKNOWN_CONCEPT`.
-- Import execution returns the same semantic diagnostics, so unresolved values are visible after import too.
-- Source-owned semantic classifications are refreshed on source reimport.
-- User-owned semantic classifications from onboarding/completion survive source reimport.
-- User-owned semantic classifications are replaced only after new values resolve to known concepts; an unknown typo does not erase previous valid selections.
-- Organization-owned semantics are hidden when organization visibility is hidden.
-- Person-owned semantics are hidden when representative visibility is restricted.
-- Event-participation semantics are hidden when the representative is restricted because they describe that participant's event intent.
-- Organization First cards can show activity/specialty/offers where permitted.
-- Person First cards can show function/interests/offers/seeks where permitted.
-- Readiness can use semantic dimensions without changing ACTIVE/PASSIVE state.
-- No directory, recommendation, matching, ranking or candidate endpoint was added.
-
-## Independent review findings repaired
-
-- P1 privacy leak: user-declared semantics could remain visible as participation-owned rows when representative/organization was hidden.
-  - Repair: participation semantics require representative visibility; offers tied to an organization are stored as organization-owned; interests are stored as person-owned.
-- P1 user data loss: unknown concept submission could delete prior USER selections before resolving replacements.
-  - Repair: semantic sync resolves first and deletes/replaces only roles with resolved concepts.
-- P2 import diagnostics: import execution dropped preview semantic diagnostics.
-  - Repair: import rows now include `semantic.known` and `semantic.unknown`, with aggregate unknown counts.
-- P2 taxonomy identity: explicit same-label/different-code concepts could be collapsed.
-  - Repair: explicit `code` now controls identity; same-label reuse applies only to generated codes.
-- P2 backup verification depth: V1.3 verifier checked existence only.
-  - Repair: verifier now compares exact source/restored counts for event taxonomy and semantic classifications.
-- P3 migration idempotence: raw SQL `ALTER TABLE ADD COLUMN` remains non-idempotent like earlier migrations; runtime schema guards are idempotent and app initialization was verified.
-
-## Final verification commands
+## Verification
 
 PASS:
 
-- `python -m py_compile server.py backend/services/networking.py backend/services/backup.py verificar_networking_v1.py verificar_networking_v1_1.py verificar_networking_v1_2.py verificar_networking_v1_3.py`
+- `python -m py_compile server.py backend/services/networking.py backend/services/backup.py verificar_networking_v1_3.py`
 - `python verificar_networking_v1_3.py`
 - `python verificar_networking_v1_2.py`
 - `python verificar_networking_v1_1.py`
@@ -223,41 +163,44 @@ PASS:
 - `python verificar_backup_restore.py`
 - `python verificar_auth_red.py`
 - `python verificar_landing_config.py`
-- App initialization on a temporary SQLite database creates `networking_event_taxonomy_concepts` and `networking_semantic_classifications`.
+- App initialization on a temporary SQLite database creates Discovery/vocabulary schema.
 
 PRE_EXISTING FAIL:
 
 - `python verificar_mvp.py` -> `FALLO: La inscripcion publica no genero portal`
 - `python verificar_integridad_bitora.py` -> `QR anticipado no fue rechazado correctamente`
 
-Not available:
+## Manual checks
 
-- No `package.json` was present, so no repository-native frontend build/lint/typecheck command was available.
+Credential with a normal phone:
 
-## Manual verification
+1. Open a participant credential in `/networking.html?token=...`.
+2. Scan the visible QR with a normal camera.
+3. The camera opens `/n/NET-...`.
+4. The public profile displays permitted data only.
 
-Configure an event vocabulary:
+Activate Discovery:
 
-1. Open Networking admin for an event.
-2. Select or paste semantic concepts in `Vocabulario semantico`.
-3. Save.
-4. Confirm that another event can have a different vocabulary.
+1. Tap Golden Ticket.
+2. Answer the progressive questions.
+3. Confirm the Golden Ticket changes to ready.
+4. Re-enter later; it opens the Discovery-ready shell.
 
-Import semantic values:
+New category becomes selectable:
 
-1. Add optional import fields such as `organization_activity`, `specialty_concepts`, `offer_concepts`, `seek_concepts`, `interest_concepts`, `function` and `seniority`.
-2. Run preview first.
-3. Correct any `UNKNOWN_CONCEPT` diagnostics by updating the import value or event vocabulary.
-4. Import; repeated import must not duplicate classifications.
+1. Import or declare a new value such as `Geotecnia aplicada`.
+2. Open admin `Vocabulario vivo` or participant Golden Ticket.
+3. Confirm the value appears as an event candidate without code changes.
 
-Participant completion:
+No directory/matching:
 
-1. Enter Networking with the participant token.
-2. Complete onboarding/profile fields for offers, seeks and interests where the event requires or recommends them.
-3. Reimport source data and confirm the user selections remain visible to the participant.
+1. `/api/networking/directory` returns 404.
+2. `/api/networking/recommendations` returns 404.
+3. Participant UI exposes credential, scan, contacts and Discovery onboarding/shell only.
 
-No directory/matching check:
+## Known limitations
 
-1. Use only own profile, own QR, scan and contacts.
-2. There is no participant-facing screen to browse all people by taxonomy.
-3. `/api/networking/directory` and `/api/networking/recommendations` return 404 in the V1.3 verifier.
+- Discovery stream/recommendation engine is intentionally not implemented.
+- Admin vocabulary normalization is still intentionally lightweight; no ontology platform.
+- Raw candidates are preserved event-locally and need later admin resolution if organizers want canonical governance.
+- Mobile verification was performed through responsive CSS/static checks and API/E2E script coverage; no browser-driven visual screenshot suite exists in the repository.

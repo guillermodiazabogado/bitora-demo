@@ -91,6 +91,7 @@
   <script>
     const params = new URLSearchParams(location.search);
     const eventId = Number(params.get("event_id") || 0);
+    const returnProfile = params.get("return_profile") || "";
     const registerForm = document.getElementById("registerForm");
     const registerStatus = document.getElementById("registerStatus");
     document.documentElement.style.setProperty("--event-primary", params.get("primary") || "#4c2ea3");
@@ -123,7 +124,8 @@
         return;
       }
       localStorage.setItem("bitoraNetworkingToken", data.owner_token);
-      registerStatus.innerHTML = `Perfil creado. <a href="${data.access_url}">Entrar a Networking</a>`;
+      const accessUrl = returnProfile ? `/networking.html?token=${encodeURIComponent(data.owner_token)}&event_id=${encodeURIComponent(eventId)}&return_profile=${encodeURIComponent(returnProfile)}` : data.access_url;
+      registerStatus.innerHTML = `Perfil creado. <a href="${accessUrl}">Entrar a Networking</a>`;
     });
   </script>
 </body>

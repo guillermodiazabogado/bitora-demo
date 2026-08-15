@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import secrets
+import unicodedata
 from collections.abc import Callable
 from urllib.parse import quote
 
@@ -34,6 +35,8 @@ SEMANTIC_TYPES = {"INDUSTRY", "SPECIALTY", "OFFER", "SEEK", "INTEREST"}
 SEMANTIC_OWNER_TYPES = {"ORGANIZATION", "PERSON", "PARTICIPATION"}
 SEMANTIC_SOURCES = {"SOURCE", "USER", "ADMIN", "SYSTEM"}
 SEMANTIC_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN", "ADMIN"}
+VOCABULARY_DIMENSIONS = {"INDUSTRY", "SPECIALTY", "OFFER", "SEEK", "INTEREST", "COMPANY_TYPE", "FUNCTION"}
+VOCABULARY_STATUSES = {"CONFIGURED", "CANONICAL", "CANDIDATE", "DISABLED"}
 READINESS_DIMENSIONS = {
     "person.identity",
     "person.role",
@@ -143,6 +146,11 @@ def networking_schema_sql() -> str:
         offers_text TEXT NOT NULL DEFAULT '',
         seeks_text TEXT NOT NULL DEFAULT '',
         interests_text TEXT NOT NULL DEFAULT '',
+        discovery_completed INTEGER NOT NULL DEFAULT 0,
+        discovery_diversity INTEGER NOT NULL DEFAULT 1,
+        desired_functions_json TEXT NOT NULL DEFAULT '[]',
+        desired_company_types_json TEXT NOT NULL DEFAULT '[]',
+        discovery_objectives_json TEXT NOT NULL DEFAULT '[]',
         completed_title TEXT NOT NULL DEFAULT '',
         completed_function TEXT NOT NULL DEFAULT '',
         completed_seniority TEXT NOT NULL DEFAULT '',
@@ -217,6 +225,22 @@ def networking_schema_sql() -> str:
         UNIQUE(event_id, owner_type, owner_id, concept_code, semantic_role, source)
     );
 
+    CREATE TABLE IF NOT EXISTS networking_event_vocabulary_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        dimension TEXT NOT NULL,
+        raw_value TEXT NOT NULL,
+        normalized_key TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'CANDIDATE',
+        concept_code TEXT REFERENCES networking_taxonomy_concepts(code) ON DELETE SET NULL,
+        source TEXT NOT NULL DEFAULT 'USER',
+        provenance TEXT NOT NULL DEFAULT '',
+        usage_count INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(event_id, dimension, normalized_key)
+    );
+
     CREATE TABLE IF NOT EXISTS networking_contacts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -245,6 +269,7 @@ def networking_schema_sql() -> str:
     CREATE INDEX IF NOT EXISTS idx_networking_event_taxonomy_event ON networking_event_taxonomy_concepts(event_id, enabled);
     CREATE INDEX IF NOT EXISTS idx_networking_semantic_owner ON networking_semantic_classifications(event_id, owner_type, owner_id);
     CREATE INDEX IF NOT EXISTS idx_networking_semantic_participation ON networking_semantic_classifications(participation_id);
+    CREATE INDEX IF NOT EXISTS idx_networking_vocabulary_event_dimension ON networking_event_vocabulary_candidates(event_id, dimension, status);
     """
 
 
@@ -257,6 +282,7 @@ class NetworkingService:
         self.ensure_v1_1_schema(db)
         self.ensure_v1_2_schema(db)
         self.ensure_v1_3_schema(db)
+        self.ensure_discovery_schema(db)
         self.ensure_taxonomy(db)
 
     def ensure_v1_1_schema(self, db) -> None:
@@ -331,6 +357,38 @@ class NetworkingService:
             CREATE INDEX IF NOT EXISTS idx_networking_event_taxonomy_event ON networking_event_taxonomy_concepts(event_id, enabled);
             CREATE INDEX IF NOT EXISTS idx_networking_semantic_owner ON networking_semantic_classifications(event_id, owner_type, owner_id);
             CREATE INDEX IF NOT EXISTS idx_networking_semantic_participation ON networking_semantic_classifications(participation_id);
+            """
+        )
+
+    def ensure_discovery_schema(self, db) -> None:
+        intent_columns = {row["name"] for row in db.execute("PRAGMA table_info(networking_intents)").fetchall()}
+        for column, ddl in {
+            "discovery_completed": "INTEGER NOT NULL DEFAULT 0",
+            "discovery_diversity": "INTEGER NOT NULL DEFAULT 1",
+            "desired_functions_json": "TEXT NOT NULL DEFAULT '[]'",
+            "desired_company_types_json": "TEXT NOT NULL DEFAULT '[]'",
+            "discovery_objectives_json": "TEXT NOT NULL DEFAULT '[]'",
+        }.items():
+            if column not in intent_columns:
+                db.execute(f"ALTER TABLE networking_intents ADD COLUMN {column} {ddl}")
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS networking_event_vocabulary_candidates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                dimension TEXT NOT NULL,
+                raw_value TEXT NOT NULL,
+                normalized_key TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'CANDIDATE',
+                concept_code TEXT REFERENCES networking_taxonomy_concepts(code) ON DELETE SET NULL,
+                source TEXT NOT NULL DEFAULT 'USER',
+                provenance TEXT NOT NULL DEFAULT '',
+                usage_count INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(event_id, dimension, normalized_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_networking_vocabulary_event_dimension ON networking_event_vocabulary_candidates(event_id, dimension, status);
             """
         )
 
@@ -634,6 +692,7 @@ class NetworkingService:
         self._upsert_classification(db, participation_id, f"FUNCTION_{item['function']}", "import")
         self._upsert_classification(db, participation_id, f"SENIORITY_{item['seniority']}", "import")
         self._sync_semantic_classifications(db, event_id, participation_id, item, source="SOURCE", provenance=item["source_system"])
+        self._harvest_vocabulary_candidates(db, event_id, item, source="SOURCE", provenance=item["source_system"])
         self.record_event(db, event_id, participation_id, None, "profile_imported", {"actor": actor, "source_system": item["source_system"], "created": created})
         return {"ok": True, "participation_id": participation_id, "created": created, "state": "ACTIVE" if activate else (existing["participation_state"] if existing else "PASSIVE"), "owner_token": owner_token}
 
@@ -705,6 +764,7 @@ class NetworkingService:
         )
         self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
         self._sync_semantic_classifications(db, int(participation["event_id"]), int(participation["id"]), data, source="USER", provenance="onboarding")
+        self._harvest_vocabulary_candidates(db, int(participation["event_id"]), data, source="USER", provenance="onboarding")
         self._apply_channel_visibility_updates(db, int(participation["id"]), data.get("channel_visibility") or {})
         self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "onboarded", {"modes": modes, "direction": direction, "contact_openness": openness})
         return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
@@ -747,6 +807,7 @@ class NetworkingService:
         )
         self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
         self._sync_semantic_classifications(db, int(participation["event_id"]), int(participation["id"]), data, source="USER", provenance="completion")
+        self._harvest_vocabulary_candidates(db, int(participation["event_id"]), data, source="USER", provenance="completion")
         self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "profile_completed", {"missing_before": data.get("missing_required") or []})
         return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
 
@@ -822,18 +883,23 @@ class NetworkingService:
         viewer = self.resolve_owner(db, viewer_token) if viewer_token else None
         if row["participation_state"] != "ACTIVE":
             return {"ok": False, "error": "Perfil Networking no activo", "status_code": 404}
+        is_self = viewer and int(viewer["id"]) == int(row["id"])
+        intent = db.execute("SELECT profile_visible FROM networking_intents WHERE participation_id = ?", (row["id"],)).fetchone()
+        if intent and not is_self and not int(intent["profile_visible"] or 0):
+            return {"ok": False, "error": "Perfil Networking no visible", "status_code": 404}
         return {"ok": True, "profile": self.participation_payload(db, int(row["id"]), viewer_id=int(viewer["id"]) if viewer else None, full=bool(viewer))}
 
     def participation_payload(self, db, participation_id: int, *, viewer_id: int | None, full: bool) -> dict:
         row = db.execute(
             """
             SELECT nep.*, p.first_name, p.last_name, p.email, p.phone, p.company,
-                   e.networking_profile_mode, e.networking_readiness_required, e.networking_readiness_recommended,
+                   e.name AS event_name, e.networking_profile_mode, e.networking_readiness_required, e.networking_readiness_recommended,
                    no.name AS organization_name, no.activity AS organization_activity, no.specialty AS organization_specialty,
                    no.website AS organization_website, no.logo_url AS organization_logo,
                    no.description AS organization_description, no.visibility AS organization_visibility,
                    ni.modes_json, ni.direction, ni.contact_openness, ni.discoverable, ni.profile_visible,
                    ni.channels_visible_default, ni.representative_visible, ni.bio, ni.offers_text, ni.seeks_text, ni.interests_text,
+                   ni.discovery_completed, ni.discovery_diversity, ni.desired_functions_json, ni.desired_company_types_json, ni.discovery_objectives_json,
                    ni.completed_title, ni.completed_function, ni.completed_seniority,
                    ni.completed_organization_activity, ni.completed_organization_specialty, ni.completed_organization_description
             FROM networking_event_participations nep
@@ -871,7 +937,13 @@ class NetworkingService:
         profile = {
             "participation_id": participation_id if (is_self or full) else None,
             "public_profile_id": data["public_profile_id"],
+            "credential": {
+                "type": "DIGITAL_EVENT_CREDENTIAL",
+                "public_path": f"/n/{data['public_profile_id']}",
+                "qr_kind": "HTTPS_DEEP_LINK",
+            },
             "event_id": data["event_id"],
+            "event_name": data.get("event_name") or "",
             "state": data["participation_state"],
             "active": data["participation_state"] == "ACTIVE",
             "requires_onboarding": data["participation_state"] == "PASSIVE",
@@ -948,10 +1020,159 @@ class NetworkingService:
             organization_visible=external_organization_visible,
         )
         profile["readiness"] = self.evaluate_profile_readiness(readiness_profile, data)
+        profile["discovery"] = self.discovery_payload(profile, data)
         if is_self:
             profile["owner_token_hint"] = data.get("owner_token_hint") or ""
             profile["email"] = data.get("email") or ""
         return profile
+
+    def discovery_payload(self, profile: dict, data: dict) -> dict:
+        desired_functions = self._json_list(data.get("desired_functions_json"))
+        desired_company_types = self._json_list(data.get("desired_company_types_json"))
+        objectives = self._json_list(data.get("discovery_objectives_json"))
+        completed = bool(int(data.get("discovery_completed") or 0))
+        missing = []
+        if not (profile.get("semantic", {}).get("seeks") or profile.get("seeks")):
+            missing.append("seeks")
+        if not (profile.get("semantic", {}).get("offers") or profile.get("semantic", {}).get("organization_offers") or profile.get("offers")):
+            missing.append("offers")
+        if not desired_company_types:
+            missing.append("company_types")
+        if not desired_functions:
+            missing.append("functions")
+        status = "READY" if completed and not missing else "NOT_CONFIGURED"
+        return {
+            "status": status,
+            "ready": status == "READY",
+            "completed": completed,
+            "diversity": bool(int(data.get("discovery_diversity") if data.get("discovery_diversity") is not None else 1)),
+            "desired_functions": desired_functions,
+            "desired_company_types": desired_company_types,
+            "objectives": objectives,
+            "missing": missing,
+            "entry_label": "Discovery listo" if status == "READY" else "Activar Discovery",
+        }
+
+    def live_vocabulary(self, db, event_id: int, *, include_candidates: bool = False) -> dict:
+        if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        result = {dimension: [] for dimension in sorted(VOCABULARY_DIMENSIONS)}
+        configured = db.execute(
+            """
+            SELECT tc.code, tc.concept_type, COALESCE(NULLIF(etc.label_override, ''), tc.label) AS label,
+                   etc.enabled, etc.sort_order,
+                   COALESCE((
+                       SELECT COUNT(*)
+                       FROM networking_semantic_classifications sc
+                       WHERE sc.event_id = etc.event_id AND sc.concept_code = tc.code
+                   ), 0) AS usage_count
+            FROM networking_event_taxonomy_concepts etc
+            JOIN networking_taxonomy_concepts tc ON tc.code = etc.concept_code
+            WHERE etc.event_id = ? AND etc.enabled = 1 AND tc.active = 1
+            ORDER BY usage_count DESC, etc.sort_order, label
+            """,
+            (event_id,),
+        ).fetchall()
+        seen: dict[str, set[str]] = {dimension: set() for dimension in result}
+        for row in configured:
+            dimension = self._vocabulary_dimension(row["concept_type"])
+            if dimension not in result:
+                continue
+            key = str(row["code"])
+            seen[dimension].add(key)
+            result[dimension].append({"value": key, "label": row["label"], "kind": "concept", "source": "configured", "usage_count": int(row["usage_count"] or 0)})
+        candidates = db.execute(
+            """
+            SELECT *
+            FROM networking_event_vocabulary_candidates
+            WHERE event_id = ? AND status != 'DISABLED'
+            ORDER BY usage_count DESC, raw_value
+            """,
+            (event_id,),
+        ).fetchall() if include_candidates else []
+        for row in candidates:
+            dimension = self._vocabulary_dimension(row["dimension"])
+            if dimension not in result:
+                continue
+            value = row["concept_code"] or f"CANDIDATE:{row['id']}"
+            if value in seen[dimension]:
+                continue
+            seen[dimension].add(value)
+            result[dimension].append({
+                "value": value,
+                "label": row["raw_value"],
+                "kind": "candidate" if not row["concept_code"] else "concept",
+                "source": row["source"],
+                "status": row["status"],
+                "usage_count": int(row["usage_count"] or 0),
+            })
+        result["FUNCTION"] = [
+            {"value": code, "label": code.replace("_", " ").title(), "kind": "function", "source": "system", "usage_count": 0}
+            for code in sorted(FUNCTIONS)
+        ]
+        return {"ok": True, "event_id": event_id, "vocabulary": result}
+
+    def discovery_onboarding(self, db, owner_token: str, data: dict) -> dict:
+        participation = self.resolve_owner(db, owner_token, int(data.get("event_id") or 0) or None)
+        if not participation:
+            return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
+        event_id = int(participation["event_id"])
+        participation_id = int(participation["id"])
+        desired_functions = [self._choice(value, FUNCTIONS, "") for value in self._semantic_values(data.get("desired_functions") or data.get("functions"))]
+        desired_functions = [value for value in desired_functions if value]
+        desired_company_types = self._discovery_values(db, event_id, "COMPANY_TYPE", data.get("desired_company_types") or data.get("company_types"))
+        objectives = self._discovery_values(db, event_id, "INTEREST", data.get("objectives") or data.get("interests"))
+        semantic_data = {
+            "seek_concepts": self._discovery_values(db, event_id, "SEEK", data.get("seek_concepts") or data.get("seeks")),
+            "offer_concepts": self._discovery_values(db, event_id, "OFFER", data.get("offer_concepts") or data.get("offers")),
+            "interest_concepts": objectives,
+        }
+        if data.get("seeks_text"):
+            semantic_data["seeks"] = str(data.get("seeks_text") or "").strip()
+        if data.get("offers_text"):
+            semantic_data["offers"] = str(data.get("offers_text") or "").strip()
+        self._sync_semantic_classifications(db, event_id, participation_id, semantic_data, source="USER", provenance="discovery")
+        self._harvest_vocabulary_candidates(db, event_id, semantic_data, source="USER", provenance="discovery")
+        for value in desired_company_types:
+            self._upsert_vocabulary_candidate(db, event_id, "COMPANY_TYPE", value, source="USER", provenance="discovery")
+        for value in objectives:
+            self._upsert_vocabulary_candidate(db, event_id, "INTEREST", value, source="USER", provenance="discovery")
+        db.execute(
+            """
+            UPDATE networking_intents
+            SET discovery_completed = 1,
+                discovery_diversity = ?,
+                desired_functions_json = ?,
+                desired_company_types_json = ?,
+                discovery_objectives_json = ?,
+                updated_at = ?
+            WHERE participation_id = ?
+            """,
+            (
+                1 if self._truthy(data.get("discovery_diversity", True)) else 0,
+                self._safe_json(desired_functions),
+                self._safe_json(desired_company_types),
+                self._safe_json(objectives),
+                self.now(),
+                participation_id,
+            ),
+        )
+        self.record_event(db, event_id, participation_id, None, "discovery_onboarded", {"desired_functions": desired_functions, "desired_company_types": desired_company_types, "objectives": objectives})
+        return {"ok": True, "participation": self.participation_payload(db, participation_id, viewer_id=participation_id, full=True), "discovery": self.discovery_shell(db, owner_token)}
+
+    def discovery_shell(self, db, owner_token: str) -> dict:
+        participation = self.resolve_owner(db, owner_token)
+        if not participation:
+            return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
+        profile = self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)
+        discovery = profile.get("discovery") or {}
+        return {
+            "ok": True,
+            "status": discovery.get("status") or "NOT_CONFIGURED",
+            "ready": bool(discovery.get("ready")),
+            "message": "Discovery esta listo. El motor de oportunidades se activa en la siguiente etapa." if discovery.get("ready") else "Completa el Golden Ticket para preparar Discovery.",
+            "profile": profile,
+        }
 
     def visible_channels(self, db, participation_id: int, *, is_self: bool, is_contact: bool, representative_visible: bool = True, organization_visible: bool = True) -> list[dict]:
         channels = []
@@ -1282,6 +1503,92 @@ class NetworkingService:
             {"field": "interest_concepts", "type": "INTEREST", "role": "INTEREST", "values": self._semantic_values(data.get("interest_concepts") or data.get("interests_concepts") or data.get("semantic_interests"))},
         ]
 
+    def _harvest_vocabulary_candidates(self, db, event_id: int, data: dict, *, source: str, provenance: str) -> None:
+        for entry in self._semantic_inputs(data):
+            for value in entry["values"]:
+                concept = self._resolve_event_concept(db, event_id, entry["type"], value)
+                self._upsert_vocabulary_candidate(
+                    db,
+                    event_id,
+                    self._vocabulary_dimension(entry["role"]),
+                    value,
+                    source=source,
+                    provenance=provenance,
+                    concept_code=concept["code"] if concept else "",
+                    status="CANONICAL" if concept else "CANDIDATE",
+                )
+        for dimension, raw in {
+            "OFFER": data.get("offers") or data.get("offers_text"),
+            "SEEK": data.get("seeks") or data.get("seeks_text"),
+            "INTEREST": data.get("interests") or data.get("interests_text"),
+        }.items():
+            for value in self._semantic_values(raw):
+                self._upsert_vocabulary_candidate(db, event_id, dimension, value, source=source, provenance=provenance)
+
+    def _upsert_vocabulary_candidate(self, db, event_id: int, dimension: str, raw_value: str, *, source: str, provenance: str, concept_code: str = "", status: str = "CANDIDATE") -> None:
+        dimension = self._vocabulary_dimension(dimension)
+        status = self._choice(status, VOCABULARY_STATUSES, "CANDIDATE")
+        raw_value = str(raw_value or "").strip()
+        if not event_id or dimension not in VOCABULARY_DIMENSIONS or not raw_value:
+            return
+        key = self._canonical_key(raw_value)
+        now = self.now()
+        db.execute(
+            """
+            INSERT INTO networking_event_vocabulary_candidates (
+                event_id, dimension, raw_value, normalized_key, status, concept_code,
+                source, provenance, usage_count, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, 1, ?, ?)
+            ON CONFLICT(event_id, dimension, normalized_key)
+            DO UPDATE SET raw_value = COALESCE(NULLIF(excluded.raw_value, ''), networking_event_vocabulary_candidates.raw_value),
+                          status = CASE
+                              WHEN networking_event_vocabulary_candidates.status = 'DISABLED' THEN 'DISABLED'
+                              WHEN excluded.status = 'CANONICAL' THEN 'CANONICAL'
+                              ELSE networking_event_vocabulary_candidates.status
+                          END,
+                          concept_code = COALESCE(excluded.concept_code, networking_event_vocabulary_candidates.concept_code),
+                          source = excluded.source,
+                          provenance = excluded.provenance,
+                          usage_count = networking_event_vocabulary_candidates.usage_count + 1,
+                          updated_at = excluded.updated_at
+            """,
+            (event_id, dimension, raw_value, key, status, concept_code, source, provenance, now, now),
+        )
+
+    def _discovery_values(self, db, event_id: int, dimension: str, raw) -> list[str]:
+        result = []
+        for value in self._semantic_values(raw):
+            text = str(value or "").strip()
+            if not text:
+                continue
+            if text.startswith("CANDIDATE:"):
+                candidate_id = int(text.split(":", 1)[1] or 0)
+                row = db.execute("SELECT raw_value FROM networking_event_vocabulary_candidates WHERE id = ? AND event_id = ?", (candidate_id, event_id)).fetchone()
+                text = row["raw_value"] if row else ""
+            elif text.upper() in FUNCTIONS and dimension == "FUNCTION":
+                text = text.upper()
+            else:
+                concept = self._resolve_event_concept(db, event_id, self._vocabulary_dimension(dimension), text)
+                text = concept["code"] if concept else text
+            if text and text not in result:
+                result.append(text)
+        return result
+
+    def _vocabulary_dimension(self, value: str) -> str:
+        value = str(value or "").strip().upper()
+        aliases = {
+            "ACTIVITY": "INDUSTRY",
+            "SECTOR": "INDUSTRY",
+            "RUBRO": "INDUSTRY",
+            "OBJECTIVE": "INTEREST",
+            "OBJECTIVES": "INTEREST",
+            "COMPANY": "COMPANY_TYPE",
+            "COMPANY_TYPES": "COMPANY_TYPE",
+            "FUNCTIONS": "FUNCTION",
+        }
+        return aliases.get(value, value)
+
     def _resolve_event_concept(self, db, event_id: int, concept_type: str, value: str):
         concept_type = self._choice(concept_type, SEMANTIC_TYPES, "")
         clean = str(value or "").strip()
@@ -1610,8 +1917,9 @@ class NetworkingService:
         return ""
 
     def _canonical_key(self, value: str) -> str:
-        key = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-        return key or hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+        normalized = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+        key = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
+        return key or hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()[:16]
 
     def _fingerprint(self, item: dict) -> str:
         payload = json.dumps({k: v for k, v in item.items() if k != "channels"}, sort_keys=True, ensure_ascii=False)
@@ -1619,6 +1927,17 @@ class NetworkingService:
 
     def _safe_json(self, value) -> str:
         return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+    def _json_list(self, raw) -> list:
+        if raw is None:
+            return []
+        if isinstance(raw, list):
+            return raw
+        try:
+            parsed = json.loads(str(raw or "[]"))
+            return parsed if isinstance(parsed, list) else []
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
 
     def _safe_source_payload(self, item: dict) -> str:
         payload = {key: value for key, value in item.items() if key != "channels"}
