@@ -8,7 +8,7 @@ import re
 import secrets
 import unicodedata
 from collections.abc import Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 
 FUNCTIONS = {
@@ -40,6 +40,11 @@ SEMANTIC_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN", "ADMIN"}
 VOCABULARY_DIMENSIONS = {"INDUSTRY", "SPECIALTY", "OFFER", "SEEK", "INTEREST", "COMPANY_TYPE", "FUNCTION"}
 VOCABULARY_STATUSES = {"CONFIGURED", "CANONICAL", "CANDIDATE", "DISABLED"}
 DISCOVERY_MAX_BATCH = 5
+NETWORKING_LAUNCH_STATES = {"DRAFT", "LIVE", "DISABLED"}
+NETWORKING_BRAND_MODES = {"BITORA", "POWERED_BY_BITORA", "EVENT_BRANDED"}
+DEFAULT_BRAND_PRIMARY = "#13243a"
+DEFAULT_BRAND_ACCENT = "#d7a63f"
+LOCAL_PUBLIC_HOSTS = {"localhost", "127.0.0.1", "::1", ""}
 READINESS_DIMENSIONS = {
     "person.identity",
     "person.role",
@@ -287,6 +292,7 @@ class NetworkingService:
         self.ensure_v1_3_schema(db)
         self.ensure_discovery_schema(db)
         self.ensure_v2_schema(db)
+        self.ensure_v2_3_schema(db)
         self.ensure_taxonomy(db)
 
     def ensure_v1_1_schema(self, db) -> None:
@@ -412,6 +418,23 @@ class NetworkingService:
             """
         )
 
+    def ensure_v2_3_schema(self, db) -> None:
+        event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+        for column, ddl in {
+            "landing_logo_data": "TEXT NOT NULL DEFAULT ''",
+            "landing_primary_color": "TEXT NOT NULL DEFAULT ''",
+            "landing_secondary_color": "TEXT NOT NULL DEFAULT ''",
+            "networking_brand_title": "TEXT NOT NULL DEFAULT ''",
+            "networking_brand_welcome": "TEXT NOT NULL DEFAULT ''",
+            "networking_brand_mode": "TEXT NOT NULL DEFAULT 'POWERED_BY_BITORA'",
+            "networking_public_base_url": "TEXT NOT NULL DEFAULT ''",
+            "networking_launch_state": "TEXT NOT NULL DEFAULT 'DRAFT'",
+            "networking_launched_at": "TEXT NOT NULL DEFAULT ''",
+            "networking_launch_updated_at": "TEXT NOT NULL DEFAULT ''",
+        }.items():
+            if column not in event_columns:
+                db.execute(f"ALTER TABLE events ADD COLUMN {column} {ddl}")
+
     def ensure_taxonomy(self, db) -> None:
         for code in sorted(FUNCTIONS):
             db.execute(
@@ -428,7 +451,9 @@ class NetworkingService:
         row = db.execute(
             """
             SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended,
-                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size,
+                   networking_launch_state, networking_public_base_url, networking_brand_title, networking_brand_welcome,
+                   networking_brand_mode, landing_logo_data, landing_primary_color, landing_secondary_color
             FROM events
             WHERE id = ?
             """,
@@ -448,8 +473,82 @@ class NetworkingService:
             "networking_discovery_enabled": bool(int(row["networking_discovery_enabled"] if "networking_discovery_enabled" in row.keys() else 1)),
             "networking_discovery_exploration_frequency": max(2, int(row["networking_discovery_exploration_frequency"] if "networking_discovery_exploration_frequency" in row.keys() else 4)),
             "networking_discovery_batch_size": max(1, min(DISCOVERY_MAX_BATCH, int(row["networking_discovery_batch_size"] if "networking_discovery_batch_size" in row.keys() else 3))),
+            "networking_launch_state": self._launch_state(row["networking_launch_state"] if "networking_launch_state" in row.keys() else ""),
+            "networking_public_base_url": str(row["networking_public_base_url"] if "networking_public_base_url" in row.keys() else "").strip(),
+            "networking_branding": self.event_branding(row),
             "semantic_taxonomy": self.event_taxonomy_payload(db, event_id).get("concepts", []),
         }
+
+    def event_branding(self, event_row) -> dict:
+        event_name = str(event_row["name"] if event_row and "name" in event_row.keys() else "").strip() or "Evento BITORA"
+        title = str(event_row["networking_brand_title"] if event_row and "networking_brand_title" in event_row.keys() else "").strip() or event_name
+        welcome = str(event_row["networking_brand_welcome"] if event_row and "networking_brand_welcome" in event_row.keys() else "").strip()
+        mode = str(event_row["networking_brand_mode"] if event_row and "networking_brand_mode" in event_row.keys() else "").strip().upper() or "POWERED_BY_BITORA"
+        if mode not in NETWORKING_BRAND_MODES:
+            mode = "POWERED_BY_BITORA"
+        primary = self._safe_hex_color(event_row["landing_primary_color"] if event_row and "landing_primary_color" in event_row.keys() else "", DEFAULT_BRAND_PRIMARY)
+        accent = self._safe_hex_color(event_row["landing_secondary_color"] if event_row and "landing_secondary_color" in event_row.keys() else "", DEFAULT_BRAND_ACCENT)
+        logo = str(event_row["landing_logo_data"] if event_row and "landing_logo_data" in event_row.keys() else "").strip()
+        return {
+            "title": title,
+            "event_name": event_name,
+            "welcome": welcome,
+            "mode": mode,
+            "logo": logo,
+            "primary_color": primary,
+            "accent_color": accent,
+            "powered_by_bitora": mode in {"BITORA", "POWERED_BY_BITORA"},
+            "has_custom_logo": bool(logo),
+            "has_custom_primary": primary != DEFAULT_BRAND_PRIMARY,
+        }
+
+    def get_event_brand(self, db, event_id: int, *, fallback_base_url: str = "", app_env: str = "development") -> dict:
+        row = self._event_launch_row(db, event_id)
+        if not row:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        brand = self.event_branding(row)
+        return {
+            "ok": True,
+            "event_id": int(row["id"]),
+            "event_name": row["name"],
+            "branding": brand,
+            "networking_launch_state": self._launch_state(row["networking_launch_state"]),
+            "networking_public_base_url": str(row["networking_public_base_url"] or "").strip(),
+            "effective_public_base_url": self._event_public_base_url(row, fallback_base_url),
+            "public_url_validation": self.validate_public_base_url(str(row["networking_public_base_url"] or "").strip() or fallback_base_url, app_env=app_env),
+        }
+
+    def update_event_brand(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
+        row = self._event_launch_row(db, event_id)
+        if not row:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        title = self._compact_text(data.get("networking_brand_title") or data.get("brand_title"), 96)
+        welcome = self._compact_text(data.get("networking_brand_welcome") or data.get("brand_welcome"), 220)
+        mode = str(data.get("networking_brand_mode") or data.get("brand_mode") or row["networking_brand_mode"] or "POWERED_BY_BITORA").strip().upper()
+        if mode not in NETWORKING_BRAND_MODES:
+            mode = "POWERED_BY_BITORA"
+        public_base_url = self._normalize_base_url(data.get("networking_public_base_url") if "networking_public_base_url" in data else row["networking_public_base_url"])
+        primary = self._safe_hex_color(data.get("landing_primary_color") if "landing_primary_color" in data else row["landing_primary_color"], "")
+        secondary = self._safe_hex_color(data.get("landing_secondary_color") if "landing_secondary_color" in data else row["landing_secondary_color"], "")
+        logo = str(data.get("landing_logo_data") if "landing_logo_data" in data else row["landing_logo_data"] or "").strip()
+        if logo and not (logo.startswith("data:image/") or logo.startswith("/") or logo.startswith("http://") or logo.startswith("https://")):
+            return {"ok": False, "error": "Logo invalido: usa data:image, una ruta local o una URL segura", "status_code": 400}
+        db.execute(
+            """
+            UPDATE events
+            SET networking_brand_title = ?,
+                networking_brand_welcome = ?,
+                networking_brand_mode = ?,
+                networking_public_base_url = ?,
+                landing_primary_color = ?,
+                landing_secondary_color = ?,
+                landing_logo_data = ?
+            WHERE id = ?
+            """,
+            (title, welcome, mode, public_base_url, primary, secondary, logo, event_id),
+        )
+        self.record_event(db, event_id, None, None, "launch_brand_updated", {"actor": actor, "brand_mode": mode, "public_base_url_configured": bool(public_base_url)})
+        return self.get_event_brand(db, event_id)
 
     def event_taxonomy_payload(self, db, event_id: int) -> dict:
         if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
@@ -480,6 +579,118 @@ class NetworkingService:
                 "sort_order": int(row["sort_order"] or 0),
             })
         return {"ok": True, "event_id": event_id, "concepts": concepts}
+
+    def launch_readiness(self, db, event_id: int, *, fallback_base_url: str = "", app_env: str = "development") -> dict:
+        event = self._event_launch_row(db, event_id)
+        if not event:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        operations = self.operations_summary(db, event_id, include_launch=False)
+        checks = []
+
+        def add(key: str, severity: str, message: str, action: str = ""):
+            checks.append({"key": key, "severity": severity, "message": message, "action": action})
+
+        brand = self.event_branding(event)
+        launch_state = self._launch_state(event["networking_launch_state"])
+        public_base_url = self._event_public_base_url(event, fallback_base_url)
+        url_validation = self.validate_public_base_url(public_base_url, app_env=app_env)
+        participant_total = int((operations.get("participants") or {}).get("total") or 0) if operations.get("ok") else 0
+        discovery_enabled = bool((operations.get("discovery") or {}).get("enabled")) if operations.get("ok") else False
+        vocabulary = operations.get("vocabulary") or {}
+        pool = ((operations.get("discovery") or {}).get("pool") or {}) if operations.get("ok") else {}
+
+        add("EVENT_CONFIGURED", "INFO", f"Evento configurado: {event['name']}.")
+        if not brand["has_custom_logo"]:
+            add("BRAND_LOGO_MISSING", "WARNING", "No hay logo de evento configurado; se usara la marca BITORA por defecto.", "Cargar logo si el evento requiere identidad propia.")
+        else:
+            add("BRAND_LOGO_CONFIGURED", "INFO", "Logo de evento configurado.")
+        if not url_validation["ok"]:
+            add(url_validation["code"], "BLOCKING", url_validation["message"], "Configurar una URL publica valida para Networking.")
+        else:
+            add("PUBLIC_URL_VALID", "INFO", url_validation["message"])
+        sample_profile = db.execute(
+            """
+            SELECT public_profile_id
+            FROM networking_event_participations
+            WHERE event_id = ? AND participation_state = 'ACTIVE'
+            ORDER BY id
+            LIMIT 1
+            """,
+            (event_id,),
+        ).fetchone()
+        if sample_profile:
+            add("QR_DEEP_LINK_READY", "INFO", "Los QR pueden generar un enlace publico de Networking.")
+        else:
+            add("QR_DEEP_LINK_NO_ACTIVE_PROFILE", "WARNING", "Todavia no hay perfiles ACTIVE para verificar un QR real.", "Activar al menos un participante de prueba.")
+        if participant_total <= 0:
+            add("NO_PARTICIPANTS", "BLOCKING", "No hay participantes importados para lanzar Networking.", "Importar participantes antes del lanzamiento.")
+        elif participant_total < 2:
+            add("VERY_SMALL_EVENT", "WARNING", "Hay muy pocos participantes; el intercambio de contactos sera limitado.")
+        else:
+            add("PARTICIPANTS_IMPORTED", "INFO", f"{participant_total} participantes disponibles para preparar Networking.")
+        incomplete = int((operations.get("participants") or {}).get("incomplete") or 0) if operations.get("ok") else 0
+        if incomplete:
+            add("INCOMPLETE_PROFILES", "WARNING", f"{incomplete} perfiles tienen gaps de readiness.", "Revisar preparacion antes del lanzamiento si esos perfiles seran invitados.")
+        if discovery_enabled:
+            if int(vocabulary.get("active_concepts") or 0) + int(vocabulary.get("represented_concepts") or 0) <= 0:
+                add("DISCOVERY_VOCABULARY_WEAK", "WARNING", "Discovery esta habilitado pero no hay vocabulario util todavia.", "Configurar vocabulario o importar datos semanticos.")
+            if int(pool.get("discoverable_participants") or 0) < 2 and participant_total > 1:
+                add("DISCOVERY_POOL_SMALL", "WARNING", "Discovery tiene pocas oportunidades visibles con la configuracion actual.", "Revisar privacidad, activacion y datos de participantes.")
+            add("DISCOVERY_CONFIGURED", "INFO", "Discovery esta habilitado como feature opcional.")
+        else:
+            add("DISCOVERY_DISABLED", "INFO", "Discovery esta deshabilitado; la credencial, QR y contactos pueden lanzarse igualmente.")
+
+        status = "READY"
+        if any(item["severity"] == "BLOCKING" for item in checks):
+            status = "NOT_READY"
+        elif any(item["severity"] == "WARNING" for item in checks):
+            status = "READY_WITH_WARNINGS"
+        return {
+            "ok": True,
+            "event": {"id": int(event["id"]), "name": event["name"]},
+            "launch_state": launch_state,
+            "status": status,
+            "status_label": {"READY": "Listo", "READY_WITH_WARNINGS": "Listo con advertencias", "NOT_READY": "No listo"}[status],
+            "blocking": [item for item in checks if item["severity"] == "BLOCKING"],
+            "warnings": [item for item in checks if item["severity"] == "WARNING"],
+            "checks": checks,
+            "branding": brand,
+            "public_url": {
+                "configured_base_url": str(event["networking_public_base_url"] or "").strip(),
+                "effective_base_url": public_base_url,
+                "sample_profile_url": f"{public_base_url}/n/{sample_profile['public_profile_id']}" if sample_profile and public_base_url else "",
+                "validation": url_validation,
+            },
+            "operations_status": operations.get("status") if operations.get("ok") else "UNKNOWN",
+        }
+
+    def update_launch_state(self, db, event_id: int, action: str, *, actor: str = "Admin", fallback_base_url: str = "", app_env: str = "development") -> dict:
+        event = self._event_launch_row(db, event_id)
+        if not event:
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        action_key = str(action or "").strip().upper()
+        if action_key in {"LAUNCH", "LIVE", "ENABLE", "REENABLE"}:
+            readiness = self.launch_readiness(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
+            if readiness.get("blocking"):
+                return {"ok": False, "error": "Networking no esta listo para lanzar", "status_code": 409, "readiness": readiness}
+            state = "LIVE"
+        elif action_key in {"DISABLE", "DISABLED", "CLOSE"}:
+            readiness = self.launch_readiness(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
+            state = "DISABLED"
+        elif action_key in {"DRAFT", "PRELAUNCH", "RESET"}:
+            readiness = self.launch_readiness(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
+            state = "DRAFT"
+        else:
+            return {"ok": False, "error": "Accion de lanzamiento invalida", "status_code": 400}
+        now = self.now()
+        launched_at = now if state == "LIVE" and not str(event["networking_launched_at"] or "").strip() else str(event["networking_launched_at"] or "")
+        db.execute(
+            "UPDATE events SET networking_launch_state = ?, networking_launched_at = ?, networking_launch_updated_at = ? WHERE id = ?",
+            (state, launched_at, now, event_id),
+        )
+        self.record_event(db, event_id, None, None, "launch_state_updated", {"actor": actor, "state": state})
+        readiness = self.launch_readiness(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
+        return {"ok": True, "event_id": event_id, "networking_launch_state": state, "readiness": readiness}
 
     def update_event_taxonomy(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
         if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
@@ -942,6 +1153,16 @@ class NetworkingService:
         if row["participation_state"] != "ACTIVE":
             return {"ok": False, "error": "Perfil Networking no activo", "status_code": 404}
         is_self = viewer and int(viewer["id"]) == int(row["id"])
+        event = self._event_launch_row(db, int(row["event_id"]))
+        launch_state = self._launch_state(event["networking_launch_state"] if event else "")
+        same_event_viewer = viewer and int(viewer["event_id"]) == int(row["event_id"])
+        if self._launch_gate_configured(event) and not (is_self or same_event_viewer) and launch_state != "LIVE":
+            return {
+                "ok": False,
+                "error": "Networking todavia no esta disponible para este evento",
+                "status": "NOT_LIVE" if launch_state == "DRAFT" else "DISABLED",
+                "status_code": 404,
+            }
         intent = db.execute("SELECT profile_visible FROM networking_intents WHERE participation_id = ?", (row["id"],)).fetchone()
         if intent and not is_self and not int(intent["profile_visible"] or 0):
             return {"ok": False, "error": "Perfil Networking no visible", "status_code": 404}
@@ -952,6 +1173,8 @@ class NetworkingService:
             """
             SELECT nep.*, p.first_name, p.last_name, p.email, p.phone, p.company,
                    e.name AS event_name, e.networking_profile_mode, e.networking_readiness_required, e.networking_readiness_recommended,
+                   e.networking_launch_state, e.networking_public_base_url, e.networking_brand_title, e.networking_brand_welcome,
+                   e.networking_brand_mode, e.landing_logo_data, e.landing_primary_color, e.landing_secondary_color,
                    no.name AS organization_name, no.activity AS organization_activity, no.specialty AS organization_specialty,
                    no.website AS organization_website, no.logo_url AS organization_logo,
                    no.description AS organization_description, no.visibility AS organization_visibility,
@@ -998,10 +1221,13 @@ class NetworkingService:
             "credential": {
                 "type": "DIGITAL_EVENT_CREDENTIAL",
                 "public_path": f"/n/{data['public_profile_id']}",
+                "public_url": self._profile_public_url(data, data["public_profile_id"]),
                 "qr_kind": "HTTPS_DEEP_LINK",
             },
             "event_id": data["event_id"],
             "event_name": data.get("event_name") or "",
+            "event_branding": self.event_branding(data),
+            "networking_launch_state": self._launch_state(data.get("networking_launch_state") or ""),
             "state": data["participation_state"],
             "active": data["participation_state"] == "ACTIVE",
             "requires_onboarding": data["participation_state"] == "PASSIVE",
@@ -1907,11 +2133,13 @@ class NetworkingService:
         summary["common_missing"] = dict(sorted(summary["common_missing"].items(), key=lambda item: (-item[1], item[0])))
         return {"ok": True, "event_id": event_id, **summary}
 
-    def operations_summary(self, db, event_id: int) -> dict:
+    def operations_summary(self, db, event_id: int, *, include_launch: bool = True, fallback_base_url: str = "", app_env: str = "development") -> dict:
         event = db.execute(
             """
             SELECT id, name, status, networking_profile_mode,
-                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size,
+                   networking_launch_state, networking_public_base_url, networking_brand_title, networking_brand_welcome,
+                   networking_brand_mode, landing_logo_data, landing_primary_color, landing_secondary_color
             FROM events
             WHERE id = ?
             """,
@@ -2054,6 +2282,8 @@ class NetworkingService:
                 "discovery_enabled": bool(discovery_config["enabled"]),
                 "discovery_batch_size": int(discovery_config["batch_size"]),
                 "discovery_exploration_frequency": int(discovery_config["exploration_frequency"]),
+                "networking_launch_state": self._launch_state(event["networking_launch_state"] if "networking_launch_state" in event.keys() else ""),
+                "networking_public_base_url": str(event["networking_public_base_url"] if "networking_public_base_url" in event.keys() else "").strip(),
             },
             "participants": {
                 "total": participants_total,
@@ -2107,15 +2337,17 @@ class NetworkingService:
             },
             "definitions": self._operations_metric_definitions(),
         }
+        if include_launch:
+            summary["launch"] = self.launch_readiness(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
         return summary
 
-    def operations_export_csv(self, db, event_id: int) -> str:
-        summary = self.operations_summary(db, event_id)
+    def operations_export_csv(self, db, event_id: int, *, fallback_base_url: str = "", app_env: str = "development") -> str:
+        summary = self.operations_summary(db, event_id, fallback_base_url=fallback_base_url, app_env=app_env)
         if not summary.get("ok"):
             return ""
         output = io.StringIO()
         headers = [
-            "event_id", "event_name", "status", "participants_total", "participants_active",
+            "event_id", "event_name", "status", "launch_state", "launch_status", "participants_total", "participants_active",
             "profiles_ready", "profiles_incomplete", "discovery_enabled", "discovery_configured",
             "discovery_users", "discovery_profiles_shown", "discovery_skips", "discovery_saved",
             "discovery_exhausted_users", "contacts_total", "scan_contact_events",
@@ -2128,6 +2360,8 @@ class NetworkingService:
             "event_id": summary["event"]["id"],
             "event_name": summary["event"]["name"],
             "status": summary["status"],
+            "launch_state": (summary.get("launch") or {}).get("launch_state") or summary.get("configuration", {}).get("networking_launch_state", "DRAFT"),
+            "launch_status": (summary.get("launch") or {}).get("status") or "",
             "participants_total": summary["participants"]["total"],
             "participants_active": summary["participants"]["active"],
             "profiles_ready": summary["participants"]["ready"],
@@ -2510,6 +2744,56 @@ class NetworkingService:
         mode = self._presentation_mode(event_row["networking_profile_mode"] if event_row and "networking_profile_mode" in event_row.keys() else "AUTO")
         return "PERSON_FIRST" if mode == "AUTO" else mode
 
+    def _event_launch_row(self, db, event_id: int):
+        return db.execute(
+            """
+            SELECT id, name, status, networking_profile_mode, networking_readiness_required, networking_readiness_recommended,
+                   networking_discovery_enabled, networking_discovery_exploration_frequency, networking_discovery_batch_size,
+                   networking_launch_state, networking_public_base_url, networking_brand_title, networking_brand_welcome,
+                   networking_brand_mode, networking_launched_at, networking_launch_updated_at,
+                   landing_logo_data, landing_primary_color, landing_secondary_color
+            FROM events
+            WHERE id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+
+    def _event_public_base_url(self, event_row, fallback_base_url: str = "") -> str:
+        configured = str(event_row["networking_public_base_url"] if event_row and "networking_public_base_url" in event_row.keys() else "").strip()
+        return self._normalize_base_url(configured or fallback_base_url or "")
+
+    def _profile_public_url(self, data: dict, public_profile_id: str) -> str:
+        base_url = self._event_public_base_url(data, "")
+        return f"{base_url}/n/{public_profile_id}" if base_url else f"/n/{public_profile_id}"
+
+    def _launch_state(self, raw) -> str:
+        state = str(raw or "").strip().upper()
+        return state if state in NETWORKING_LAUNCH_STATES else "DRAFT"
+
+    def _launch_gate_configured(self, event_row) -> bool:
+        if not event_row:
+            return False
+        if self._launch_state(event_row["networking_launch_state"] if "networking_launch_state" in event_row.keys() else "") != "DRAFT":
+            return True
+        return any(
+            str(event_row[key] if key in event_row.keys() else "").strip()
+            for key in ("networking_public_base_url", "networking_brand_title", "networking_launch_updated_at", "networking_launched_at")
+        )
+
+    def _normalize_base_url(self, value) -> str:
+        return str(value or "").strip().rstrip("/")
+
+    def _safe_hex_color(self, value, default: str = "") -> str:
+        raw = str(value or "").strip()
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", raw):
+            return raw.lower()
+        if re.fullmatch(r"[0-9a-fA-F]{6}", raw):
+            return f"#{raw.lower()}"
+        return default
+
+    def _compact_text(self, value, limit: int) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip())[:limit]
+
     def _readiness_keys(self, raw) -> list[str]:
         if raw is None:
             return []
@@ -2549,6 +2833,37 @@ class NetworkingService:
 
     def get_participation(self, db, participation_id: int):
         return db.execute("SELECT * FROM networking_event_participations WHERE id = ?", (participation_id,)).fetchone()
+
+    def public_profile_link(self, db, public_profile_id: str, *, fallback_base_url: str = "") -> dict:
+        row = db.execute(
+            """
+            SELECT nep.public_profile_id, e.*
+            FROM networking_event_participations nep
+            JOIN events e ON e.id = nep.event_id
+            WHERE nep.public_profile_id = ?
+            """,
+            (str(public_profile_id or "").strip().upper(),),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": "Perfil Networking inexistente", "status_code": 404}
+        base_url = self._event_public_base_url(row, fallback_base_url)
+        return {"ok": True, "url": f"{base_url}/n/{row['public_profile_id']}", "launch_state": self._launch_state(row["networking_launch_state"])}
+
+    def validate_public_base_url(self, value: str, *, app_env: str = "development") -> dict:
+        raw = self._normalize_base_url(value)
+        if not raw:
+            return {"ok": False, "code": "PUBLIC_URL_MISSING", "message": "Falta configurar la URL publica usada por los QR de Networking."}
+        parsed = urlparse(raw)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return {"ok": False, "code": "PUBLIC_URL_INVALID", "message": "La URL publica debe incluir esquema y host, por ejemplo https://evento.example.com."}
+        host = (parsed.hostname or "").strip().lower()
+        env = str(app_env or "development").strip().lower()
+        production_like = env in {"production", "staging", "online", "prod"}
+        if production_like and parsed.scheme != "https":
+            return {"ok": False, "code": "PUBLIC_URL_NOT_HTTPS", "message": "En entorno publico, los QR de Networking deben usar HTTPS."}
+        if production_like and (host in LOCAL_PUBLIC_HOSTS or host.startswith("192.168.") or host.startswith("10.") or host.endswith(".local")):
+            return {"ok": False, "code": "PUBLIC_URL_LOCAL_ONLY", "message": "La URL publica no puede usar localhost, IP privada o host local en un lanzamiento publico."}
+        return {"ok": True, "code": "PUBLIC_URL_VALID", "message": f"URL publica valida para enlaces Networking: {raw}."}
 
     def record_event(self, db, event_id: int, actor_id: int | None, target_id: int | None, event_type: str, payload: dict) -> None:
         db.execute(

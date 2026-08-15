@@ -78,6 +78,51 @@
         </div>
       </article>
       <article class="networking-panel">
+        <h2>Lanzamiento y marca</h2>
+        <p class="networking-status">Configura identidad, URL publica y estado live sin tocar codigo.</p>
+        <div class="networking-two">
+          <label>Titulo publico
+            <input id="brandTitle" placeholder="Nombre publico del evento">
+          </label>
+          <label>Modo de marca
+            <select id="brandMode">
+              <option value="POWERED_BY_BITORA">Evento + Powered by BITORA</option>
+              <option value="BITORA">BITORA</option>
+              <option value="EVENT_BRANDED">Evento</option>
+            </select>
+          </label>
+        </div>
+        <label>Bienvenida breve
+          <input id="brandWelcome" maxlength="220" placeholder="Texto corto para credencial y perfil publico">
+        </label>
+        <div class="networking-two">
+          <label>Color principal
+            <input id="brandPrimary" placeholder="#13243a">
+          </label>
+          <label>Color acento
+            <input id="brandAccent" placeholder="#d7a63f">
+          </label>
+        </div>
+        <label>Logo / imagen de evento
+          <input id="brandLogo" placeholder="data:image..., /assets/logo.png o https://...">
+        </label>
+        <label>URL publica Networking
+          <input id="publicBaseUrl" placeholder="https://evento.example.com">
+        </label>
+        <div id="launchStatus" class="networking-status">Cargar launch check para ver estado.</div>
+        <div id="launchChecks" class="readiness-list"></div>
+        <div class="participant-actions-row">
+          <button id="loadBrandBtn" type="button" class="ghost">Leer marca</button>
+          <button id="saveBrandBtn" type="button">Guardar marca</button>
+          <button id="loadLaunchBtn" type="button" class="ghost">Launch check</button>
+        </div>
+        <div class="participant-actions-row">
+          <button id="launchNetworkingBtn" type="button">Lanzar Networking</button>
+          <button id="disableNetworkingBtn" type="button" class="ghost">Deshabilitar</button>
+          <button id="draftNetworkingBtn" type="button" class="ghost">Volver a prelaunch</button>
+        </div>
+      </article>
+      <article class="networking-panel">
         <h2>Preparacion del evento</h2>
         <p class="networking-status">Resumen operativo de perfiles listos e incompletos. No publica un directorio.</p>
         <div id="readinessCards" class="networking-report-cards"></div>
@@ -130,6 +175,8 @@
     const operationsCards = document.getElementById("operationsCards");
     const operationsWarnings = document.getElementById("operationsWarnings");
     const operationsStatus = document.getElementById("operationsStatus");
+    const launchChecks = document.getElementById("launchChecks");
+    const launchStatus = document.getElementById("launchStatus");
     function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
     function payload() {
       return {
@@ -225,7 +272,7 @@
         operationsStatus.textContent = data.error || "No se pudo leer operaciones.";
         return;
       }
-      operationsStatus.textContent = `${data.status_label}: ${data.event.name} · Discovery ${data.discovery.enabled ? "habilitado" : "deshabilitado"}`;
+      operationsStatus.textContent = `${data.status_label}: ${data.event.name} - Discovery ${data.discovery.enabled ? "habilitado" : "deshabilitado"} - Launch ${data.launch?.status || data.configuration?.networking_launch_state || "DRAFT"}`;
       (data.warnings || []).forEach((warning) => {
         const item = document.createElement("div");
         item.className = `readiness-item ${warning.severity === "CRITICAL" ? "warn" : "ok"}`;
@@ -245,6 +292,75 @@
       addOperationsCard("Agotamiento", data.discovery.exhausted_users);
       addOperationsCard("Vocabulario activo", data.vocabulary.active_concepts);
       addOperationsCard("Vocabulario pendiente", data.vocabulary.unresolved_candidates);
+      addOperationsCard("Launch", data.launch?.status || data.configuration?.networking_launch_state || "DRAFT");
+    }
+    function brandPayload() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      return {
+        actor: "Admin",
+        event_id: eventId,
+        networking_brand_title: document.getElementById("brandTitle").value,
+        networking_brand_welcome: document.getElementById("brandWelcome").value,
+        networking_brand_mode: document.getElementById("brandMode").value,
+        landing_primary_color: document.getElementById("brandPrimary").value,
+        landing_secondary_color: document.getElementById("brandAccent").value,
+        landing_logo_data: document.getElementById("brandLogo").value,
+        networking_public_base_url: document.getElementById("publicBaseUrl").value,
+      };
+    }
+    function renderLaunch(data) {
+      launchChecks.replaceChildren();
+      if (!data.ok) {
+        launchStatus.textContent = data.error || "No se pudo evaluar lanzamiento.";
+        return;
+      }
+      launchStatus.textContent = `${data.status_label || data.status} - Estado: ${data.launch_state}`;
+      (data.checks || []).forEach((check) => {
+        const item = document.createElement("div");
+        item.className = `readiness-item ${check.severity === "BLOCKING" ? "warn" : "ok"}`;
+        item.innerHTML = `<strong>${check.severity}</strong><span>${check.message}${check.action ? ` Accion: ${check.action}` : ""}</span>`;
+        launchChecks.appendChild(item);
+      });
+    }
+    async function loadBrand() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo marca...";
+      const response = await fetch(`/api/networking/brand?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        const brand = data.branding || {};
+        document.getElementById("brandTitle").value = brand.title || "";
+        document.getElementById("brandWelcome").value = brand.welcome || "";
+        document.getElementById("brandMode").value = brand.mode || "POWERED_BY_BITORA";
+        document.getElementById("brandPrimary").value = brand.primary_color || "";
+        document.getElementById("brandAccent").value = brand.accent_color || "";
+        document.getElementById("brandLogo").value = brand.logo || "";
+        document.getElementById("publicBaseUrl").value = data.networking_public_base_url || "";
+      }
+    }
+    async function saveBrand() {
+      output.textContent = "Guardando marca...";
+      const response = await fetch("/api/networking/brand", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(brandPayload())});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) await loadLaunch();
+    }
+    async function loadLaunch() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Evaluando lanzamiento...";
+      const response = await fetch(`/api/networking/launch?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      renderLaunch(data);
+    }
+    async function launchAction(action) {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Actualizando estado...";
+      const response = await fetch("/api/networking/launch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({actor: "Admin", event_id: eventId, action})});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      renderLaunch(data.readiness || data);
     }
     function exportOperations() {
       const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
@@ -292,6 +408,12 @@
     document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
     document.getElementById("loadOperationsBtn").addEventListener("click", () => loadOperations().catch((error) => output.textContent = error.message));
     document.getElementById("exportOperationsBtn").addEventListener("click", exportOperations);
+    document.getElementById("loadBrandBtn").addEventListener("click", () => loadBrand().catch((error) => output.textContent = error.message));
+    document.getElementById("saveBrandBtn").addEventListener("click", () => saveBrand().catch((error) => output.textContent = error.message));
+    document.getElementById("loadLaunchBtn").addEventListener("click", () => loadLaunch().catch((error) => output.textContent = error.message));
+    document.getElementById("launchNetworkingBtn").addEventListener("click", () => launchAction("launch").catch((error) => output.textContent = error.message));
+    document.getElementById("disableNetworkingBtn").addEventListener("click", () => launchAction("disable").catch((error) => output.textContent = error.message));
+    document.getElementById("draftNetworkingBtn").addEventListener("click", () => launchAction("draft").catch((error) => output.textContent = error.message));
     document.getElementById("loadTaxonomyBtn").addEventListener("click", () => loadTaxonomy().catch((error) => output.textContent = error.message));
     document.getElementById("saveTaxonomyBtn").addEventListener("click", () => saveTaxonomy().catch((error) => output.textContent = error.message));
     document.getElementById("loadLiveVocabularyBtn").addEventListener("click", () => loadLiveVocabulary().catch((error) => output.textContent = error.message));

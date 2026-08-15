@@ -7,15 +7,17 @@
   <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
   <script src="/html5-qrcode.min.js"></script>
   <style>
+    :root {--event-primary: #13243a; --event-accent: #d7a63f;}
     .credential-home {display: grid; gap: 14px;}
     .event-credential {position: relative; overflow: hidden; border-radius: 18px; padding: 18px; color: #162033; background: linear-gradient(145deg, #ffffff 0%, #f4f7fb 55%, #dfe8f5 100%); box-shadow: 0 20px 52px rgba(21, 31, 50, .18); border: 1px solid rgba(22, 32, 51, .08);}
     .event-credential::before {content: ""; display: block; width: 72px; height: 10px; border-radius: 999px; background: #18253a; margin: 0 auto 16px;}
-    .credential-band {position: absolute; inset: 0 auto 0 0; width: 10px; background: linear-gradient(#13243a, #d7a63f);}
+    .credential-band {position: absolute; inset: 0 auto 0 0; width: 10px; background: linear-gradient(var(--event-primary), var(--event-accent));}
     .credential-top {display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-left: 10px;}
     .credential-event {font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; font-weight: 800;}
     .credential-id {font-size: .78rem; color: #64748b;}
     .credential-main {display: grid; grid-template-columns: 1fr 120px; gap: 16px; align-items: center; margin: 18px 0 10px 10px;}
-    .credential-photo {width: 72px; height: 72px; border-radius: 16px; background: #172238; color: #fff; display: grid; place-items: center; font-size: 1.8rem; font-weight: 800; background-size: cover; background-position: center;}
+    .credential-logo {width: 76px; max-height: 42px; object-fit: contain;}
+    .credential-photo {width: 72px; height: 72px; border-radius: 16px; background: var(--event-primary); color: #fff; display: grid; place-items: center; font-size: 1.8rem; font-weight: 800; background-size: cover; background-position: center;}
     .credential-name {margin: 10px 0 2px; font-size: clamp(1.45rem, 7vw, 2.15rem); line-height: 1; overflow-wrap: anywhere;}
     .credential-role, .credential-org {margin: 0; color: #475569; overflow-wrap: anywhere;}
     .credential-qr {width: 120px; aspect-ratio: 1; border-radius: 10px; padding: 8px; background: #fff; border: 1px solid #dbe3ef;}
@@ -27,11 +29,11 @@
     .discovery-overlay {position: fixed; inset: 0; z-index: 20; background: #07111f; color: #fff; display: grid; place-items: center; padding: 18px;}
     .discovery-card {width: min(680px, 100%); min-height: min(680px, calc(100vh - 36px)); display: grid; grid-template-rows: auto 1fr auto; gap: 18px;}
     .discovery-progress {height: 7px; background: rgba(255,255,255,.18); border-radius: 999px; overflow: hidden;}
-    .discovery-progress span {display: block; height: 100%; width: 0; background: #d7a63f;}
+    .discovery-progress span {display: block; height: 100%; width: 0; background: var(--event-accent);}
     .discovery-question h2 {font-size: clamp(2rem, 8vw, 4rem); line-height: 1; margin: 16px 0;}
     .chip-grid {display: flex; flex-wrap: wrap; gap: 10px;}
     .chip-grid button {border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: 12px 15px; min-height: 44px;}
-    .chip-grid button.selected {background: #d7a63f; color: #241600; border-color: #d7a63f; font-weight: 800;}
+    .chip-grid button.selected {background: var(--event-accent); color: #241600; border-color: var(--event-accent); font-weight: 800;}
     .discovery-controls {display: flex; gap: 10px; align-items: center;}
     .discovery-controls button {flex: 1;}
     .discovery-manual {width: 100%; margin-top: 14px; min-height: 46px;}
@@ -111,7 +113,7 @@
             <div class="credential-event" id="credentialEvent">Evento</div>
             <div class="credential-id" id="credentialId">NET</div>
           </div>
-          <img src="/assets/bitora-logo.svg" alt="BITORA" style="width:72px;height:auto">
+          <img id="credentialBrandLogo" src="/assets/bitora-logo.svg" alt="BITORA" class="credential-logo">
         </div>
         <div class="credential-main">
           <div>
@@ -290,6 +292,19 @@
     const splitManual = (value) => String(value || "").split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
     const actionLabel = (type) => ({whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type);
     const profileTitle = (profile) => profile?.presentation?.primary?.title || profile?.name || profile?.organization || "Mi perfil";
+    const safeUrl = (url) => String(url || "").replace(/'/g, "%27");
+    const applyBranding = (profile) => {
+      const brand = profile?.event_branding || {};
+      document.documentElement.style.setProperty("--event-primary", brand.primary_color || "#13243a");
+      document.documentElement.style.setProperty("--event-accent", brand.accent_color || "#d7a63f");
+      const title = brand.title || profile?.event_name || "Evento BITORA";
+      $("credentialEvent").textContent = title;
+      $("networkingTitle").textContent = profile?.active ? `Credencial ${title}` : "Activa tu credencial";
+      if (brand.welcome) $("networkingSubtitle").textContent = brand.welcome;
+      const logo = brand.logo || "/assets/bitora-logo.svg";
+      $("credentialBrandLogo").src = logo;
+      $("credentialBrandLogo").alt = brand.title || "BITORA";
+    };
     const profileIdFrom = (value) => {
       const match = String(value || "").match(/NET-[A-Z0-9]+/i);
       return match ? match[0].toUpperCase() : "";
@@ -310,7 +325,7 @@
       const semanticSummary = profile.semantic?.summary || [];
       template.querySelector(".networking-bio").textContent = [primary.description || profile.bio || profile.offers || profile.seeks || "", semanticSummary.join(" / ")].filter(Boolean).join(" - ");
       if (primary.media) {
-        avatar.style.backgroundImage = `url('${primary.media}')`;
+        avatar.style.backgroundImage = `url('${safeUrl(primary.media)}')`;
         avatar.textContent = "";
       } else {
         avatar.textContent = name.slice(0, 1).toUpperCase();
@@ -435,15 +450,16 @@
       const primary = profile.presentation?.primary || {};
       const secondary = profile.presentation?.secondary || {};
       const title = profileTitle(profile);
-      $("credentialEvent").textContent = profile.event_name || "Evento BITORA";
+      applyBranding(profile);
       $("credentialId").textContent = profile.public_profile_id;
       $("credentialName").textContent = title;
       $("credentialRole").textContent = primary.subtitle || profile.role || "";
       $("credentialOrg").textContent = secondary.title || profile.organization || "";
-      $("publicProfileLink").textContent = `${location.origin}/n/${profile.public_profile_id}`;
+      const publicUrl = profile.credential?.public_url && profile.credential.public_url.startsWith("http") ? profile.credential.public_url : `${location.origin}/n/${profile.public_profile_id}`;
+      $("publicProfileLink").textContent = publicUrl;
       $("myQr").src = `/api/networking/qr.svg?profile_id=${encodeURIComponent(profile.public_profile_id)}`;
       const photo = primary.media || profile.photo || profile.logo || "";
-      $("credentialPhoto").style.backgroundImage = photo ? `url('${photo}')` : "";
+      $("credentialPhoto").style.backgroundImage = photo ? `url('${safeUrl(photo)}')` : "";
       $("credentialPhoto").textContent = photo ? "" : title.slice(0, 1).toUpperCase();
       $("goldenTicketBtn").textContent = profile.discovery?.ready ? "Golden Ticket: Discovery listo" : "Golden Ticket: Activar Discovery";
       $("goldenTicketBtn").classList.toggle("ready", !!profile.discovery?.ready);
@@ -478,7 +494,7 @@
       const eventId = params.get("event_id") || "";
       const session = await api(`/api/networking/session?token=${encodeURIComponent(token)}${eventId ? `&event_id=${encodeURIComponent(eventId)}` : ""}`);
       currentProfile = session.participation;
-      $("networkingTitle").textContent = currentProfile.active ? "Tu credencial digital" : "Activa tu credencial";
+      applyBranding(currentProfile);
       show("tokenPanel", false);
       show("onboardingPanel", currentProfile.requires_onboarding);
       show("activeApp", currentProfile.active);

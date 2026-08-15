@@ -8267,6 +8267,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
+            if path == "/api/networking/brand":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.brand")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().get_event_brand(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
             if path == "/api/networking/readiness":
                 actor = query.get("actor", ["Admin"])[0]
                 event_id = int(query.get("event_id", ["0"])[0] or 0)
@@ -8302,7 +8321,26 @@ class AppHandler(SimpleHTTPRequestHandler):
                     elif not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
-                    result = networking_service().operations_summary(db, event_id)
+                    result = networking_service().operations_summary(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/launch":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.launch")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().launch_readiness(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
@@ -8321,11 +8359,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                     elif not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
-                    summary = networking_service().operations_summary(db, event_id)
+                    summary = networking_service().operations_summary(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
                     if not summary.get("ok"):
                         self.send_json(summary, int(summary.pop("status_code", 200)))
                         return
-                    csv_body = networking_service().operations_export_csv(db, event_id)
+                    csv_body = networking_service().operations_export_csv(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
                     audit(db, actor, "networking.operations_exported", "event", event_id, {"format": "csv"})
                 send_download(self, f"networking-operaciones-evento-{event_id}.csv", "text/csv; charset=utf-8", csv_body.encode("utf-8"))
                 return
@@ -8410,10 +8448,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                         "SELECT 1 FROM networking_event_participations WHERE public_profile_id = ? AND participation_state = 'ACTIVE'",
                         (profile_id,),
                     ).fetchone()
+                    link = networking_service().public_profile_link(db, profile_id, fallback_base_url=configured_base_url(self)) if exists else {}
                 if not exists:
                     self.send_error(HTTPStatus.NOT_FOUND, "Perfil Networking inexistente")
                     return
-                body = qr_svg(absolute_url(f"/n/{profile_id}", self)).encode("utf-8")
+                body = qr_svg(str(link.get("url") or absolute_url(f"/n/{profile_id}", self))).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -12875,6 +12914,61 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().update_event_config(db, event_id, data, actor)
                     if result.get("ok"):
                         audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode"), "networking_readiness_required": result.get("networking_readiness_required"), "networking_readiness_recommended": result.get("networking_readiness_recommended")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/brand":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.brand")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_brand(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.brand_updated", "event", event_id, {"brand_mode": result.get("branding", {}).get("mode"), "public_url_configured": bool(result.get("networking_public_base_url"))})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/launch":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                action = data.get("action") or data.get("networking_launch_action")
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.launch")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_launch_state(db, event_id, str(action or ""), actor=actor, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.launch_state_updated", "event", event_id, {"state": result.get("networking_launch_state")})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")

@@ -6,22 +6,25 @@
   <title>Perfil BITORA Networking</title>
   <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
   <style>
+    :root {--event-primary: #13243a; --event-accent: #d7a63f;}
     .public-networking-shell {min-height: 100vh; display: grid; align-content: center; gap: 16px; padding: 18px; max-width: 680px; margin: 0 auto;}
     .public-profile-hero {display: grid; gap: 14px;}
     .public-profile-actions {display: grid; gap: 10px;}
     .public-token-box {display: grid; gap: 8px;}
     .public-token-box .networking-token-row {display: grid; grid-template-columns: 1fr auto; gap: 8px;}
+    .networking-hero {border-top: 6px solid var(--event-accent);}
+    .public-event-logo {width: 86px; max-height: 44px; object-fit: contain;}
   </style>
 </head>
 <body class="networking-body">
   <main class="public-networking-shell">
     <header class="networking-hero">
       <div class="networking-brand-row">
-        <img src="/assets/bitora-logo.svg" alt="BITORA">
-        <span>Networking</span>
+        <img id="publicEventLogo" src="/assets/bitora-logo.svg" alt="BITORA" class="public-event-logo">
+        <span id="publicEventName">Networking</span>
       </div>
-      <h1>Perfil publico</h1>
-      <p>Informacion permitida por privacidad.</p>
+      <h1 id="publicTitle">Perfil publico</h1>
+      <p id="publicSubtitle">Informacion permitida por privacidad.</p>
     </header>
 
     <section id="profileHolder" class="public-profile-hero"></section>
@@ -68,6 +71,17 @@
       return data;
     };
     const actionLabel = (type) => ({whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type);
+    const safeUrl = (url) => String(url || "").replace(/'/g, "%27");
+    function applyBranding(profile) {
+      const brand = profile?.event_branding || {};
+      document.documentElement.style.setProperty("--event-primary", brand.primary_color || "#13243a");
+      document.documentElement.style.setProperty("--event-accent", brand.accent_color || "#d7a63f");
+      $("publicEventLogo").src = brand.logo || "/assets/bitora-logo.svg";
+      $("publicEventLogo").alt = brand.title || "BITORA";
+      $("publicEventName").textContent = brand.title || profile?.event_name || "Networking";
+      $("publicTitle").textContent = "Perfil Networking";
+      $("publicSubtitle").textContent = brand.welcome || "Informacion permitida por privacidad.";
+    }
 
     function renderProfile(profile) {
       const template = $("profileCardTemplate").content.cloneNode(true);
@@ -80,7 +94,7 @@
       template.querySelector(".networking-role").textContent = [primary.subtitle, secondary.title].filter(Boolean).join(" / ");
       template.querySelector(".networking-bio").textContent = [primary.description, (profile.semantic?.summary || []).join(" / ")].filter(Boolean).join(" - ");
       if (primary.media) {
-        avatar.style.backgroundImage = `url('${primary.media}')`;
+        avatar.style.backgroundImage = `url('${safeUrl(primary.media)}')`;
         avatar.textContent = "";
       } else {
         avatar.textContent = title.slice(0, 1).toUpperCase();
@@ -101,6 +115,7 @@
       $("tokenInput").value = token;
       const result = await api(`/api/networking/profile?profile_id=${encodeURIComponent(profileId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`);
       publicProfile = result.profile;
+      applyBranding(publicProfile);
       renderProfile(publicProfile);
       $("openCredentialLink").href = `/networking.html?return_profile=${encodeURIComponent(profileId)}${publicProfile.event_id ? `&event_id=${encodeURIComponent(publicProfile.event_id)}` : ""}`;
       $("registerLink").href = `/networking-register.html?event_id=${encodeURIComponent(publicProfile.event_id || "")}&return_profile=${encodeURIComponent(profileId)}`;

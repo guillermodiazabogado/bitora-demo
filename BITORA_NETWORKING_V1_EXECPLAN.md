@@ -82,6 +82,64 @@ Rollback tecnico: eliminar rutas Networking de `server.py`, servicio `backend/se
 - `PAUSED` y `REVOKED` estan reservados conceptualmente, pero V1 verifica `PASSIVE` y `ACTIVE`.
 - Exportar a contactos del dispositivo depende del navegador/dispositivo; V1 deja canales accionables.
 
+## V2.3 Event Launch, Branding & Deployment Readiness
+
+Checkpoint de arranque verificado: `fdcfb5f`.
+
+ExecPlan aplicado:
+
+1. Reentry y baseline
+   - Verificar branch, HEAD, worktree, docs, migraciones, QR publico, admin, operaciones V2.2 y fallas heredadas.
+   - Preservar `R2_RESTORE_ISOLATED_VALIDATION.json`.
+
+2. Brand/config audit
+   - Reusar `events.landing_logo_data`, `landing_primary_color` y `landing_secondary_color`.
+   - Agregar solo campos event-scoped de Networking launch/brand en migracion `033`.
+
+3. Participant branding
+   - Incluir `event_branding` en payload de EventParticipation.
+   - Aplicar marca en credencial, perfil publico y tokens visuales de Discovery.
+
+4. Public URL/QR
+   - Centralizar construccion de link publico por evento en `NetworkingService.public_profile_link`.
+   - Validar URL publica con reglas environment-aware.
+   - Mantener QR como deep link publico, no autenticacion.
+
+5. Launch readiness
+   - Agregar `NetworkingService.launch_readiness`.
+   - Clasificar checks como `BLOCKING`, `WARNING` o `INFO`.
+   - Integrar launch summary en operaciones V2.2.
+
+6. Admin launch controls
+   - Agregar endpoints `GET/POST /api/networking/brand` y `GET/POST /api/networking/launch`.
+   - Extender `networking-admin.html` con marca, URL, launch check, launch, disable y prelaunch.
+
+7. Public prelaunch/live behavior
+   - Bloquear perfil publico antes de `LIVE`, salvo preview del owner con token privado.
+   - Hacer `DISABLED` reversible y no destructivo.
+
+8. Verification
+   - Crear `verificar_networking_v2_3.py`.
+   - Verificar branding default/custom, aislamiento multi-evento, public URL, prelaunch, launch, disable/re-enable, Discovery disabled, QR security, operations, backup/restore e invalid token.
+
+Rollback/recovery:
+
+- Revertir migracion `033`, metodos V2.3 de `NetworkingService`, endpoints brand/launch de `server.py`, bloques HTML en `networking.html`, `networking-public.html`, `networking-admin.html`, sus espejos `static/`, verifier y doc V2.3.
+- La accion de launch es no destructiva; si un evento queda mal configurado, usar `POST /api/networking/launch` con `disable` o `draft` para detener acceso publico sin perder estado.
+
+Invariantes V2.3:
+
+- Branding es event-scoped y no altera personas/organizaciones.
+- Una misma persona en dos eventos recibe marca y QR de cada EventParticipation.
+- URL publica tiene una fuente autoritativa por evento.
+- Produccion no debe quedar launch-ready con URL local/no HTTPS.
+- Public QR no autentica owner.
+- Prelaunch publico no filtra perfiles.
+- Admin preview no implica launch.
+- Launch/disable es reversible y no destructivo.
+- Discovery puede estar deshabilitado con Networking live.
+- No hay CSS/HTML arbitrario ni codigo event-specific.
+
 ## V1.1 Event Visual Hierarchy
 
 Checkpoint de arranque verificado: `8a05a2d`.
