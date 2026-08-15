@@ -7061,6 +7061,7 @@ def public_api_post(path: str) -> bool:
         "/api/portal/surveys/submit",
         "/api/networking/external-register",
         "/api/networking/onboarding",
+        "/api/networking/complete-profile",
         "/api/networking/scan",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
@@ -8245,10 +8246,35 @@ class AppHandler(SimpleHTTPRequestHandler):
                     self.send_json({"error": "Falta evento"}, 400)
                     return
                 with connect() as db:
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.config")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
                     result = networking_service().get_event_config(db, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/readiness":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.readiness")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    include_participants = query.get("include_participants", ["0"])[0] in {"1", "true", "TRUE", "si", "yes"}
+                    result = networking_service().readiness_summary(db, event_id, include_participants=include_participants)
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
@@ -12689,7 +12715,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     self.send_json({"error": "Faltan evento o filas"}, 400)
                     return
                 with connect() as db:
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.import_preview")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
                     result = networking_service().preview_import(db, event_id, rows, str(data.get("source_system") or "BITORA"))
@@ -12705,7 +12736,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.import")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
                         db.execute("ROLLBACK")
                         self.send_json(deny_message(actor), 403)
                         return
@@ -12723,13 +12760,19 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
-                    if not can_actor(db, actor, CONFIG_ROLES):
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.config")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
                         db.execute("ROLLBACK")
                         self.send_json(deny_message(actor), 403)
                         return
                     result = networking_service().update_event_config(db, event_id, data, actor)
                     if result.get("ok"):
-                        audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode")})
+                        audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode"), "networking_readiness_required": result.get("networking_readiness_required"), "networking_readiness_recommended": result.get("networking_readiness_recommended")})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")
@@ -12759,6 +12802,19 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = networking_service().onboard(db, token, data)
                     if result.get("ok"):
                         audit(db, "participant", "networking.onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/complete-profile":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().complete_profile(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.profile_completed", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
                         db.execute("COMMIT")
                     else:
                         db.execute("ROLLBACK")

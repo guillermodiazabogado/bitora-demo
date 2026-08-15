@@ -52,10 +52,22 @@
           </label>
         </div>
         <p class="networking-status">Organizacion primero destaca empresa/institucion; Persona primero destaca al profesional. La privacidad no cambia.</p>
+        <label>Datos obligatorios de readiness
+          <textarea id="readinessRequired" rows="3" placeholder="Usar default del modo si queda vacio"></textarea>
+        </label>
+        <label>Datos recomendados de readiness
+          <textarea id="readinessRecommended" rows="3" placeholder="Usar default del modo si queda vacio"></textarea>
+        </label>
         <div class="participant-actions-row">
           <button id="loadConfigBtn" type="button" class="ghost">Leer config</button>
           <button id="saveConfigBtn" type="button">Guardar config</button>
         </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Preparacion del evento</h2>
+        <p class="networking-status">Resumen operativo de perfiles listos e incompletos. No publica un directorio.</p>
+        <div id="readinessCards" class="networking-report-cards"></div>
+        <button id="loadReadinessBtn" type="button" class="ghost">Ver readiness</button>
       </article>
       <article class="networking-panel">
         <h2>Resultado</h2>
@@ -67,6 +79,7 @@
   <script>
     const output = document.getElementById("adminOutput");
     const cards = document.getElementById("summaryCards");
+    const readinessCards = document.getElementById("readinessCards");
     function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
     function payload() {
       return {
@@ -82,7 +95,7 @@
       const data = await response.json();
       output.textContent = JSON.stringify(data, null, 2);
       cards.replaceChildren();
-      ["valid", "invalid", "created", "updated", "errors"].forEach((key) => {
+      ["valid", "complete", "incomplete", "created", "updated", "errors"].forEach((key) => {
         if (data[key] === undefined) return;
         const card = document.createElement("div");
         card.className = "networking-report-card";
@@ -98,8 +111,13 @@
       output.textContent = JSON.stringify(data, null, 2);
       if (data.ok) {
         document.getElementById("profileMode").value = data.networking_profile_mode;
+        document.getElementById("readinessRequired").value = (data.networking_readiness_required || []).join(", ");
+        document.getElementById("readinessRecommended").value = (data.networking_readiness_recommended || []).join(", ");
         document.getElementById("eventId").value = eventId;
       }
+    }
+    function splitKeys(value) {
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
     }
     async function saveConfig() {
       const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
@@ -107,15 +125,36 @@
       const response = await fetch("/api/networking/config", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({actor: "Admin", event_id: eventId, networking_profile_mode: document.getElementById("profileMode").value}),
+        body: JSON.stringify({
+          actor: "Admin",
+          event_id: eventId,
+          networking_profile_mode: document.getElementById("profileMode").value,
+          networking_readiness_required: splitKeys(document.getElementById("readinessRequired").value),
+          networking_readiness_recommended: splitKeys(document.getElementById("readinessRecommended").value),
+        }),
       });
       const data = await response.json();
       output.textContent = JSON.stringify(data, null, 2);
+    }
+    async function loadReadiness() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo preparacion...";
+      const response = await fetch(`/api/networking/readiness?actor=Admin&event_id=${encodeURIComponent(eventId)}&include_participants=1`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      readinessCards.replaceChildren();
+      ["total", "passive", "active", "ready", "incomplete"].forEach((key) => {
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${key}</span><strong>${data[key] || 0}</strong>`;
+        readinessCards.appendChild(card);
+      });
     }
     document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
     document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
     document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
     document.getElementById("saveConfigBtn").addEventListener("click", () => saveConfig().catch((error) => output.textContent = error.message));
+    document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
   </script>
 </body>
 </html>

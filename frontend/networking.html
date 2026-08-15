@@ -62,11 +62,87 @@
             <input name="seeks" placeholder="Aliados, proveedores, clientes">
           </label>
         </div>
+        <div class="networking-two">
+          <label>Actividad / sector
+            <input name="organization_activity" placeholder="Rubro principal">
+          </label>
+          <label>Especialidad
+            <input name="organization_specialty" placeholder="Area concreta">
+          </label>
+        </div>
+        <label>Descripcion de organizacion
+          <textarea name="organization_description" rows="2" placeholder="Breve contexto si el evento prioriza empresas"></textarea>
+        </label>
         <button type="submit">Activar Networking</button>
       </form>
     </section>
 
     <section id="activeApp" class="hidden">
+      <section id="readinessPanel" class="networking-panel hidden">
+        <div class="networking-panel-head">
+          <div>
+            <span class="networking-kicker">Perfil</span>
+            <h2 id="readinessTitle">Perfil Networking</h2>
+          </div>
+          <strong id="readinessPercent"></strong>
+        </div>
+        <p id="readinessText" class="networking-status"></p>
+        <form id="completionForm" class="networking-form hidden">
+          <div class="networking-two">
+            <label>Cargo / rol
+              <input name="title">
+            </label>
+            <label>Funcion
+              <select name="function">
+                <option value="">Sin cambio</option>
+                <option value="EXECUTIVE">Direccion</option>
+                <option value="COMMERCIAL">Comercial</option>
+                <option value="PROCUREMENT">Compras</option>
+                <option value="BUSINESS_DEVELOPMENT">Desarrollo de negocio</option>
+                <option value="TECHNOLOGY">Tecnologia</option>
+                <option value="OPERATIONS">Operaciones</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="FINANCE">Finanzas</option>
+                <option value="HUMAN_RESOURCES">Recursos humanos</option>
+                <option value="INSTITUTIONAL">Institucional</option>
+                <option value="PROFESSIONAL_TECHNICAL">Profesional / tecnico</option>
+                <option value="OTHER">Otro</option>
+              </select>
+            </label>
+          </div>
+          <label>Descripcion breve
+            <textarea name="bio" rows="2"></textarea>
+          </label>
+          <div class="networking-two">
+            <label>Ofrezco
+              <input name="offers">
+            </label>
+            <label>Busco
+              <input name="seeks">
+            </label>
+          </div>
+          <div class="networking-two">
+            <label>Actividad / sector
+              <input name="organization_activity">
+            </label>
+            <label>Especialidad
+              <input name="organization_specialty">
+            </label>
+          </div>
+          <label>Descripcion de organizacion
+            <textarea name="organization_description" rows="2"></textarea>
+          </label>
+          <div class="networking-two">
+            <label>Web corporativa
+              <input name="website">
+            </label>
+            <label>Email
+              <input name="email" type="email">
+            </label>
+          </div>
+          <button type="submit">Guardar datos faltantes</button>
+        </form>
+      </section>
       <nav class="networking-tabs" aria-label="Navegacion Networking">
         <button class="active" type="button" data-tab="scan">Scan</button>
         <button type="button" data-tab="qr">Mi QR</button>
@@ -199,6 +275,19 @@
       $(targetId).replaceChildren(card);
     }
 
+    function renderReadiness(profile) {
+      const readiness = profile?.readiness || {};
+      show("readinessPanel", !!readiness.status);
+      if (!readiness.status) return;
+      $("readinessTitle").textContent = readiness.status === "READY" ? "Perfil listo para Networking" : "Faltan datos para dejarlo listo";
+      $("readinessPercent").textContent = `${readiness.percentage || 0}%`;
+      const missing = readiness.missing_required || [];
+      $("readinessText").textContent = missing.length
+        ? `Te falta completar ${missing.length} dato${missing.length === 1 ? "" : "s"}: ${(readiness.next_actions || []).join(", ")}.`
+        : "Tu perfil tiene los datos minimos configurados para este evento.";
+      show("completionForm", readiness.status !== "READY");
+    }
+
     async function loadSession() {
       if (!token) {
         show("tokenPanel", true);
@@ -215,6 +304,7 @@
       show("tokenPanel", false);
       show("onboardingPanel", currentProfile.requires_onboarding);
       show("activeApp", currentProfile.active);
+      renderReadiness(currentProfile);
       if (currentProfile.active) {
         $("myName").textContent = profileTitle(currentProfile);
         $("myProfileId").textContent = currentProfile.public_profile_id;
@@ -234,6 +324,19 @@
       const result = await api("/api/networking/onboarding", {method: "POST", body: JSON.stringify(payload)});
       currentProfile = result.participation;
       await loadSession();
+    }
+
+    async function submitCompletion(event) {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const payload = Object.fromEntries(form.entries());
+      payload.token = token;
+      payload.event_id = currentProfile.event_id;
+      payload.missing_required = currentProfile.readiness?.missing_required || [];
+      const result = await api("/api/networking/complete-profile", {method: "POST", body: JSON.stringify(payload)});
+      currentProfile = result.participation;
+      renderReadiness(currentProfile);
+      $("networkingTitle").textContent = profileTitle(currentProfile);
     }
 
     async function scanProfile(value) {
@@ -281,6 +384,7 @@
       loadSession().catch((error) => alert(error.message));
     });
     $("onboardingForm").addEventListener("submit", (event) => submitOnboarding(event).catch((error) => alert(error.message)));
+    $("completionForm").addEventListener("submit", (event) => submitCompletion(event).catch((error) => alert(error.message)));
     $("manualScanBtn").addEventListener("click", () => scanProfile($("manualProfileInput").value.trim()).catch((error) => $("scanResult").textContent = error.message));
     $("continueScanBtn").addEventListener("click", () => {
       $("manualProfileInput").value = "";

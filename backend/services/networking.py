@@ -30,6 +30,46 @@ CHANNEL_TYPES = {"whatsapp", "phone", "email", "website", "instagram", "linkedin
 CHANNEL_VISIBILITY = {"PUBLIC", "CONTACTS", "HIDDEN"}
 PRESENTATION_MODES = {"ORGANIZATION_FIRST", "PERSON_FIRST", "AUTO"}
 CHANNEL_SCOPES = {"PERSONAL", "ORGANIZATION"}
+READINESS_DIMENSIONS = {
+    "person.identity",
+    "person.role",
+    "person.bio",
+    "organization.identity",
+    "organization.activity",
+    "organization.description",
+    "networking.intent",
+    "networking.offers_seeks",
+    "contact.permitted_route",
+    "contact.organization_route",
+}
+READINESS_LABELS = {
+    "person.identity": "identidad de la persona",
+    "person.role": "rol o funcion",
+    "person.bio": "descripcion profesional",
+    "organization.identity": "organizacion",
+    "organization.activity": "actividad o especialidad",
+    "organization.description": "descripcion de la organizacion",
+    "networking.intent": "intencion de networking",
+    "networking.offers_seeks": "ofertas o busquedas",
+    "contact.permitted_route": "canal de contacto permitido",
+    "contact.organization_route": "ruta corporativa permitida",
+}
+READINESS_DEFAULTS = {
+    "ORGANIZATION_FIRST": {
+        "required": [
+            "organization.identity",
+            "organization.activity",
+            "networking.intent",
+            "networking.offers_seeks",
+            "contact.permitted_route",
+        ],
+        "recommended": ["organization.description", "person.identity", "person.role", "contact.organization_route"],
+    },
+    "PERSON_FIRST": {
+        "required": ["person.identity", "person.role", "person.bio", "networking.intent", "contact.permitted_route"],
+        "recommended": ["organization.identity", "networking.offers_seeks"],
+    },
+}
 
 
 def networking_schema_sql() -> str:
@@ -90,6 +130,12 @@ def networking_schema_sql() -> str:
         offers_text TEXT NOT NULL DEFAULT '',
         seeks_text TEXT NOT NULL DEFAULT '',
         interests_text TEXT NOT NULL DEFAULT '',
+        completed_title TEXT NOT NULL DEFAULT '',
+        completed_function TEXT NOT NULL DEFAULT '',
+        completed_seniority TEXT NOT NULL DEFAULT '',
+        completed_organization_activity TEXT NOT NULL DEFAULT '',
+        completed_organization_specialty TEXT NOT NULL DEFAULT '',
+        completed_organization_description TEXT NOT NULL DEFAULT '',
         updated_at TEXT NOT NULL
     );
 
@@ -161,6 +207,7 @@ class NetworkingService:
     def ensure_schema(self, db) -> None:
         db.executescript(networking_schema_sql())
         self.ensure_v1_1_schema(db)
+        self.ensure_v1_2_schema(db)
         self.ensure_taxonomy(db)
 
     def ensure_v1_1_schema(self, db) -> None:
@@ -176,6 +223,24 @@ class NetworkingService:
         if "scope" not in channel_columns:
             db.execute("ALTER TABLE networking_contact_channels ADD COLUMN scope TEXT NOT NULL DEFAULT 'PERSONAL'")
 
+    def ensure_v1_2_schema(self, db) -> None:
+        event_columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+        if "networking_readiness_required" not in event_columns:
+            db.execute("ALTER TABLE events ADD COLUMN networking_readiness_required TEXT NOT NULL DEFAULT ''")
+        if "networking_readiness_recommended" not in event_columns:
+            db.execute("ALTER TABLE events ADD COLUMN networking_readiness_recommended TEXT NOT NULL DEFAULT ''")
+        intent_columns = {row["name"] for row in db.execute("PRAGMA table_info(networking_intents)").fetchall()}
+        for column in [
+            "completed_title",
+            "completed_function",
+            "completed_seniority",
+            "completed_organization_activity",
+            "completed_organization_specialty",
+            "completed_organization_description",
+        ]:
+            if column not in intent_columns:
+                db.execute(f"ALTER TABLE networking_intents ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+
     def ensure_taxonomy(self, db) -> None:
         for code in sorted(FUNCTIONS):
             db.execute(
@@ -189,29 +254,48 @@ class NetworkingService:
             )
 
     def get_event_config(self, db, event_id: int) -> dict:
-        row = db.execute("SELECT id, name, networking_profile_mode FROM events WHERE id = ?", (event_id,)).fetchone()
+        row = db.execute("SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
         if not row:
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        readiness = self.readiness_config(row)
         return {
             "ok": True,
             "event_id": int(row["id"]),
             "event_name": row["name"],
             "networking_profile_mode": self._presentation_mode(row["networking_profile_mode"]),
+            "networking_readiness_required": readiness["required"],
+            "networking_readiness_recommended": readiness["recommended"],
+            "networking_readiness_available": sorted(READINESS_DIMENSIONS),
         }
 
     def update_event_config(self, db, event_id: int, data: dict, actor: str = "Admin") -> dict:
         if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
         mode = self._presentation_mode(data.get("networking_profile_mode") or data.get("profile_mode") or data.get("mode"))
-        db.execute("UPDATE events SET networking_profile_mode = ? WHERE id = ?", (mode, event_id))
-        self.record_event(db, event_id, None, None, "event_config_updated", {"actor": actor, "networking_profile_mode": mode})
-        return {"ok": True, "event_id": event_id, "networking_profile_mode": mode}
+        existing = db.execute("SELECT networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
+        if "networking_readiness_required" in data or "readiness_required" in data:
+            required = self._readiness_keys(data.get("networking_readiness_required") if "networking_readiness_required" in data else data.get("readiness_required"))
+        else:
+            required = self._readiness_keys(existing["networking_readiness_required"] if existing else "")
+        if "networking_readiness_recommended" in data or "readiness_recommended" in data:
+            recommended = self._readiness_keys(data.get("networking_readiness_recommended") if "networking_readiness_recommended" in data else data.get("readiness_recommended"))
+        else:
+            recommended = self._readiness_keys(existing["networking_readiness_recommended"] if existing else "")
+        recommended = [key for key in recommended if key not in required]
+        db.execute(
+            "UPDATE events SET networking_profile_mode = ?, networking_readiness_required = ?, networking_readiness_recommended = ? WHERE id = ?",
+            (mode, ",".join(required), ",".join(recommended), event_id),
+        )
+        self.record_event(db, event_id, None, None, "event_config_updated", {"actor": actor, "networking_profile_mode": mode, "readiness_required": required, "readiness_recommended": recommended})
+        row = db.execute("SELECT id, name, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
+        readiness = self.readiness_config(row)
+        return {"ok": True, "event_id": event_id, "networking_profile_mode": mode, "networking_readiness_required": readiness["required"], "networking_readiness_recommended": readiness["recommended"]}
 
     def preview_import(self, db, event_id: int, rows: list[dict], source_system: str = "external") -> dict:
-        event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+        event = db.execute("SELECT id, networking_profile_mode, networking_readiness_required, networking_readiness_recommended FROM events WHERE id = ?", (event_id,)).fetchone()
         if not event:
             return {"ok": False, "error": "Evento inexistente", "status_code": 404}
-        summary = {"valid": 0, "errors": 0, "existing": 0, "rows": []}
+        summary = {"valid": 0, "errors": 0, "existing": 0, "complete": 0, "incomplete": 0, "common_missing": {}, "rows": []}
         for index, row in enumerate(rows, start=1):
             item, error = self._normalize_import_row(row, source_system)
             if error:
@@ -219,14 +303,22 @@ class NetworkingService:
                 summary["rows"].append({"row": index, "ok": False, "error": error})
                 continue
             existing = self._find_existing_participation(db, event_id, item)
+            readiness = self.evaluate_import_readiness(item, event)
             summary["valid"] += 1
             summary["existing"] += 1 if existing else 0
-            summary["rows"].append({"row": index, "ok": True, "email": item["email"], "existing": bool(existing)})
+            if readiness["status"] == "READY":
+                summary["complete"] += 1
+            else:
+                summary["incomplete"] += 1
+                for key in readiness["missing_required"]:
+                    summary["common_missing"][key] = int(summary["common_missing"].get(key, 0)) + 1
+            summary["rows"].append({"row": index, "ok": True, "email": item["email"], "existing": bool(existing), "readiness": readiness})
+        summary["common_missing"] = dict(sorted(summary["common_missing"].items(), key=lambda item: (-item[1], item[0])))
         return {"ok": summary["errors"] == 0, **summary}
 
     def import_profiles(self, db, event_id: int, rows: list[dict], source_system: str = "external", actor: str = "system") -> dict:
         preview = self.preview_import(db, event_id, rows, source_system)
-        if not preview.get("ok"):
+        if preview.get("status_code"):
             return preview
         summary = {"created": 0, "updated": 0, "errors": 0, "rows": []}
         for index, row in enumerate(rows, start=1):
@@ -378,6 +470,12 @@ class NetworkingService:
                 offers_text = COALESCE(NULLIF(?, ''), offers_text),
                 seeks_text = COALESCE(NULLIF(?, ''), seeks_text),
                 interests_text = COALESCE(NULLIF(?, ''), interests_text),
+                completed_title = COALESCE(NULLIF(?, ''), completed_title),
+                completed_function = COALESCE(NULLIF(?, ''), completed_function),
+                completed_seniority = COALESCE(NULLIF(?, ''), completed_seniority),
+                completed_organization_activity = COALESCE(NULLIF(?, ''), completed_organization_activity),
+                completed_organization_specialty = COALESCE(NULLIF(?, ''), completed_organization_specialty),
+                completed_organization_description = COALESCE(NULLIF(?, ''), completed_organization_description),
                 updated_at = ?
             WHERE participation_id = ?
             """,
@@ -391,6 +489,12 @@ class NetworkingService:
                 str(data.get("offers") or data.get("offers_text") or "").strip(),
                 str(data.get("seeks") or data.get("seeks_text") or "").strip(),
                 str(data.get("interests") or data.get("interests_text") or "").strip(),
+                str(data.get("completed_title") or data.get("title") or "").strip(),
+                self._choice(data.get("completed_function") or data.get("function"), FUNCTIONS, ""),
+                self._choice(data.get("completed_seniority") or data.get("seniority"), SENIORITIES, ""),
+                str(data.get("completed_organization_activity") or data.get("organization_activity") or "").strip(),
+                str(data.get("completed_organization_specialty") or data.get("organization_specialty") or "").strip(),
+                str(data.get("completed_organization_description") or data.get("organization_description") or "").strip(),
                 now,
                 participation["id"],
             ),
@@ -415,8 +519,49 @@ class NetworkingService:
                 participation["id"],
             ),
         )
+        self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
         self._apply_channel_visibility_updates(db, int(participation["id"]), data.get("channel_visibility") or {})
         self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "onboarded", {"modes": modes, "direction": direction, "contact_openness": openness})
+        return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
+
+    def complete_profile(self, db, owner_token: str, data: dict) -> dict:
+        participation = self.resolve_owner(db, owner_token, int(data.get("event_id") or 0) or None)
+        if not participation:
+            return {"ok": False, "error": "Acceso Networking invalido", "status_code": 404}
+        now = self.now()
+        db.execute(
+            """
+            UPDATE networking_intents
+            SET bio = COALESCE(NULLIF(?, ''), bio),
+                offers_text = COALESCE(NULLIF(?, ''), offers_text),
+                seeks_text = COALESCE(NULLIF(?, ''), seeks_text),
+                interests_text = COALESCE(NULLIF(?, ''), interests_text),
+                completed_title = COALESCE(NULLIF(?, ''), completed_title),
+                completed_function = COALESCE(NULLIF(?, ''), completed_function),
+                completed_seniority = COALESCE(NULLIF(?, ''), completed_seniority),
+                completed_organization_activity = COALESCE(NULLIF(?, ''), completed_organization_activity),
+                completed_organization_specialty = COALESCE(NULLIF(?, ''), completed_organization_specialty),
+                completed_organization_description = COALESCE(NULLIF(?, ''), completed_organization_description),
+                updated_at = ?
+            WHERE participation_id = ?
+            """,
+            (
+                str(data.get("bio") or "").strip(),
+                str(data.get("offers") or data.get("offers_text") or "").strip(),
+                str(data.get("seeks") or data.get("seeks_text") or "").strip(),
+                str(data.get("interests") or data.get("interests_text") or "").strip(),
+                str(data.get("completed_title") or data.get("title") or "").strip(),
+                self._choice(data.get("completed_function") or data.get("function"), FUNCTIONS, ""),
+                self._choice(data.get("completed_seniority") or data.get("seniority"), SENIORITIES, ""),
+                str(data.get("completed_organization_activity") or data.get("organization_activity") or "").strip(),
+                str(data.get("completed_organization_specialty") or data.get("organization_specialty") or "").strip(),
+                str(data.get("completed_organization_description") or data.get("organization_description") or "").strip(),
+                now,
+                participation["id"],
+            ),
+        )
+        self._upsert_channels(db, int(participation["id"]), self._completion_item(data), preserve_user_visibility=False)
+        self.record_event(db, int(participation["event_id"]), int(participation["id"]), None, "profile_completed", {"missing_before": data.get("missing_required") or []})
         return {"ok": True, "participation": self.participation_payload(db, int(participation["id"]), viewer_id=int(participation["id"]), full=True)}
 
     def session(self, db, owner_token: str, event_id: int | None = None) -> dict:
@@ -497,12 +642,14 @@ class NetworkingService:
         row = db.execute(
             """
             SELECT nep.*, p.first_name, p.last_name, p.email, p.phone, p.company,
-                   e.networking_profile_mode,
+                   e.networking_profile_mode, e.networking_readiness_required, e.networking_readiness_recommended,
                    no.name AS organization_name, no.activity AS organization_activity, no.specialty AS organization_specialty,
                    no.website AS organization_website, no.logo_url AS organization_logo,
                    no.description AS organization_description, no.visibility AS organization_visibility,
                    ni.modes_json, ni.direction, ni.contact_openness, ni.discoverable, ni.profile_visible,
-                   ni.channels_visible_default, ni.representative_visible, ni.bio, ni.offers_text, ni.seeks_text, ni.interests_text
+                   ni.channels_visible_default, ni.representative_visible, ni.bio, ni.offers_text, ni.seeks_text, ni.interests_text,
+                   ni.completed_title, ni.completed_function, ni.completed_seniority,
+                   ni.completed_organization_activity, ni.completed_organization_specialty, ni.completed_organization_description
             FROM networking_event_participations nep
             JOIN events e ON e.id = nep.event_id
             JOIN people p ON p.id = nep.person_id
@@ -525,12 +672,15 @@ class NetworkingService:
         representative_visible = int(data.get("representative_visible") or 0) == 1 or is_self
         organization_visible = is_self or data.get("organization_visibility") != "HIDDEN"
         organization_name = data.get("organization_name") or data.get("company") or ""
+        effective_title = data.get("completed_title") or data.get("title") or ""
+        effective_function = data.get("completed_function") or data.get("normalized_function") or "OTHER"
+        effective_seniority = data.get("completed_seniority") or data.get("normalized_seniority") or "PROFESSIONAL"
         person_bio = data.get("bio") or ""
         person_seeks = data.get("seeks_text") or ""
         person_interests = data.get("interests_text") or ""
-        organization_description = data.get("organization_description") or ""
-        organization_activity = data.get("organization_activity") or ""
-        organization_specialty = data.get("organization_specialty") or ""
+        organization_description = data.get("completed_organization_description") or data.get("organization_description") or ""
+        organization_activity = data.get("completed_organization_activity") or data.get("organization_activity") or ""
+        organization_specialty = data.get("completed_organization_specialty") or data.get("organization_specialty") or ""
         organization_offers = data.get("offers_text") or ""
         profile = {
             "participation_id": participation_id if (is_self or full) else None,
@@ -542,9 +692,9 @@ class NetworkingService:
             "name": f"{data['first_name']} {data['last_name']}".strip() if representative_visible else "",
             "organization": organization_name if organization_visible else "",
             "organization_visible": organization_visible,
-            "role": (data.get("title") or "") if representative_visible else "",
-            "function": (data.get("normalized_function") or "OTHER") if representative_visible else "",
-            "seniority": (data.get("normalized_seniority") or "PROFESSIONAL") if representative_visible else "",
+            "role": effective_title if representative_visible else "",
+            "function": effective_function if representative_visible else "",
+            "seniority": effective_seniority if representative_visible else "",
             "bio": person_bio if representative_visible else "",
             "offers": organization_offers if organization_visible else "",
             "seeks": person_seeks if representative_visible else "",
@@ -572,6 +722,28 @@ class NetworkingService:
             representative_visible=representative_visible,
             organization_visible=organization_visible,
         )
+        external_representative_visible = int(data.get("representative_visible") or 0) == 1
+        external_organization_visible = data.get("organization_visibility") != "HIDDEN"
+        readiness_profile = dict(profile)
+        if not external_representative_visible:
+            readiness_profile.update({"name": "", "role": "", "function": "", "seniority": "", "bio": "", "seeks": "", "interests": "", "photo": ""})
+        if not external_organization_visible:
+            readiness_profile.update({"organization": "", "organization_visible": False, "logo": "", "offers": "", "organization_activity": "", "organization_specialty": "", "organization_description": ""})
+        readiness_profile["channels"] = self.visible_channels(
+            db,
+            participation_id,
+            is_self=False,
+            is_contact=True,
+            representative_visible=external_representative_visible,
+            organization_visible=external_organization_visible,
+        )
+        readiness_profile["presentation"] = self.presentation_payload(
+            readiness_profile,
+            requested_mode=data.get("networking_profile_mode") or "AUTO",
+            representative_visible=external_representative_visible,
+            organization_visible=external_organization_visible,
+        )
+        profile["readiness"] = self.evaluate_profile_readiness(readiness_profile, data)
         if is_self:
             profile["owner_token_hint"] = data.get("owner_token_hint") or ""
             profile["email"] = data.get("email") or ""
@@ -651,6 +823,163 @@ class NetworkingService:
             }
         return {"mode": mode, "primary": primary, "secondary": secondary, "person": person, "organization": organization}
 
+    def readiness_config(self, event_row) -> dict:
+        mode = self._effective_readiness_mode(event_row)
+        defaults = READINESS_DEFAULTS.get(mode, READINESS_DEFAULTS["PERSON_FIRST"])
+        required = self._readiness_keys(event_row["networking_readiness_required"] if event_row and "networking_readiness_required" in event_row.keys() else "")
+        recommended = self._readiness_keys(event_row["networking_readiness_recommended"] if event_row and "networking_readiness_recommended" in event_row.keys() else "")
+        if not required:
+            required = list(defaults["required"])
+        if not recommended:
+            recommended = list(defaults["recommended"])
+        recommended = [key for key in recommended if key not in required]
+        return {"mode": mode, "required": required, "recommended": recommended}
+
+    def evaluate_profile_readiness(self, profile: dict, event_row) -> dict:
+        config = self.readiness_config(event_row)
+        completed = self._completed_readiness_dimensions(profile)
+        required = config["required"]
+        recommended = config["recommended"]
+        missing_required = [key for key in required if key not in completed]
+        missing_recommended = [key for key in recommended if key not in completed]
+        relevant = required + recommended
+        done = len([key for key in relevant if key in completed])
+        status = "READY" if not missing_required else "INCOMPLETE"
+        active = profile.get("state") == "ACTIVE"
+        return {
+            "status": status,
+            "ready_participation": bool(active and status == "READY"),
+            "profile_complete": status == "READY",
+            "participation_state": profile.get("state") or "",
+            "mode": config["mode"],
+            "completed": done,
+            "relevant": len(relevant),
+            "percentage": round(done * 100 / len(relevant)) if relevant else 100,
+            "missing_required": missing_required,
+            "missing_recommended": missing_recommended,
+            "missing_labels": {key: READINESS_LABELS.get(key, key) for key in missing_required + missing_recommended},
+            "next_actions": [READINESS_LABELS.get(key, key) for key in missing_required[:3]],
+        }
+
+    def evaluate_import_readiness(self, item: dict, event_row) -> dict:
+        profile = {
+            "state": "PASSIVE",
+            "name": f"{item.get('first_name', '')} {item.get('last_name', '')}".strip(),
+            "role": item.get("title") or "",
+            "function": item.get("function") or "OTHER",
+            "bio": item.get("bio") or "",
+            "organization": item.get("company") if item.get("organization_visibility") != "HIDDEN" else "",
+            "organization_activity": item.get("organization_activity") or "",
+            "organization_specialty": item.get("organization_specialty") or "",
+            "organization_description": item.get("organization_description") or "",
+            "offers": item.get("offers") or "",
+            "seeks": item.get("seeks") or "",
+            "interests": item.get("interests") or "",
+            "modes": [],
+            "direction": "",
+            "contact_openness": "",
+            "channels": [
+                {
+                    "type": channel.get("type") or channel.get("channel_type"),
+                    "scope": self._choice(channel.get("scope"), CHANNEL_SCOPES, "PERSONAL"),
+                }
+                for channel in item.get("channels") or []
+                if self._choice(channel.get("visibility"), CHANNEL_VISIBILITY, "CONTACTS") != "HIDDEN"
+            ],
+        }
+        return self.evaluate_profile_readiness(profile, event_row)
+
+    def readiness_summary(self, db, event_id: int, *, include_participants: bool = False) -> dict:
+        if not db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone():
+            return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+        rows = db.execute("SELECT id FROM networking_event_participations WHERE event_id = ? ORDER BY updated_at DESC, id DESC", (event_id,)).fetchall()
+        summary = {"total": 0, "passive": 0, "active": 0, "ready": 0, "incomplete": 0, "common_missing": {}, "participants": []}
+        for row in rows:
+            profile = self.participation_payload(db, int(row["id"]), viewer_id=None, full=True)
+            readiness = profile.get("readiness") or {}
+            summary["total"] += 1
+            if profile.get("state") == "ACTIVE":
+                summary["active"] += 1
+            elif profile.get("state") == "PASSIVE":
+                summary["passive"] += 1
+            if readiness.get("status") == "READY":
+                summary["ready"] += 1
+            else:
+                summary["incomplete"] += 1
+            for key in readiness.get("missing_required") or []:
+                summary["common_missing"][key] = int(summary["common_missing"].get(key, 0)) + 1
+            if include_participants and readiness.get("status") != "READY":
+                summary["participants"].append({
+                    "participation_id": profile.get("participation_id"),
+                    "display_name": profile.get("name") or profile.get("organization") or "Perfil sin nombre visible",
+                    "state": profile.get("state"),
+                    "readiness": {
+                        "status": readiness.get("status"),
+                        "percentage": readiness.get("percentage"),
+                        "missing_required": readiness.get("missing_required") or [],
+                        "missing_recommended": readiness.get("missing_recommended") or [],
+                        "missing_labels": readiness.get("missing_labels") or {},
+                    },
+                })
+        summary["common_missing"] = dict(sorted(summary["common_missing"].items(), key=lambda item: (-item[1], item[0])))
+        return {"ok": True, "event_id": event_id, **summary}
+
+    def _completed_readiness_dimensions(self, profile: dict) -> set[str]:
+        completed = set()
+        channels = profile.get("channels") or []
+        if profile.get("name"):
+            completed.add("person.identity")
+        if profile.get("role") or (profile.get("function") and profile.get("function") != "OTHER"):
+            completed.add("person.role")
+        if profile.get("bio") or profile.get("interests"):
+            completed.add("person.bio")
+        if profile.get("organization"):
+            completed.add("organization.identity")
+        if profile.get("organization_activity") or profile.get("organization_specialty"):
+            completed.add("organization.activity")
+        if profile.get("organization_description") or profile.get("offers"):
+            completed.add("organization.description")
+        if profile.get("modes") and profile.get("direction") and profile.get("contact_openness"):
+            completed.add("networking.intent")
+        if profile.get("offers") or profile.get("seeks") or profile.get("interests"):
+            completed.add("networking.offers_seeks")
+        if channels:
+            completed.add("contact.permitted_route")
+        if any(channel.get("scope") == "ORGANIZATION" for channel in channels):
+            completed.add("contact.organization_route")
+        return completed
+
+    def _completion_item(self, data: dict) -> dict:
+        channels = data.get("channels") if isinstance(data.get("channels"), list) else []
+        for channel in CHANNEL_TYPES:
+            if data.get(channel):
+                scope = "ORGANIZATION" if channel == "website" else "PERSONAL"
+                channels.append({"type": channel, "value": str(data.get(channel)).strip(), "scope": scope, "visibility": data.get("channel_visibility_default") or "CONTACTS", "source": "participant"})
+        return {"channels": channels}
+
+    def _effective_readiness_mode(self, event_row) -> str:
+        mode = self._presentation_mode(event_row["networking_profile_mode"] if event_row and "networking_profile_mode" in event_row.keys() else "AUTO")
+        return "PERSON_FIRST" if mode == "AUTO" else mode
+
+    def _readiness_keys(self, raw) -> list[str]:
+        if raw is None:
+            return []
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    raw = parsed
+                else:
+                    raw = [part.strip() for part in raw.split(",")]
+            except json.JSONDecodeError:
+                raw = [part.strip() for part in raw.split(",")]
+        result = []
+        for item in raw or []:
+            key = str(item or "").strip()
+            if key in READINESS_DIMENSIONS and key not in result:
+                result.append(key)
+        return result
+
     def resolve_owner(self, db, owner_token: str, event_id: int | None = None):
         token = str(owner_token or "").strip()
         if not token:
@@ -715,10 +1044,11 @@ class NetworkingService:
             "interests": str(row.get("interests") or row.get("interests_text") or "").strip(),
             "channels": row.get("channels") if isinstance(row.get("channels"), list) else [],
         }
+        visibility_map = row.get("channel_visibility") if isinstance(row.get("channel_visibility"), dict) else {}
         for channel in CHANNEL_TYPES:
             if row.get(channel):
                 scope = "ORGANIZATION" if channel == "website" and item["company"] else "PERSONAL"
-                item["channels"].append({"type": channel, "value": str(row.get(channel)).strip(), "scope": scope})
+                item["channels"].append({"type": channel, "value": str(row.get(channel)).strip(), "scope": scope, "visibility": visibility_map.get(channel)})
         return item, ""
 
     def _upsert_person(self, db, item: dict) -> int:
