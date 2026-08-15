@@ -274,6 +274,58 @@ class EventBackupService:
         ),
         ("reservations", "SELECT * FROM reservations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("access_logs", "SELECT * FROM access_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "networking_organizations",
+            """
+            SELECT DISTINCT no.*
+            FROM networking_organizations no
+            JOIN networking_event_participations nep ON nep.organization_id = no.id
+            WHERE nep.event_id = ?
+            ORDER BY no.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_event_participations",
+            "SELECT * FROM networking_event_participations WHERE event_id = ? ORDER BY id",
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_intents",
+            """
+            SELECT ni.*
+            FROM networking_intents ni
+            JOIN networking_event_participations nep ON nep.id = ni.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY ni.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_contact_channels",
+            """
+            SELECT nc.*
+            FROM networking_contact_channels nc
+            JOIN networking_event_participations nep ON nep.id = nc.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY nc.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("networking_taxonomy_concepts", "SELECT * FROM networking_taxonomy_concepts ORDER BY id", lambda event_id: ()),
+        (
+            "networking_classifications",
+            """
+            SELECT nc.*
+            FROM networking_classifications nc
+            JOIN networking_event_participations nep ON nep.id = nc.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY nc.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("networking_contacts", "SELECT * FROM networking_contacts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("networking_interaction_events", "SELECT * FROM networking_interaction_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_logs", "SELECT * FROM communication_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_queue", "SELECT * FROM communication_queue WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("email_delivery_events", "SELECT * FROM email_delivery_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -621,6 +673,13 @@ class EventRestoreService:
         "speaker_documents",
         "speaker_access_tokens",
         "access_logs",
+        "networking_organizations",
+        "networking_event_participations",
+        "networking_intents",
+        "networking_contact_channels",
+        "networking_classifications",
+        "networking_contacts",
+        "networking_interaction_events",
         "communication_logs",
         "communication_queue",
         "email_delivery_events",
@@ -810,6 +869,13 @@ class EventRestoreService:
                     "speaker_activity_assignments": {},
                     "speaker_documents": {},
                     "speaker_access_tokens": {},
+                    "networking_organizations": {},
+                    "networking_event_participations": {},
+                    "networking_intents": {},
+                    "networking_contact_channels": {},
+                    "networking_classifications": {},
+                    "networking_contacts": {},
+                    "networking_interaction_events": {},
                     "communication_v4_templates": {},
                     "communication_v4_template_versions": {},
                     "communication_v4_segments": {},
@@ -1065,6 +1131,16 @@ class EventRestoreService:
                 row["bag_id"] = maps["capacity_bags"].get(int(row["bag_id"]), row["bag_id"])
             if "person_id" in row and row.get("person_id") is not None:
                 row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
+            if table.startswith("networking_") and "organization_id" in row and row.get("organization_id") is not None:
+                row["organization_id"] = maps["networking_organizations"].get(int(row["organization_id"]), row["organization_id"])
+            if table.startswith("networking_") and "participation_id" in row and row.get("participation_id") is not None:
+                row["participation_id"] = maps["networking_event_participations"].get(int(row["participation_id"]), row["participation_id"])
+            if table.startswith("networking_") and "owner_participation_id" in row and row.get("owner_participation_id") is not None:
+                row["owner_participation_id"] = maps["networking_event_participations"].get(int(row["owner_participation_id"]), row["owner_participation_id"])
+            if table.startswith("networking_") and "target_participation_id" in row and row.get("target_participation_id") is not None:
+                row["target_participation_id"] = maps["networking_event_participations"].get(int(row["target_participation_id"]), row["target_participation_id"])
+            if table.startswith("networking_") and "actor_participation_id" in row and row.get("actor_participation_id") is not None:
+                row["actor_participation_id"] = maps["networking_event_participations"].get(int(row["actor_participation_id"]), row["actor_participation_id"])
             if "participant_id" in row and row.get("participant_id") is not None:
                 row["participant_id"] = maps["people"].get(int(row["participant_id"]), row["participant_id"])
             if "candidate_person_id" in row and row.get("candidate_person_id") is not None:
@@ -1229,6 +1305,11 @@ class EventRestoreService:
                 row["checked_in_by"] = ""
                 row["access_count"] = 0
                 row["status"] = "active" if row.get("status") != "cancelled" else "cancelled"
+            if table == "networking_event_participations":
+                if row.get("public_profile_id"):
+                    row["public_profile_id"] = self._unique_networking_profile_id(db)
+                if row.get("owner_token_hash"):
+                    row["owner_token_hash"] = f"restored:{hashlib.sha256((str(row['owner_token_hash']) + self.now()).encode('utf-8')).hexdigest()}"
             elif "token" in row and str(row.get("token") or "") in token_map:
                 row["token"] = token_map[str(row["token"])]
             if table == "communication_queue":
@@ -1393,6 +1474,13 @@ class EventRestoreService:
     def _event_name(self, db, event_id: int) -> str:
         row = db.execute("SELECT name FROM events WHERE id = ?", (event_id,)).fetchone()
         return row["name"] if row else ""
+
+    def _unique_networking_profile_id(self, db) -> str:
+        while True:
+            token = self.token_factory().upper().replace("-", "")
+            value = f"NET-{token[:12]}"
+            if not db.execute("SELECT id FROM networking_event_participations WHERE public_profile_id = ?", (value,)).fetchone():
+                return value
 
     def _audit(self, db, actor: str, action: str, entity_type: str, entity_id: int | None, payload: dict) -> None:
         if not self._has_column(db, "audit_logs", "payload"):

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Networking Admin</title>
+  <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
+</head>
+<body>
+  <main class="networking-admin-shell">
+    <header class="producer-module-header">
+      <div>
+        <span class="badge">BITORA Networking V1</span>
+        <h1>Importacion y control</h1>
+      </div>
+      <a href="/index.html" class="producer-home-return-link">Volver</a>
+    </header>
+    <section class="networking-admin-grid">
+      <article class="networking-panel">
+        <h2>Importar perfiles</h2>
+        <div class="networking-two">
+          <label>Evento
+            <input id="eventId" type="number" min="1" value="1">
+          </label>
+          <label>Origen
+            <input id="sourceSystem" value="BITORA">
+          </label>
+        </div>
+        <label>Filas JSON
+          <textarea id="rowsInput" rows="14">[
+  {"first_name":"Ana","last_name":"Demo","email":"ana.demo@example.test","organization":"BITORA Labs","title":"Directora Comercial","function":"COMMERCIAL","seniority":"MANAGEMENT","linkedin":"https://www.linkedin.com","whatsapp":"5491100000000"},
+  {"first_name":"Luis","last_name":"Demo","email":"luis.demo@example.test","organization":"Soluciones Evento","title":"CTO","function":"TECHNOLOGY","seniority":"EXECUTIVE","channel_visibility":{"email":"HIDDEN"}}
+]</textarea>
+        </label>
+        <div class="participant-actions-row">
+          <button id="previewBtn" type="button" class="ghost">Validar</button>
+          <button id="importBtn" type="button">Importar</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Resultado</h2>
+        <div id="summaryCards" class="networking-report-cards"></div>
+        <pre id="adminOutput" class="networking-admin-output"></pre>
+      </article>
+    </section>
+  </main>
+  <script>
+    const output = document.getElementById("adminOutput");
+    const cards = document.getElementById("summaryCards");
+    function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
+    function payload() {
+      return {
+        actor: "Admin",
+        event_id: Number(document.getElementById("eventId").value),
+        source_system: document.getElementById("sourceSystem").value,
+        rows: rows(),
+      };
+    }
+    async function post(path) {
+      output.textContent = "Procesando...";
+      const response = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload())});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      cards.replaceChildren();
+      ["valid", "invalid", "created", "updated", "errors"].forEach((key) => {
+        if (data[key] === undefined) return;
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${key}</span><strong>${Array.isArray(data[key]) ? data[key].length : data[key]}</strong>`;
+        cards.appendChild(card);
+      });
+    }
+    document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
+    document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
+  </script>
+</body>
+</html>

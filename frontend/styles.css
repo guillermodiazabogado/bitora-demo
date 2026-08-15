@@ -143,6 +143,365 @@ button:hover,
   width: 100%;
 }
 
+.networking-body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(32, 199, 181, 0.18), transparent 30%),
+    linear-gradient(180deg, #08171c 0%, #0d2f35 330px, #eef5f4 331px);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+.networking-app-shell,
+.networking-register-shell,
+.networking-admin-shell {
+  margin: 0 auto;
+  max-width: 1120px;
+  padding: 18px;
+}
+
+.networking-app-shell,
+.networking-register-shell {
+  max-width: 680px;
+}
+
+.networking-hero,
+.event-register-hero {
+  color: #ffffff;
+  padding: 24px 0 18px;
+}
+
+.networking-brand-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.networking-brand-row img {
+  background: #ffffff;
+  border-radius: 6px;
+  height: 34px;
+  padding: 5px;
+  width: auto;
+}
+
+.networking-brand-row span,
+.event-register-hero span,
+.networking-kicker {
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.networking-hero h1,
+.event-register-hero h1 {
+  color: #ffffff;
+  font-size: 34px;
+  letter-spacing: 0;
+  line-height: 1.05;
+  margin: 0 0 10px;
+}
+
+.networking-hero p,
+.event-register-hero p {
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+}
+
+.networking-panel {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(6, 57, 64, 0.1);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+  padding: 16px;
+}
+
+.networking-panel h2,
+.networking-profile-card h3 {
+  color: var(--brand-dark);
+  letter-spacing: 0;
+  margin: 4px 0 10px;
+}
+
+.networking-panel-head,
+.networking-token-row,
+.networking-two,
+.networking-tabs,
+.networking-actions,
+.bitora-developed {
+  display: flex;
+  gap: 10px;
+}
+
+.networking-panel-head {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.networking-token-row {
+  align-items: stretch;
+}
+
+.networking-token-row input,
+.networking-token-row button {
+  min-width: 0;
+}
+
+.networking-token-row input {
+  flex: 1;
+}
+
+.networking-form {
+  display: grid;
+  gap: 12px;
+}
+
+.networking-form label,
+.networking-form fieldset {
+  color: var(--brand-dark);
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.networking-form fieldset {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  grid-template-columns: 1fr;
+  margin: 0;
+  padding: 12px;
+}
+
+.networking-form fieldset label {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  font-weight: 650;
+}
+
+.networking-form input,
+.networking-form select,
+.networking-form textarea,
+#tokenInput,
+#manualProfileInput,
+#eventId,
+#sourceSystem,
+#rowsInput {
+  background: #f8fbfb;
+  border: 1px solid #ccdada;
+  border-radius: 6px;
+  color: var(--ink);
+  min-height: 42px;
+  padding: 10px;
+  width: 100%;
+}
+
+.networking-two {
+  align-items: start;
+  flex-wrap: wrap;
+}
+
+.networking-two > * {
+  flex: 1 1 220px;
+}
+
+.networking-tabs {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(6, 57, 64, 0.1);
+  border-radius: 8px;
+  margin: 0 0 14px;
+  padding: 6px;
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+}
+
+.networking-tabs button {
+  background: transparent;
+  color: var(--brand-dark);
+  flex: 1;
+  font-size: 13px;
+  font-weight: 850;
+  min-height: 38px;
+}
+
+.networking-tabs button.active {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.networking-reader {
+  align-items: center;
+  aspect-ratio: 1 / 1;
+  background: #07141b;
+  border-radius: 8px;
+  color: #ffffff;
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+  min-height: 240px;
+  overflow: hidden;
+}
+
+.networking-result,
+.networking-card-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.networking-profile-card {
+  background: #ffffff;
+  border: 1px solid rgba(11, 127, 134, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 64px 1fr;
+  padding: 12px;
+}
+
+.networking-avatar {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(11, 127, 134, 0.92), rgba(202, 166, 106, 0.92));
+  background-position: center;
+  background-size: cover;
+  border-radius: 8px;
+  color: #ffffff;
+  display: flex;
+  font-size: 26px;
+  font-weight: 900;
+  height: 64px;
+  justify-content: center;
+  width: 64px;
+}
+
+.networking-role,
+.networking-bio,
+.networking-empty,
+.networking-status,
+.networking-muted-link {
+  color: var(--muted);
+}
+
+.networking-actions {
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.networking-actions a,
+.networking-actions span {
+  background: #e8f7f7;
+  border: 1px solid rgba(11, 127, 134, 0.16);
+  border-radius: 999px;
+  color: var(--brand-dark);
+  font-size: 12px;
+  font-weight: 850;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
+.networking-qr-panel {
+  text-align: center;
+}
+
+.networking-qr-panel img {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 10px auto;
+  max-width: 320px;
+  padding: 14px;
+  width: 100%;
+}
+
+.event-register-body {
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--event-primary) 72%, #07141b), #07141b 48%, color-mix(in srgb, var(--event-accent) 32%, #eef5f4) 49%, #eef5f4);
+}
+
+.bitora-developed {
+  align-items: center;
+  color: rgba(6, 57, 64, 0.68);
+  font-size: 12px;
+  justify-content: center;
+  padding: 8px 0 18px;
+}
+
+.bitora-developed img {
+  height: 20px;
+  width: auto;
+}
+
+.networking-admin-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.75fr);
+}
+
+.networking-admin-output {
+  background: #07141b;
+  border-radius: 8px;
+  color: #d8f8f4;
+  min-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.networking-report-cards {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  margin-bottom: 12px;
+}
+
+.networking-report-card {
+  background: #eef7f7;
+  border: 1px solid rgba(11, 127, 134, 0.16);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.networking-report-card span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.networking-report-card strong {
+  color: var(--brand-dark);
+  font-size: 26px;
+}
+
+@media (max-width: 720px) {
+  .networking-app-shell,
+  .networking-register-shell {
+    padding: 14px;
+  }
+
+  .networking-hero h1,
+  .event-register-hero h1 {
+    font-size: 29px;
+  }
+
+  .networking-admin-grid,
+  .networking-profile-card {
+    grid-template-columns: 1fr;
+  }
+
+  .networking-tabs {
+    bottom: 8px;
+    top: auto;
+  }
+}
+
 .topbar {
   align-items: center;
   background: #07141b;

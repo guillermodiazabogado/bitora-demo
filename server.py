@@ -56,6 +56,7 @@ from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
 from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
+from backend.services.networking import NetworkingService
 from backend.services.google_oauth import (
     GoogleOAuthClient,
     GoogleOAuthError,
@@ -417,6 +418,10 @@ def qr_service() -> QRService:
     return QRService()
 
 
+def networking_service() -> NetworkingService:
+    return NetworkingService(now=now_iso)
+
+
 def backup_service():
     if DB_CONFIG.engine == "postgres":
         return PostgresBackupService(BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
@@ -754,6 +759,7 @@ def init_db() -> None:
             ensure_default_spaces(db)
             ensure_capacity_bags(db)
             ensure_communication_templates(db)
+            networking_service().ensure_taxonomy(db)
         return
     with connect() as db:
         db.executescript(
@@ -1574,6 +1580,7 @@ def init_db() -> None:
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
         ensure_multitenant_schema(db)
+        networking_service().ensure_schema(db)
         ensure_indexes(db)
         ensure_default_users(db)
         bootstrap_default_organization(db)
@@ -7012,6 +7019,8 @@ def public_static_path(path: str) -> bool:
         "/scan.html",
         "/web.html",
         "/web",
+        "/networking.html",
+        "/networking-register.html",
         "/e.html",
         "/p.html",
         "/styles.css",
@@ -7029,7 +7038,7 @@ def public_api_get(path: str) -> bool:
         return True
     if path.startswith("/api/public/speakers/"):
         return True
-    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
+    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook", "/api/networking/session", "/api/networking/contacts", "/api/networking/profile", "/api/networking/qr.svg"}
 
 
 def public_api_post(path: str) -> bool:
@@ -7050,6 +7059,9 @@ def public_api_post(path: str) -> bool:
         "/api/portal/profile",
         "/api/portal/surveys/start",
         "/api/portal/surveys/submit",
+        "/api/networking/external-register",
+        "/api/networking/onboarding",
+        "/api/networking/scan",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
         "/api/waiting-room/join",
@@ -8224,6 +8236,47 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/network-info":
                 self.send_json(network_info(self))
+                return
+
+            if path == "/api/networking/session":
+                token = query.get("token", [""])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0) or None
+                with connect() as db:
+                    result = networking_service().session(db, token, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/contacts":
+                token = query.get("token", [""])[0]
+                with connect() as db:
+                    result = networking_service().contacts(db, token)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/profile":
+                profile_id = query.get("profile_id", [""])[0]
+                token = query.get("token", [""])[0]
+                with connect() as db:
+                    result = networking_service().public_profile(db, profile_id, token)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/qr.svg":
+                profile_id = query.get("profile_id", [""])[0].strip().upper()
+                with connect() as db:
+                    exists = db.execute(
+                        "SELECT 1 FROM networking_event_participations WHERE public_profile_id = ? AND participation_state = 'ACTIVE'",
+                        (profile_id,),
+                    ).fetchone()
+                if not exists:
+                    self.send_error(HTTPStatus.NOT_FOUND, "Perfil Networking inexistente")
+                    return
+                body = qr_svg(f"BITORA-NET:{profile_id}").encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
 
             if path == "/api/waiting-room/status":
@@ -12612,6 +12665,85 @@ class AppHandler(SimpleHTTPRequestHandler):
                     db.execute("COMMIT")
                     result = portal_payload(db, token)
                 self.send_json({"ok": True, "promoted": promoted, "portal": result})
+                return
+
+            if path == "/api/networking/import/preview":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = data.get("rows") or []
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o filas"}, 400)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().preview_import(db, event_id, rows, str(data.get("source_system") or "BITORA"))
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/import":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = data.get("rows") or []
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o filas"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().import_profiles(db, event_id, rows, str(data.get("source_system") or "BITORA"), actor)
+                    audit(db, actor, "networking.imported", "event", event_id, {"summary": {key: result.get(key) for key in ("created", "updated", "errors")}})
+                    db.execute("COMMIT")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/external-register":
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().external_register(db, event_id, data)
+                    if result.get("ok"):
+                        audit(db, "public", "networking.external_registered", "event", event_id, {"participation_id": result.get("participation_id")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 201 if result.get("ok") else 400)))
+                return
+
+            if path == "/api/networking/onboarding":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().onboard(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/scan":
+                token = data.get("token", "").strip()
+                raw_profile = str(data.get("public_profile_id") or data.get("profile_id") or data.get("qr_payload") or "").strip()
+                match = re.search(r"(?:BITORA-NET:)?(NET-[A-Z0-9]+)", raw_profile, re.I)
+                profile_id = match.group(1).upper() if match else raw_profile.upper()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().scan(db, token, profile_id)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.scan_contact", "networking_contact", result.get("contact_id"), {"created": result.get("created")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
             if path == "/api/events":

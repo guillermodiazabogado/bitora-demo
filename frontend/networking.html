@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Networking</title>
+  <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
+  <script src="/html5-qrcode.min.js"></script>
+</head>
+<body class="networking-body">
+  <main class="networking-app-shell" aria-label="BITORA Networking">
+    <header class="networking-hero">
+      <div class="networking-brand-row">
+        <img src="/assets/bitora-logo.svg" alt="BITORA">
+        <span>Networking</span>
+      </div>
+      <h1 id="networkingTitle">Conexiones utiles, sin ruido</h1>
+      <p id="networkingSubtitle">Escanea, guarda contactos y conserva solo los canales permitidos.</p>
+    </header>
+
+    <section id="tokenPanel" class="networking-panel">
+      <label for="tokenInput">Codigo de acceso</label>
+      <div class="networking-token-row">
+        <input id="tokenInput" autocomplete="one-time-code" placeholder="Pega tu token o enlace">
+        <button id="saveTokenBtn" type="button">Entrar</button>
+      </div>
+      <a id="registerLink" href="/networking-register.html" class="networking-muted-link">Inscribirme como visitante externo</a>
+    </section>
+
+    <section id="onboardingPanel" class="networking-panel hidden">
+      <span class="networking-kicker">Primer uso</span>
+      <h2>Configura como queres conectar</h2>
+      <form id="onboardingForm" class="networking-form">
+        <fieldset>
+          <legend>Modo</legend>
+          <label><input type="checkbox" name="modes" value="COMMERCIAL" checked> Comercial</label>
+          <label><input type="checkbox" name="modes" value="BUSINESS_ALLIANCES"> Alianzas</label>
+          <label><input type="checkbox" name="modes" value="SERVICES_SOLUTIONS"> Servicios y soluciones</label>
+        </fieldset>
+        <label>Direccion
+          <select name="direction">
+            <option value="BOTH">Busco y ofrezco</option>
+            <option value="SEEKING">Busco</option>
+            <option value="OFFERING">Ofrezco</option>
+          </select>
+        </label>
+        <label>Apertura de contacto
+          <select name="contact_openness">
+            <option value="DIRECT">Contacto directo</option>
+            <option value="CONNECT_FIRST">Conectar primero</option>
+            <option value="CORPORATE_ROUTE">Ruta corporativa</option>
+          </select>
+        </label>
+        <label>Descripcion breve
+          <textarea name="bio" rows="3" placeholder="Que haces y que oportunidades queres encontrar"></textarea>
+        </label>
+        <div class="networking-two">
+          <label>Ofrezco
+            <input name="offers" placeholder="Soluciones, servicios, productos">
+          </label>
+          <label>Busco
+            <input name="seeks" placeholder="Aliados, proveedores, clientes">
+          </label>
+        </div>
+        <button type="submit">Activar Networking</button>
+      </form>
+    </section>
+
+    <section id="activeApp" class="hidden">
+      <nav class="networking-tabs" aria-label="Navegacion Networking">
+        <button class="active" type="button" data-tab="scan">Scan</button>
+        <button type="button" data-tab="qr">Mi QR</button>
+        <button type="button" data-tab="contacts">Mis contactos</button>
+      </nav>
+
+      <section id="scanTab" class="networking-tab-panel">
+        <article class="networking-panel">
+          <div class="networking-panel-head">
+            <div>
+              <span class="networking-kicker">Scan</span>
+              <h2>Lee un QR Networking</h2>
+            </div>
+            <button id="continueScanBtn" type="button" class="ghost">Continuar</button>
+          </div>
+          <div id="reader" class="networking-reader"></div>
+          <div class="networking-token-row">
+            <input id="manualProfileInput" placeholder="NET-...">
+            <button id="manualScanBtn" type="button">Resolver</button>
+          </div>
+          <div id="scanResult" class="networking-result"></div>
+        </article>
+      </section>
+
+      <section id="qrTab" class="networking-tab-panel hidden">
+        <article class="networking-panel networking-qr-panel">
+          <span class="networking-kicker">Mi QR</span>
+          <h2 id="myName">Tu perfil publico</h2>
+          <img id="myQr" alt="QR publico de Networking">
+          <p id="myProfileId"></p>
+        </article>
+      </section>
+
+      <section id="contactsTab" class="networking-tab-panel hidden">
+        <article class="networking-panel">
+          <div class="networking-panel-head">
+            <div>
+              <span class="networking-kicker">Mis contactos</span>
+              <h2>Galeria guardada</h2>
+            </div>
+            <button id="refreshContactsBtn" type="button" class="ghost">Actualizar</button>
+          </div>
+          <div id="contactsGrid" class="networking-card-grid"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <template id="profileCardTemplate">
+    <article class="networking-profile-card">
+      <div class="networking-avatar"></div>
+      <div>
+        <h3></h3>
+        <p class="networking-role"></p>
+        <p class="networking-bio"></p>
+        <div class="networking-actions"></div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    let token = params.get("token") || localStorage.getItem("bitoraNetworkingToken") || "";
+    let currentProfile = null;
+    let scanner = null;
+
+    const $ = (id) => document.getElementById(id);
+    const api = async (path, options = {}) => {
+      const response = await fetch(path, {
+        ...options,
+        headers: {"Content-Type": "application/json", ...(options.headers || {})},
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || "No se pudo completar la accion");
+      return data;
+    };
+
+    function show(id, visible) {
+      $(id).classList.toggle("hidden", !visible);
+    }
+
+    function actionLabel(type) {
+      return {whatsapp: "WhatsApp", phone: "Telefono", email: "Email", website: "Web", instagram: "Instagram", linkedin: "LinkedIn", facebook: "Facebook", tiktok: "TikTok", x: "X", youtube: "YouTube", other: "Link"}[type] || type;
+    }
+
+    function renderProfile(profile, targetId) {
+      const template = $("profileCardTemplate").content.cloneNode(true);
+      const card = template.querySelector(".networking-profile-card");
+      const avatar = template.querySelector(".networking-avatar");
+      const name = profile.name || profile.organization || "Oportunidad disponible";
+      template.querySelector("h3").textContent = name;
+      template.querySelector(".networking-role").textContent = [profile.organization, profile.role].filter(Boolean).join(" · ");
+      template.querySelector(".networking-bio").textContent = profile.bio || profile.offers || profile.seeks || "";
+      if (profile.photo || profile.logo) {
+        avatar.style.backgroundImage = `url('${profile.photo || profile.logo}')`;
+        avatar.textContent = "";
+      } else {
+        avatar.textContent = name.slice(0, 1).toUpperCase();
+      }
+      const actions = template.querySelector(".networking-actions");
+      (profile.channels || []).forEach((channel) => {
+        const link = document.createElement("a");
+        link.href = channel.url || "#";
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = actionLabel(channel.type);
+        actions.appendChild(link);
+      });
+      if (!(profile.channels || []).length) {
+        const empty = document.createElement("span");
+        empty.textContent = "Sin canales visibles";
+        actions.appendChild(empty);
+      }
+      $(targetId).replaceChildren(card);
+    }
+
+    async function loadSession() {
+      if (!token) {
+        show("tokenPanel", true);
+        show("onboardingPanel", false);
+        show("activeApp", false);
+        return;
+      }
+      $("tokenInput").value = token;
+      localStorage.setItem("bitoraNetworkingToken", token);
+      const eventId = params.get("event_id") || "";
+      const session = await api(`/api/networking/session?token=${encodeURIComponent(token)}${eventId ? `&event_id=${encodeURIComponent(eventId)}` : ""}`);
+      currentProfile = session.participation;
+      $("networkingTitle").textContent = currentProfile.active ? `Hola, ${currentProfile.name || currentProfile.organization}` : "Activa tu Networking";
+      show("tokenPanel", false);
+      show("onboardingPanel", currentProfile.requires_onboarding);
+      show("activeApp", currentProfile.active);
+      if (currentProfile.active) {
+        $("myName").textContent = currentProfile.name || currentProfile.organization || "Mi perfil";
+        $("myProfileId").textContent = currentProfile.public_profile_id;
+        $("myQr").src = `/api/networking/qr.svg?profile_id=${encodeURIComponent(currentProfile.public_profile_id)}`;
+        await loadContacts();
+        startScanner();
+      }
+    }
+
+    async function submitOnboarding(event) {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const modes = form.getAll("modes");
+      const payload = Object.fromEntries(form.entries());
+      payload.modes = modes;
+      payload.token = token;
+      const result = await api("/api/networking/onboarding", {method: "POST", body: JSON.stringify(payload)});
+      currentProfile = result.participation;
+      await loadSession();
+    }
+
+    async function scanProfile(value) {
+      if (!value) return;
+      $("scanResult").textContent = "Resolviendo perfil...";
+      const result = await api("/api/networking/scan", {method: "POST", body: JSON.stringify({token, qr_payload: value})});
+      renderProfile(result.profile, "scanResult");
+      await loadContacts();
+    }
+
+    async function loadContacts() {
+      const result = await api(`/api/networking/contacts?token=${encodeURIComponent(token)}`);
+      const grid = $("contactsGrid");
+      grid.replaceChildren();
+      if (!result.contacts.length) {
+        grid.innerHTML = "<p class='networking-empty'>Todavia no guardaste contactos.</p>";
+        return;
+      }
+      result.contacts.forEach((item) => {
+        const holder = document.createElement("div");
+        holder.id = `contact-${item.contact_id}`;
+        grid.appendChild(holder);
+        renderProfile(item.profile, holder.id);
+      });
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll(".networking-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
+      ["scan", "qr", "contacts"].forEach((name) => show(`${name}Tab`, name === tab));
+      if (tab === "scan") startScanner();
+    }
+
+    async function startScanner() {
+      if (!window.Html5Qrcode || scanner) return;
+      try {
+        scanner = new Html5Qrcode("reader");
+        await scanner.start({facingMode: "environment"}, {fps: 8, qrbox: {width: 240, height: 240}}, (decodedText) => scanProfile(decodedText));
+      } catch (error) {
+        $("reader").textContent = "Camara no disponible. Usa el campo manual.";
+      }
+    }
+
+    $("saveTokenBtn").addEventListener("click", () => {
+      token = $("tokenInput").value.trim();
+      loadSession().catch((error) => alert(error.message));
+    });
+    $("onboardingForm").addEventListener("submit", (event) => submitOnboarding(event).catch((error) => alert(error.message)));
+    $("manualScanBtn").addEventListener("click", () => scanProfile($("manualProfileInput").value.trim()).catch((error) => $("scanResult").textContent = error.message));
+    $("continueScanBtn").addEventListener("click", () => {
+      $("manualProfileInput").value = "";
+      $("scanResult").replaceChildren();
+      startScanner();
+    });
+    $("refreshContactsBtn").addEventListener("click", () => loadContacts().catch((error) => alert(error.message)));
+    document.querySelectorAll(".networking-tabs button").forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
+    loadSession().catch((error) => {
+      show("tokenPanel", true);
+      $("tokenInput").value = token;
+      alert(error.message);
+    });
+  </script>
+</body>
+</html>

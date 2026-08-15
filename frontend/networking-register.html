@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inscripcion Networking</title>
+  <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
+</head>
+<body class="networking-body event-register-body">
+  <main class="networking-register-shell">
+    <header class="event-register-hero">
+      <span id="eventName">Networking del evento</span>
+      <h1>Presentate para conectar mejor</h1>
+      <p>Tu perfil queda en BITORA Networking y se activa despues de completar el primer uso.</p>
+    </header>
+    <form id="registerForm" class="networking-panel networking-form">
+      <div class="networking-two">
+        <label>Nombre
+          <input name="first_name" required>
+        </label>
+        <label>Apellido
+          <input name="last_name" required>
+        </label>
+      </div>
+      <label>Email
+        <input name="email" type="email" required>
+      </label>
+      <label>Telefono
+        <input name="phone" inputmode="tel">
+      </label>
+      <div class="networking-two">
+        <label>Organizacion
+          <input name="organization">
+        </label>
+        <label>Cargo visible
+          <input name="title">
+        </label>
+      </div>
+      <label>Descripcion breve
+        <textarea name="bio" rows="3"></textarea>
+      </label>
+      <div class="networking-two">
+        <label>LinkedIn
+          <input name="linkedin">
+        </label>
+        <label>Web
+          <input name="website">
+        </label>
+      </div>
+      <label>WhatsApp
+        <input name="whatsapp" inputmode="tel">
+      </label>
+      <button type="submit">Crear perfil</button>
+      <p id="registerStatus" class="networking-status"></p>
+    </form>
+    <footer class="bitora-developed">
+      <span>Desarrollado por</span>
+      <img src="/assets/bitora-logo.svg" alt="BITORA">
+    </footer>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const eventId = Number(params.get("event_id") || 0);
+    const registerForm = document.getElementById("registerForm");
+    const registerStatus = document.getElementById("registerStatus");
+    document.documentElement.style.setProperty("--event-primary", params.get("primary") || "#4c2ea3");
+    document.documentElement.style.setProperty("--event-accent", params.get("accent") || "#20c7b5");
+    document.getElementById("eventName").textContent = params.get("event_name") || "Networking del evento";
+    if (!eventId) {
+      registerStatus.textContent = "Falta el identificador del evento. Usa el enlace oficial del evento.";
+      registerForm.querySelectorAll("input, textarea, button").forEach((field) => field.disabled = true);
+    }
+    registerForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!eventId) return;
+      const form = new FormData(event.currentTarget);
+      const payload = Object.fromEntries(form.entries());
+      payload.event_id = eventId;
+      payload.channels = ["whatsapp", "linkedin", "website"].map((type) => ({type, value: payload[type]})).filter((item) => item.value);
+      registerStatus.textContent = "Creando perfil...";
+      const response = await fetch("/api/networking/external-register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {
+        registerStatus.textContent = data.error || "No se pudo crear el perfil";
+        return;
+      }
+      localStorage.setItem("bitoraNetworkingToken", data.owner_token);
+      registerStatus.innerHTML = `Perfil creado. <a href="${data.access_url}">Entrar a Networking</a>`;
+    });
+  </script>
+</body>
+</html>
