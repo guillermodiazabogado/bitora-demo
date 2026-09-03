@@ -151,6 +151,13 @@ class HttpClient:
         return self.request("POST", "/api/auth/login", json_body={"name": user, "pin": password}, timeout=60)
 
 
+def authenticate(client: HttpClient, secrets: dict) -> dict:
+    return client.login(
+        str(secrets["BITORA_ENDURANCE_ADMIN_USER"]),
+        str(secrets["BITORA_ENDURANCE_ADMIN_PASSWORD"]),
+    )
+
+
 def r2_configured(secrets: dict) -> bool:
     if secrets.get("R2_BUCKET") and wrangler_available():
         return True
@@ -303,8 +310,25 @@ def inspect_backup(raw: bytes) -> dict:
             pass
 
 
-def backup_check(client: HttpClient, event_id: int, out_dir: Path, label: str) -> dict:
+def backup_check(client: HttpClient, event_id: int, out_dir: Path, label: str, secrets: dict | None = None) -> dict:
+    if secrets:
+        auth = authenticate(client, secrets)
+        if not auth.get("ok"):
+            return {
+                "timestamp_utc": iso(),
+                "label": label,
+                "http_status": auth.get("status"),
+                "bytes": 0,
+                "sha256": "",
+                "status": "FAILED",
+                "content": {},
+                "error": "backup_auth_failed",
+            }
     response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
+    if response.get("status") == 401 and secrets:
+        auth = authenticate(client, secrets)
+        if auth.get("ok"):
+            response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
     payload = {
         "timestamp_utc": iso(),
         "label": label,
@@ -479,7 +503,7 @@ def main() -> int:
     write_json(out_dir / "RUN_METADATA.json", metadata)
 
     client = HttpClient(args.base_url)
-    login = client.login(str(secrets["BITORA_ENDURANCE_ADMIN_USER"]), str(secrets["BITORA_ENDURANCE_ADMIN_PASSWORD"]))
+    login = authenticate(client, secrets)
     if not login.get("ok"):
         append_jsonl(paths["errors"], {"timestamp_utc": iso(), "severity": "CRITICAL", "code": "auth.login_failed", "status": login.get("status")})
         return 1
@@ -512,7 +536,7 @@ def main() -> int:
 
         for mark in backup_marks:
             if elapsed_hours >= mark and mark not in done_backups:
-                last_backup = backup_check(client, args.event_id, out_dir, f"T{mark:02d}H")
+                last_backup = backup_check(client, args.event_id, out_dir, f"T{mark:02d}H", secrets)
                 append_jsonl(paths["backup"], last_backup)
                 if last_backup.get("status") != "PASSED":
                     append_jsonl(paths["errors"], {"timestamp_utc": iso(), "severity": "HIGH", "code": "backup.failed", "mark": mark})
@@ -541,11 +565,15 @@ def main() -> int:
         time.sleep(max(60, min(args.interval_seconds, int((expected_end - utc_now()).total_seconds()))))
 
     if 24 not in done_backups:
-        last_backup = backup_check(client, args.event_id, out_dir, "T24H")
+        last_backup = backup_check(client, args.event_id, out_dir, "T24H", secrets)
         append_jsonl(paths["backup"], last_backup)
+        if last_backup.get("status") != "PASSED":
+            append_jsonl(paths["errors"], {"timestamp_utc": iso(), "severity": "HIGH", "code": "backup.failed", "mark": 24})
     if 24 not in done_restores:
         restore_record = restore_check(last_backup or {}, args.python)
         append_jsonl(paths["restore"], restore_record)
+        if restore_record.get("status") != "PASSED":
+            append_jsonl(paths["errors"], {"timestamp_utc": iso(), "severity": "HIGH", "code": "restore.failed", "mark": 24})
     critical, high, warning = count_findings(paths["errors"])
     elapsed_hours = (utc_now() - start).total_seconds() / 3600
     passed = elapsed_hours >= args.hours and critical == 0 and high == 0

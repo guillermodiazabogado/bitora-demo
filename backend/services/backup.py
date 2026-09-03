@@ -255,11 +255,18 @@ class EventBackupService:
             """
             SELECT DISTINCT p.*
             FROM people p
-            JOIN accreditations a ON a.person_id = p.id
-            WHERE a.event_id = ?
+            WHERE p.id IN (
+                SELECT a.person_id
+                FROM accreditations a
+                WHERE a.event_id = ?
+                UNION
+                SELECT nep.person_id
+                FROM networking_event_participations nep
+                WHERE nep.event_id = ?
+            )
             ORDER BY p.id
             """,
-            lambda event_id: (event_id,),
+            lambda event_id: (event_id, event_id),
         ),
         (
             "participant_communication_preferences",
