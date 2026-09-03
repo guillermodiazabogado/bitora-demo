@@ -311,9 +311,12 @@ def inspect_backup(raw: bytes) -> dict:
 
 
 def backup_check(client: HttpClient, event_id: int, out_dir: Path, label: str, secrets: dict | None = None) -> dict:
-    if secrets:
+    response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
+    if response.get("status") == 401 and secrets:
         auth = authenticate(client, secrets)
-        if not auth.get("ok"):
+        if auth.get("ok"):
+            response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
+        else:
             return {
                 "timestamp_utc": iso(),
                 "label": label,
@@ -324,11 +327,6 @@ def backup_check(client: HttpClient, event_id: int, out_dir: Path, label: str, s
                 "content": {},
                 "error": "backup_auth_failed",
             }
-    response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
-    if response.get("status") == 401 and secrets:
-        auth = authenticate(client, secrets)
-        if auth.get("ok"):
-            response = client.request("GET", f"/api/backup?event_id={event_id}", timeout=180)
     payload = {
         "timestamp_utc": iso(),
         "label": label,
