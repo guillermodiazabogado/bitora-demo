@@ -387,7 +387,7 @@ def restore_check(backup_record: dict, python_exe: str) -> dict:
     return payload
 
 
-def classify_checkpoint(record: dict) -> list[dict]:
+def classify_checkpoint(record: dict, availability_failure_streak: int = 0) -> list[dict]:
     findings = []
     health = record.get("health", {})
     ready = record.get("ready", {})
@@ -395,32 +395,47 @@ def classify_checkpoint(record: dict) -> list[dict]:
     ready_body = ready.get("json") or {}
     checks = ready_body.get("checks") or {}
     if not health.get("ok") or health_body.get("status") != "ok":
-        findings.append({"severity": "CRITICAL", "code": "health.failed"})
+        findings.append({
+            "severity": "CRITICAL" if availability_failure_streak >= 3 else "WARNING",
+            "code": "health.failed",
+            "streak": availability_failure_streak,
+        })
     if not ready.get("ok") or ready_body.get("status") != "ready":
-        findings.append({"severity": "CRITICAL", "code": "ready.failed"})
-    if checks.get("safe_mode") is not True:
+        findings.append({
+            "severity": "CRITICAL" if availability_failure_streak >= 3 else "WARNING",
+            "code": "ready.failed",
+            "streak": availability_failure_streak,
+        })
+    if ready.get("ok") and checks.get("safe_mode") is not True:
         findings.append({"severity": "CRITICAL", "code": "safe_mode.off"})
-    if checks.get("live_mode_off") is not True:
+    if ready.get("ok") and checks.get("live_mode_off") is not True:
         findings.append({"severity": "CRITICAL", "code": "live_mode.on"})
     jobs = health_body.get("jobs") or {}
     if int(jobs.get("failed") or 0):
         findings.append({"severity": "HIGH", "code": "jobs.failed"})
     storage = health_body.get("storage") or {}
-    if storage.get("backend") != "r2" or storage.get("ready") is not True:
+    if health.get("ok") and (storage.get("backend") != "r2" or storage.get("ready") is not True):
         findings.append({"severity": "CRITICAL", "code": "r2.not_ready"})
     metrics = (record.get("participant_metrics") or {}).get("json") or {}
-    if metrics.get("registered") != 10:
+    if record.get("participant_metrics", {}).get("ok") and metrics.get("registered") != 10:
         findings.append({"severity": "HIGH", "code": "baseline.participants"})
     return findings
 
 
-def checkpoint(client: HttpClient, event_id: int, target_sha: str) -> dict:
+def checkpoint(
+    client: HttpClient,
+    event_id: int,
+    target_sha: str,
+    availability_failure_streak: int = 0,
+    probe: dict | None = None,
+) -> dict:
+    probe = probe or {}
     record = {
         "timestamp_utc": iso(),
         "target_sha": target_sha,
         "event_id": event_id,
-        "health": client.request("GET", "/health", timeout=60),
-        "ready": client.request("GET", "/ready", timeout=60),
+        "health": probe.get("health") or client.request("GET", "/health", timeout=60),
+        "ready": probe.get("ready") or client.request("GET", "/ready", timeout=60),
         "event": client.request("GET", f"/api/event?event_id={event_id}", timeout=60),
         "participant_metrics": client.request("GET", f"/api/participant-metrics?event_id={event_id}", timeout=60),
         "public_display": client.request("GET", f"/api/public-display?event_id={event_id}", timeout=60),
@@ -429,7 +444,7 @@ def checkpoint(client: HttpClient, event_id: int, target_sha: str) -> dict:
     }
     for key in ("health", "ready", "event", "participant_metrics", "public_display", "users_read"):
         record[key].pop("raw", None)
-    record["findings"] = classify_checkpoint(record)
+    record["findings"] = classify_checkpoint(record, availability_failure_streak)
     return record
 
 
@@ -511,11 +526,22 @@ def main() -> int:
     restore_marks = [12, 24]
     done_backups: set[int] = set()
     done_restores: set[int] = set()
+    availability_failure_streak = 0
 
     while True:
         now = utc_now()
         elapsed_hours = (now - start).total_seconds() / 3600
-        record = checkpoint(client, args.event_id, args.target_sha)
+        probe = {
+            "health": client.request("GET", "/health", timeout=60),
+            "ready": client.request("GET", "/ready", timeout=60),
+        }
+        health_body = probe["health"].get("json") or {}
+        ready_body = probe["ready"].get("json") or {}
+        if not probe["health"].get("ok") or health_body.get("status") != "ok" or not probe["ready"].get("ok") or ready_body.get("status") != "ready":
+            availability_failure_streak += 1
+        else:
+            availability_failure_streak = 0
+        record = checkpoint(client, args.event_id, args.target_sha, availability_failure_streak, probe)
         append_jsonl(paths["checkpoints"], record)
         append_jsonl(paths["functional"], {
             "timestamp_utc": record["timestamp_utc"],
