@@ -297,7 +297,7 @@ async function api(path, options = {}) {
     location.href = "/login.html";
     throw new Error("Sesion requerida");
   }
-  if (!response.ok) throw new Error(data.error || "Error inesperado");
+  if (!response.ok) throw new Error(data.error || data.reason || "Error inesperado");
   return data;
 }
 
