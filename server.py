@@ -16,6 +16,7 @@ import random
 import re
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from html import escape
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -6618,7 +6619,7 @@ def executive_report_data(db: sqlite3.Connection, event_id: int) -> dict | None:
         LEFT JOIN reservations r ON r.activity_id = a.id
         LEFT JOIN activity_attendance at ON at.activity_id = a.id
         WHERE a.event_id = ? AND a.status <> 'cancelled'
-        GROUP BY a.id
+        GROUP BY a.id, a.title, s.name, a.capacity, a.starts_at
         ORDER BY present DESC, reserved DESC, a.starts_at
         LIMIT 10
         """,
@@ -7002,6 +7003,12 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     return dict(row) if row else None
 
 
+def json_default(value):
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def parse_cookies(header: str | None) -> dict[str, str]:
     cookies: dict[str, str] = {}
     for part in (header or "").split(";"):
@@ -7281,7 +7288,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             RUNTIME_METRICS.finish(started, "PATCH", parsed.path, getattr(self, "_response_status", 200))
 
     def send_json(self, data: dict | list, status: int = 200) -> None:
-        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(data, ensure_ascii=False, default=json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -9333,7 +9340,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             FROM activities a
                             JOIN spaces s ON s.id = a.space_id
                             WHERE a.event_id = ? AND a.status <> 'cancelled'
-                            GROUP BY a.id
+                            GROUP BY a.id, a.title, s.name, a.starts_at
                             ORDER BY a.starts_at
                             """,
                             (event_id,),
@@ -9479,7 +9486,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         FROM activities a
                         LEFT JOIN reservations r ON r.activity_id = a.id
                         WHERE a.event_id = ?
-                        GROUP BY a.id
+                        GROUP BY a.id, a.title, s.name, a.starts_at
                         """,
                         (event_id,),
                     ).fetchall()
@@ -9784,7 +9791,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         JOIN spaces s ON s.id = a.space_id
                         LEFT JOIN reservations r ON r.activity_id = a.id
                         WHERE a.event_id = ?
-                        GROUP BY a.id
+                        GROUP BY a.id, a.title, s.name, a.starts_at
                         ORDER BY a.starts_at
                         """,
                         (event_id,),
@@ -9865,10 +9872,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                         WHERE active = 1
                           AND (
                             lower(name) = 'acceso'
-                            OR lower(role) LIKE '%acceso%'
-                            OR lower(role) LIKE '%admin%'
+                            OR lower(role) LIKE ?
+                            OR lower(role) LIKE ?
                           )
                         """
+                        ,
+                        ("%acceso%", "%admin%"),
                     ).fetchone()["c"]
                     waitlist_count = db.execute("SELECT COUNT(*) AS c FROM reservations WHERE event_id = ? AND status = 'waitlisted'", (event_id,)).fetchone()["c"]
                     rejection_count = db.execute(
@@ -9880,13 +9889,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()["c"]
-                    index_count = db.execute(
-                        "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'"
-                    ).fetchone()["c"]
-                    integrity = db.execute("PRAGMA quick_check").fetchone()[0]
+                    if DB_CONFIG.engine == "postgres":
+                        index_count = db.execute(
+                            """
+                            SELECT COUNT(*) AS c
+                            FROM pg_indexes
+                            WHERE schemaname = CURRENT_SCHEMA()
+                              AND indexname LIKE ?
+                            """,
+                            ("idx_%",),
+                        ).fetchone()["c"]
+                        integrity = db.execute("SELECT 1 AS ok").fetchone()["ok"]
+                    else:
+                        index_count = db.execute(
+                            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'"
+                        ).fetchone()["c"]
+                        integrity = db.execute("PRAGMA quick_check").fetchone()[0]
                 checks = [
                     {"key": "event", "label": "Evento activo", "ok": bool(event), "detail": event["name"] if event else "sin evento"},
-                    {"key": "database", "label": "Base local", "ok": integrity == "ok", "detail": integrity},
+                    {"key": "database", "label": "Base de datos", "ok": str(integrity) in {"ok", "1"}, "detail": "online" if str(integrity) == "1" else str(integrity)},
                     {"key": "indexes", "label": "Indices de rendimiento", "ok": int(index_count or 0) >= 8, "detail": f"{index_count} indices"},
                     {"key": "backup", "label": "Backup reciente", "ok": backup_age_minutes is not None and backup_age_minutes <= 30, "detail": f"{backup_age_minutes} min" if backup_age_minutes is not None else "sin backup"},
                     {"key": "accreditations", "label": "Acreditaciones activas", "ok": int(counts["active"] or 0) > 0, "detail": str(int(counts["active"] or 0))},
