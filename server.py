@@ -5631,7 +5631,7 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
     data["announcements"] = announcements
     data["attendances"] = attendances
     data["surveys"] = participant_survey_payloads(db, int(data["event_id"]), int(data["person_id"]))
-    data["certificates"] = [
+    certificates = [
         {
             "id": item["certificate_id"],
             "activity_id": item["activity_id"],
@@ -5642,6 +5642,18 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         for item in attendances
         if item.get("certificate_generated_at")
     ]
+    if data.get("checked_in_at") and not any(str(item.get("id")) == f"M-{data['id']}" for item in certificates):
+        certificates.insert(
+            0,
+            {
+                "id": f"M-{data['id']}",
+                "activity_id": None,
+                "title": f"Participacion en {data['event_name']}",
+                "percentage": 100,
+                "url": f"/api/certificate.pdf?token={data['token']}&manual=1",
+            },
+        )
+    data["certificates"] = certificates
     data["next_activity"] = next_activity
     data["current_activity"] = current_activity
     data["certificate"] = {
