@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bitora_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-bitora_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-backups:/bitora/pgbackups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bitora_staging} -d ${POSTGRES_DB:-bitora_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.staging
+    restart: unless-stopped
+    env_file:
+      - ${BITORA_ENV_FILE:-.env}
+    environment:
+      QR_POSTGRES_DSN: postgresql://${POSTGRES_USER:-bitora_staging}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bitora_staging}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bitora_staging}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bitora_staging}
+      BITORA_DISABLE_EMBEDDED_WORKER: "1"
+      QR_HOST: 0.0.0.0
+      PORT: 8787
+    volumes:
+      - bitora-storage:/bitora/storage
+      - bitora-backups:/bitora/backups
+      - bitora-logs:/bitora/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8787"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.staging
+    restart: unless-stopped
+    env_file:
+      - ${BITORA_ENV_FILE:-.env}
+    environment:
+      QR_POSTGRES_DSN: postgresql://${POSTGRES_USER:-bitora_staging}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bitora_staging}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bitora_staging}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bitora_staging}
+      BITORA_DISABLE_EMBEDDED_WORKER: "0"
+    volumes:
+      - bitora-storage:/bitora/storage
+      - bitora-backups:/bitora/backups
+      - bitora-logs:/bitora/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "backend/worker.py"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - ${BITORA_ENV_FILE:-.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  postgres-backups:
+  bitora-storage:
+  bitora-backups:
+  bitora-logs:
+  caddy-data:
+  caddy-config:
