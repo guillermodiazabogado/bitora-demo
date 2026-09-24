@@ -8685,13 +8685,21 @@ class AppHandler(SimpleHTTPRequestHandler):
                             return
                     data = certificate_payload(db, token, activity_id or None, manual=manual)
                     if data:
+                        audit_entity_id = data.get("certificate_id")
+                        if manual:
+                            audit_entity_id = data.get("accreditation_id")
                         audit(
                             db,
                             "portal" if not manual else "Admin",
                             "certificate.downloaded" if not manual else "certificate.manual_printed",
                             "certificate_eligibility",
-                            data["certificate_id"],
-                            {"token": token, "activity_id": data.get("activity_id"), "manual": manual},
+                            audit_entity_id,
+                            {
+                                "token": token,
+                                "activity_id": data.get("activity_id"),
+                                "manual": manual,
+                                "certificate_id": data.get("certificate_id"),
+                            },
                         )
                 if not data:
                     self.send_error(HTTPStatus.NOT_FOUND, "Certificado no disponible")
