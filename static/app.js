@@ -1623,6 +1623,8 @@ function printOneWristband(token) {
 
 async function printManualCertificate(token) {
   const notice = $("#receptionNotice");
+  const registerResult = $("#registerResult");
+  if (registerResult?.querySelector(".danger")) registerResult.innerHTML = "";
   const url = `/api/certificate.pdf?token=${encodeURIComponent(token)}&manual=1`;
   try {
     const response = await fetch(url);
@@ -1641,6 +1643,7 @@ async function printManualCertificate(token) {
     const objectUrl = URL.createObjectURL(blob);
     window.open(objectUrl, "_blank");
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    if (registerResult?.querySelector(".danger")) registerResult.innerHTML = "";
     notice.innerHTML = `<div class="panel success">Certificado preparado para imprimir.</div>`;
   } catch (err) {
     notice.innerHTML = `<div class="panel danger">No se pudo preparar el certificado.</div>`;
