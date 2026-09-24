@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 import re
 
 
@@ -67,15 +68,15 @@ class OperationsCenterService:
     def alerts(self, db, *, organization_id: int, event_id: int) -> list[dict]:
         self._event(db, organization_id, event_id)
         rows = db.execute("SELECT * FROM operations_center_alerts WHERE organization_id = ? AND event_id = ? ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END, id DESC", (organization_id, event_id)).fetchall()
-        return [dict(row) for row in rows]
+        return [self._jsonable(dict(row)) for row in rows]
 
     def incidents(self, db, *, organization_id: int, event_id: int) -> list[dict]:
         self._event(db, organization_id, event_id)
-        return [dict(row) for row in db.execute("SELECT * FROM operations_center_incidents WHERE organization_id = ? AND event_id = ? ORDER BY id DESC", (organization_id, event_id)).fetchall()]
+        return [self._jsonable(dict(row)) for row in db.execute("SELECT * FROM operations_center_incidents WHERE organization_id = ? AND event_id = ? ORDER BY id DESC", (organization_id, event_id)).fetchall()]
 
     def tasks(self, db, *, organization_id: int, event_id: int) -> list[dict]:
         self._event(db, organization_id, event_id)
-        return [dict(row) for row in db.execute("SELECT * FROM operations_center_tasks WHERE organization_id = ? AND event_id = ? ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END, id DESC", (organization_id, event_id)).fetchall()]
+        return [self._jsonable(dict(row)) for row in db.execute("SELECT * FROM operations_center_tasks WHERE organization_id = ? AND event_id = ? ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END, id DESC", (organization_id, event_id)).fetchall()]
 
     def create_incident(self, db, *, organization_id: int, event_id: int, actor: str, data: dict) -> dict:
         self._event(db, organization_id, event_id)
@@ -198,3 +199,9 @@ class OperationsCenterService:
         if value not in choices:
             raise OperationsCenterError("OPERATIONS_CHOICE_INVALID", "Valor invalido")
         return value
+
+    def _jsonable(self, item: dict) -> dict:
+        return {
+            key: value.isoformat() if isinstance(value, (date, datetime)) else value
+            for key, value in item.items()
+        }
