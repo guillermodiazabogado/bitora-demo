@@ -5493,7 +5493,7 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         FROM accreditations a
         JOIN people p ON p.id = a.person_id
         JOIN events e ON e.id = a.event_id
-        WHERE a.token = ?
+        WHERE lower(a.token) = lower(?)
         """,
         (token,),
     ).fetchone()
@@ -5759,8 +5759,8 @@ def release_available_certificates(db: sqlite3.Connection, event_id: int | None 
 
 def certificate_payload(db: sqlite3.Connection, token: str, activity_id: int | None = None, manual: bool = False) -> dict | None:
     release_available_certificates(db)
-    params: list[object] = [token.strip().upper()]
-    where = "ac.token = ?"
+    params: list[object] = [token.strip()]
+    where = "lower(ac.token) = lower(?)"
     if activity_id:
         where += " AND ce.activity_id = ?"
         params.append(activity_id)
@@ -5799,10 +5799,10 @@ def certificate_payload(db: sqlite3.Connection, token: str, activity_id: int | N
         FROM accreditations ac
         JOIN events e ON e.id = ac.event_id
         JOIN people p ON p.id = ac.person_id
-        WHERE ac.token = ? AND ac.status = 'active'
+        WHERE lower(ac.token) = lower(?) AND ac.status = 'active'
         LIMIT 1
         """,
-        [token.strip().upper()],
+        [token.strip()],
     ).fetchone()
     if not fallback:
         return None
@@ -8607,10 +8607,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/qr.svg":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     svg = qr_service().svg(db, token, qr_svg)
-                    acc = db.execute("SELECT id, event_id FROM accreditations WHERE token = ?", (token,)).fetchone()
+                    acc = db.execute("SELECT id, event_id FROM accreditations WHERE lower(token) = lower(?)", (token,)).fetchone()
                     if acc:
                         audit(db, "portal", "portal.qr_viewed", "accreditation", acc["id"], {"event_id": acc["event_id"]})
                 if not svg:
@@ -8626,7 +8626,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/credential.svg":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     data = portal_payload(db, token)
                     if data:
@@ -8646,7 +8646,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path in {"/api/credential.png", "/api/credential.pdf"}:
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     data = portal_payload(db, token)
                     if data:
@@ -8670,7 +8670,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/certificate.pdf":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 activity_id = int(query.get("activity_id", ["0"])[0] or 0)
                 manual = query.get("manual", ["0"])[0] == "1"
                 with connect() as db:
