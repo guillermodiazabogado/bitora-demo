@@ -202,8 +202,9 @@
       </div>
 
       <div class="layout">
-        <aside class="panel">
+        <aside class="panel producer-event-settings">
           <h2>Configuracion del evento</h2>
+          <p id="eventFormHelp" class="empty">Revisa y corrige los datos base del evento activo.</p>
           <form id="eventForm" class="stack">
             <label class="project-type-field">
               <span>Tipo de Proyecto</span>
@@ -260,9 +261,9 @@
             <input name="primary_action_label" placeholder="Texto boton principal">
             <input name="secondary_action_label" placeholder="Texto boton secundario">
             <textarea name="description" placeholder="Descripcion breve"></textarea>
-            <button>Crear evento</button>
+            <button id="eventFormSubmitBtn">Crear evento</button>
           </form>
-          <details class="prepare-box">
+          <details class="prepare-box producer-admin-only">
             <summary>Preparar evento real</summary>
             <form id="prepareEventForm" class="stack">
               <label class="project-type-field">
@@ -323,7 +324,7 @@
               <button class="danger-button">Crear base limpia</button>
             </form>
           </details>
-          <div class="prepare-box demo-loader-box">
+          <div class="prepare-box demo-loader-box producer-admin-only">
             <h2>Demo avanzada 1000</h2>
             <p>Carga una demo completa con 1000 participantes, 5 salas, 20 actividades, reservas, lista de espera, pantalla publica, comunicaciones demo y pico operativo con 30 terminales QR activas.</p>
             <form id="demoRealForm" class="stack">
@@ -331,7 +332,7 @@
               <button class="danger-button">Cargar demo 1000 con pico operativo</button>
             </form>
           </div>
-          <div class="prepare-box demo-loader-box">
+          <div class="prepare-box demo-loader-box producer-admin-only">
             <h2>Experiencia en vivo 10</h2>
             <p>Crea un evento nuevo, publicado y vacio para que diez invitados completen la inscripcion, reciban su portal, QR y confirmacion por WhatsApp.</p>
             <form id="demoLive10Form" class="stack">
@@ -343,7 +344,7 @@
           <div id="prepareNotice" class="result"></div>
         </aside>
 
-        <section class="content">
+        <section class="content producer-admin-only">
           <div class="panel action-backup">
             <h2>Backups y Recuperacion</h2>
             <p class="empty">Subi un ZIP de evento, verificá el manifiesto y restauralo de forma controlada. Por defecto se crea un evento nuevo en borrador.</p>

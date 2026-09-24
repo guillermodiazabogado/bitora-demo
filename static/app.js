@@ -1168,6 +1168,7 @@ function updateMetrics() {
   renderFeatureVisibility();
   renderLandingConfig();
   renderWaitingRoomConfig();
+  renderEventConfigForm();
   renderProducerHome();
 }
 
@@ -1284,6 +1285,44 @@ function renderWaitingRoomConfig() {
   form.show_position.checked = Number(event.show_waiting_position ?? 1) === 1;
   form.show_estimated_time.checked = Number(event.show_estimated_time ?? 1) === 1;
   form.waiting_message.value = event.waiting_message || "";
+}
+
+function setFieldValue(form, name, value) {
+  if (!form?.elements?.[name]) return;
+  form.elements[name].value = value ?? "";
+}
+
+function renderEventConfigForm() {
+  const form = $("#eventForm");
+  if (!form) return;
+  const event = currentEvent();
+  const producerEdit = effectiveRole() === "Productor" && Boolean(event);
+  form.dataset.mode = producerEdit ? "edit" : "create";
+  $("#eventFormSubmitBtn").textContent = producerEdit ? "Guardar cambios" : "Crear evento";
+  $("#eventFormHelp").textContent = producerEdit
+    ? "Estos son los datos cargados por administracion. Corregilos si algo quedo mal."
+    : "Crea un evento nuevo con la configuracion inicial.";
+  if (!producerEdit || !event) return;
+  setFieldValue(form, "project_type", event.project_type || "conference");
+  setFieldValue(form, "name", event.name || "");
+  setFieldValue(form, "venue", event.venue || "");
+  setFieldValue(form, "starts_at", String(event.starts_at || "").slice(0, 16));
+  setFieldValue(form, "ends_at", String(event.ends_at || "").slice(0, 16));
+  setFieldValue(form, "capacity", event.capacity || 0);
+  setFieldValue(form, "activities_enabled", Number(event.activities_enabled ?? 1));
+  setFieldValue(form, "capacity_control_enabled", Number(event.capacity_control_enabled ?? 1));
+  setFieldValue(form, "waitlist_enabled", Number(event.waitlist_enabled || 0));
+  setFieldValue(form, "activity_selection_mode", event.activity_selection_mode || "optional_later");
+  setFieldValue(form, "controlar_asistencia", Number(event.controlar_asistencia ?? 1));
+  setFieldValue(form, "attendance_mode", event.attendance_mode || "entry_only");
+  setFieldValue(form, "porcentaje_minimo_asistencia", event.porcentaje_minimo_asistencia || 80);
+  setFieldValue(form, "activity_access_open_minutes_before", event.activity_access_open_minutes_before || 10);
+  setFieldValue(form, "generar_certificados", Number(event.generar_certificados ?? 1));
+  setFieldValue(form, "captation_mode", event.captation_mode || "MIXTO");
+  setFieldValue(form, "whatsapp_number", event.whatsapp_number || "");
+  setFieldValue(form, "primary_action_label", event.primary_action_label || "");
+  setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
+  setFieldValue(form, "description", event.description || "");
 }
 
 async function saveWaitingRoomConfig(event) {
@@ -2728,6 +2767,15 @@ async function createEvent(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formData(form);
+  if (form.dataset.mode === "edit" && state.eventId) {
+    data.event_id = state.eventId;
+    data.actor = state.currentUser;
+    await api("/api/events/update", { method: "POST", body: JSON.stringify(data) });
+    await loadEvents();
+    $("#prepareNotice").innerHTML = `<div class="panel success">Configuracion del evento actualizada.</div>`;
+    setView("configure");
+    return;
+  }
   data.status = "published";
   data.actor = state.currentUser;
   const result = await api("/api/events", { method: "POST", body: JSON.stringify(data) });

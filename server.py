@@ -13127,6 +13127,55 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json(result, int(result.pop("status_code", 200)))
                 return
 
+            if path == "/api/events/update":
+                event_id = int(data.get("event_id") or 0)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, session = self.require_event_permission(db, event_id, "configure_event", "event.update", str(data.get("actor") or ""))
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    db.execute(
+                        """
+                        UPDATE events
+                        SET name = ?, description = ?, venue = ?, starts_at = ?, ends_at = ?,
+                            project_type = ?, capacity = ?, activity_selection_mode = ?,
+                            generar_certificados = ?, controlar_asistencia = ?, attendance_mode = ?,
+                            porcentaje_minimo_asistencia = ?, captation_mode = ?,
+                            primary_action_label = ?, secondary_action_label = ?, whatsapp_number = ?,
+                            activity_access_open_minutes_before = ?, activities_enabled = ?,
+                            capacity_control_enabled = ?, waitlist_enabled = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            str(data.get("name") or "").strip(),
+                            str(data.get("description") or "").strip(),
+                            str(data.get("venue") or "").strip(),
+                            str(data.get("starts_at") or "").strip(),
+                            str(data.get("ends_at") or "").strip(),
+                            normalize_project_type(data.get("project_type")),
+                            int(data.get("capacity") or 0),
+                            str(data.get("activity_selection_mode") or "optional_later").strip() or "optional_later",
+                            1 if truthy(data.get("generar_certificados", True)) else 0,
+                            1 if truthy(data.get("controlar_asistencia", True)) else 0,
+                            str(data.get("attendance_mode") or "entry_only").strip() or "entry_only",
+                            int(data.get("porcentaje_minimo_asistencia") or 80),
+                            str(data.get("captation_mode") or "MIXTO").strip() or "MIXTO",
+                            str(data.get("primary_action_label") or "").strip(),
+                            str(data.get("secondary_action_label") or "").strip(),
+                            str(data.get("whatsapp_number") or "").strip(),
+                            max(0, int(data.get("activity_access_open_minutes_before") or 10)),
+                            1 if truthy(data.get("activities_enabled", True)) else 0,
+                            1 if truthy(data.get("capacity_control_enabled", True)) else 0,
+                            1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            event_id,
+                        ),
+                    )
+                    audit(db, (session or {}).get("name", data.get("actor", "Admin")), "event.updated", "event", event_id, {"fields": sorted(data.keys())})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "id": event_id})
+                return
+
             if path == "/api/events":
                 actor = data.get("actor", "Admin")
                 with connect() as db:
