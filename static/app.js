@@ -3421,4 +3421,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (initialView === "simulator") await loadSimulator();
     if (initialView === "reports") await loadVisualization();
   }
+  document.body.classList.remove("app-loading");
 });

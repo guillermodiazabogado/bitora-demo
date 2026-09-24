@@ -55,7 +55,7 @@ class OperationsCenterService:
             "surveys_active": {"value": count("SELECT COUNT(*) AS c FROM surveys WHERE event_id = ? AND status IN ('OPEN','open','PUBLISHED','published')"), "source": "surveys", "scope": "event"},
             "alerts_open": {"value": count("SELECT COUNT(*) AS c FROM operations_center_alerts WHERE event_id = ? AND status = 'OPEN'"), "source": "operations_center_alerts", "scope": "event"},
             "incidents_open": {"value": count("SELECT COUNT(*) AS c FROM operations_center_incidents WHERE event_id = ? AND status NOT IN ('RESOLVED','CLOSED')"), "source": "operations_center_incidents", "scope": "event"},
-            "tasks_overdue": {"value": count("SELECT COUNT(*) AS c FROM operations_center_tasks WHERE event_id = ? AND status NOT IN ('COMPLETED','CANCELLED') AND due_at <> '' AND due_at < ?", (event_id, self.now())), "source": "operations_center_tasks", "scope": "event"},
+            "tasks_overdue": {"value": count("SELECT COUNT(*) AS c FROM operations_center_tasks WHERE event_id = ? AND status NOT IN ('COMPLETED','CANCELLED') AND due_at IS NOT NULL AND due_at < ?", (event_id, self.now())), "source": "operations_center_tasks", "scope": "event"},
         }
 
     def readiness(self, db, *, organization_id: int, event_id: int, actor: str) -> dict:

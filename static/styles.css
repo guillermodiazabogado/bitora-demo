@@ -601,7 +601,11 @@ nav button.active {
   color: white;
 }
 
-body.producer-mode .topbar nav button:not(#homeNav) {
+body.app-loading .topbar nav {
+  visibility: hidden;
+}
+
+body.producer-mode .topbar nav {
   display: none;
 }
 
