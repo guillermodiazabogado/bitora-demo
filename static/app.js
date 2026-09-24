@@ -1500,6 +1500,8 @@ async function loadAccreditations() {
   const q = encodeURIComponent($("#searchInput")?.value || "");
   const rows = filterAccreditations(await api(`/api/accreditations?event_id=${state.eventId}&q=${q}`));
   state.accreditations = await api(`/api/accreditations?event_id=${state.eventId}`);
+  const registerResult = $("#registerResult");
+  if (registerResult?.querySelector(".danger")) registerResult.innerHTML = "";
   $("#accreditations").innerHTML = rows.map((row) => renderAccreditationCard(row)).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
   bindAccreditationActions($("#accreditations"));
   renderReservationSelectors();
