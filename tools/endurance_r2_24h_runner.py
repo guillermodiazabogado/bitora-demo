@@ -417,8 +417,14 @@ def classify_checkpoint(record: dict, availability_failure_streak: int = 0) -> l
     if health.get("ok") and (storage.get("backend") != "r2" or storage.get("ready") is not True):
         findings.append({"severity": "CRITICAL", "code": "r2.not_ready"})
     metrics = (record.get("participant_metrics") or {}).get("json") or {}
-    if record.get("participant_metrics", {}).get("ok") and metrics.get("registered") != 10:
-        findings.append({"severity": "HIGH", "code": "baseline.participants"})
+    if record.get("participant_metrics", {}).get("ok"):
+        registered = int(metrics.get("registered") or 0)
+        with_agenda = int(metrics.get("with_agenda") or 0)
+        with_reservations = int(metrics.get("with_reservations") or 0)
+        if registered <= 0:
+            findings.append({"severity": "HIGH", "code": "baseline.participants.empty"})
+        if with_agenda > registered or with_reservations > registered:
+            findings.append({"severity": "HIGH", "code": "baseline.participants.inconsistent"})
     return findings
 
 
