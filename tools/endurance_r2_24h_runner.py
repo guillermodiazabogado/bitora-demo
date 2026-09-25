@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import http.cookiejar
 import json
 import os
@@ -205,25 +206,81 @@ def apply_r2_env(secrets: dict) -> None:
 def r2_direct_check(run_id: str) -> dict:
     if os.environ.get("R2_BUCKET") and wrangler_available():
         return r2_direct_check_wrangler(run_id, os.environ["R2_BUCKET"])
-    from backend.storage import StorageService
-
-    storage = StorageService(Path(os.environ.get("TEMP", ".")) / "bitora-r2-unused", "r2")
     payload = f"BITORA ENDURANCE R2 {run_id} {iso()}".encode("utf-8")
     checksum = hashlib.sha256(payload).hexdigest()
     name = f"{run_id}-{utc_now().strftime('%Y%m%d%H%M%S')}.txt"
-    record = storage.save_event(DEFAULT_EVENT_ID, "uploads", name, payload)
-    read_back = storage.read_event(DEFAULT_EVENT_ID, "uploads", name)
-    deleted = storage.delete_event(DEFAULT_EVENT_ID, "uploads", name)
+    key = f"{os.environ.get('R2_PREFIX', '').strip('/')}/endurance/{run_id}/{name}".strip("/")
+    endpoint = os.environ.get("R2_ENDPOINT") or os.environ.get("S3_ENDPOINT_URL") or ""
+    bucket = os.environ.get("R2_BUCKET") or os.environ.get("S3_BUCKET") or ""
+    access_key = os.environ.get("R2_ACCESS_KEY_ID") or os.environ.get("S3_ACCESS_KEY_ID") or ""
+    secret_key = os.environ.get("R2_SECRET_ACCESS_KEY") or os.environ.get("S3_SECRET_ACCESS_KEY") or ""
+    if not endpoint or not bucket or not access_key or not secret_key:
+        return {"timestamp_utc": iso(), "status": "FAILED", "error": "r2_credentials_missing"}
+    put = r2_signed_request("PUT", endpoint, bucket, key, access_key, secret_key, payload)
+    get = r2_signed_request("GET", endpoint, bucket, key, access_key, secret_key, b"")
+    read_back = get.get("raw") or b""
+    delete = r2_signed_request("DELETE", endpoint, bucket, key, access_key, secret_key, b"")
     return {
         "timestamp_utc": iso(),
-        "status": "PASSED" if record.get("sha256") == checksum and read_back == payload and deleted else "FAILED",
-        "write": True,
+        "status": "PASSED" if put.get("ok") and get.get("ok") and read_back == payload and delete.get("ok") else "FAILED",
+        "write": bool(put.get("ok")),
         "read": read_back == payload,
         "checksum": hashlib.sha256(read_back).hexdigest() if read_back else "",
         "expected_checksum": checksum,
-        "delete": bool(deleted),
-        "key_hint": mask(str(record.get("key", "")), 10),
+        "delete": bool(delete.get("ok")),
+        "key_hint": mask(key, 10),
+        "errors": {
+            "put": put.get("error", ""),
+            "get": get.get("error", ""),
+            "delete": delete.get("error", ""),
+        },
     }
+
+
+def r2_signed_request(method: str, endpoint: str, bucket: str, key: str, access_key: str, secret_key: str, payload: bytes) -> dict:
+    parsed = urllib.parse.urlparse(endpoint.rstrip("/"))
+    host = parsed.netloc
+    canonical_uri = "/" + "/".join(
+        urllib.parse.quote(part.strip(), safe="-_.~")
+        for part in [bucket, *key.split("/")]
+        if part.strip()
+    )
+    url = f"{parsed.scheme}://{host}{canonical_uri}"
+    amz_date = utc_now().strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = amz_date[:8]
+    payload_hash = hashlib.sha256(payload).hexdigest()
+    canonical_headers = f"host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"
+    signed_headers = "host;x-amz-content-sha256;x-amz-date"
+    canonical_request = "\n".join([method, canonical_uri, "", canonical_headers, signed_headers, payload_hash])
+    credential_scope = f"{date_stamp}/auto/s3/aws4_request"
+    string_to_sign = "\n".join(["AWS4-HMAC-SHA256", amz_date, credential_scope, hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()])
+
+    def sign(key_bytes: bytes, msg: str) -> bytes:
+        return hmac.new(key_bytes, msg.encode("utf-8"), hashlib.sha256).digest()
+
+    signing_key = sign(sign(sign(sign(("AWS4" + secret_key).encode("utf-8"), date_stamp), "auto"), "s3"), "aws4_request")
+    signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+    authorization = f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
+    request = urllib.request.Request(
+        url,
+        data=payload if method in {"PUT", "POST"} else None,
+        method=method,
+        headers={
+            "Authorization": authorization,
+            "Host": host,
+            "x-amz-content-sha256": payload_hash,
+            "x-amz-date": amz_date,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+            return {"ok": 200 <= int(response.status) < 300, "status": int(response.status), "raw": raw, "error": ""}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        return {"ok": False, "status": int(exc.code), "raw": b"", "error": f"HTTP {exc.code}: {detail}"}
+    except Exception as exc:
+        return {"ok": False, "status": None, "raw": b"", "error": str(exc)[:300]}
 
 
 def r2_direct_check_wrangler(run_id: str, bucket: str) -> dict:
