@@ -261,6 +261,8 @@ const PRODUCER_HOME_MODULES = [
   },
 ];
 
+const DEFAULT_PORTAL_VISIBLE_TABS = ["inicio", "qr", "agenda", "charlas", "asistencia", "encuesta", "certificado", "notificaciones", "perfil"];
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -1292,6 +1294,28 @@ function setFieldValue(form, name, value) {
   form.elements[name].value = value ?? "";
 }
 
+function parsePortalTabs(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : DEFAULT_PORTAL_VISIBLE_TABS;
+  } catch (err) {
+    return DEFAULT_PORTAL_VISIBLE_TABS;
+  }
+}
+
+function setPortalTabCheckboxes(values) {
+  const selected = new Set(parsePortalTabs(values));
+  $$(".portal-tab-checkbox").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function selectedPortalTabs() {
+  const selected = $$(".portal-tab-checkbox").filter((input) => input.checked).map((input) => input.value);
+  return selected.length ? selected : DEFAULT_PORTAL_VISIBLE_TABS;
+}
+
 function renderEventConfigForm() {
   const form = $("#eventForm");
   if (!form) return;
@@ -1303,6 +1327,7 @@ function renderEventConfigForm() {
     ? "Estos son los datos cargados por administracion. Corregilos si algo quedo mal."
     : "Crea un evento nuevo con la configuracion inicial.";
   if (!producerEdit || !event) return;
+  setPortalTabCheckboxes(event.portal_visible_tabs);
   setFieldValue(form, "project_type", event.project_type || "conference");
   setFieldValue(form, "name", event.name || "");
   setFieldValue(form, "venue", event.venue || "");
@@ -2767,6 +2792,7 @@ async function createEvent(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formData(form);
+  data.portal_visible_tabs = selectedPortalTabs();
   if (form.dataset.mode === "edit" && state.eventId) {
     data.event_id = state.eventId;
     data.actor = state.currentUser;

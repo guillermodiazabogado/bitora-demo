@@ -3,117 +3,656 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BITORA - Encuestas V4</title>
+  <title>BITORA - Encuestas</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    body { background: #f6f7f9; color: #18202a; font-family: system-ui, sans-serif; margin: 0; }
-    main { max-width: 1120px; margin: 0 auto; padding: 24px; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-    h1 { font-size: 24px; margin: 0; }
-    h2 { font-size: 18px; margin: 0 0 12px; }
-    section { background: #fff; border: 1px solid #d9dee7; border-radius: 8px; margin-bottom: 16px; padding: 16px; }
-    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
-    input, select, textarea { border: 1px solid #c9d1dc; border-radius: 6px; font: inherit; padding: 9px; }
-    textarea { min-height: 84px; resize: vertical; }
-    button { border: 0; border-radius: 6px; background: #174ea6; color: white; cursor: pointer; font-weight: 700; padding: 10px 14px; }
+    :root {
+      --ink: #071926;
+      --muted: #5d7185;
+      --line: #d8e2ea;
+      --panel: #ffffff;
+      --bg: #eef4f6;
+      --blue: #174ea6;
+      --green: #107c4c;
+      --amber: #a76612;
+      --red: #ba2d21;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: 30px; line-height: 1.05; }
+    h2 { margin-bottom: 12px; font-size: 20px; }
+    h3 { margin-bottom: 8px; font-size: 16px; }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(7, 25, 38, .04);
+    }
+
+    .actions,
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input, select {
+      min-height: 42px;
+      border: 1px solid #c9d1dc;
+      border-radius: 6px;
+      font: inherit;
+      padding: 9px;
+      background: #fff;
+    }
+
+    button,
+    .button-link {
+      min-height: 40px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--blue);
+      color: white;
+      cursor: pointer;
+      font-weight: 750;
+      padding: 10px 14px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     button.secondary { background: #415166; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border-bottom: 1px solid #e4e8ef; padding: 8px; text-align: left; }
-    .status { border-radius: 999px; background: #eef3fb; display: inline-block; padding: 4px 8px; }
-    .muted { color: #607080; font-size: 13px; }
+
+    button.ghost,
+    .button-link.ghost {
+      background: #eef6f7;
+      color: #073844;
+      border: 1px solid #b9dfe2;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .metric {
+      min-height: 92px;
+      padding: 14px;
+      border: 1px solid #e2ebf1;
+      border-radius: 8px;
+      background: #fbfdfe;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .builder {
+      display: grid;
+      grid-template-columns: minmax(250px, .85fr) minmax(320px, 1.15fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .template-list,
+    .question-preview,
+    .survey-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .template-option {
+      width: 100%;
+      justify-content: flex-start;
+      text-align: left;
+      background: #f8fbfc;
+      color: var(--ink);
+      border: 1px solid #d9e5ec;
+      min-height: 74px;
+      padding: 12px;
+    }
+
+    .template-option.active {
+      background: #e8f7f7;
+      border-color: #62c2c2;
+      outline: 2px solid rgba(13, 140, 140, .12);
+    }
+
+    .template-option strong,
+    .template-option span {
+      display: block;
+    }
+
+    .template-option span {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .question-card,
+    .survey-card {
+      border: 1px solid #e2ebf1;
+      border-radius: 8px;
+      background: #fbfdfe;
+      padding: 12px;
+    }
+
+    .question-card strong,
+    .survey-card strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .survey-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: #eef3fb;
+      color: #285074;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .pill.open,
+    .pill.published {
+      background: #e7f7ef;
+      color: var(--green);
+    }
+
+    .pill.draft {
+      background: #fff4d7;
+      color: var(--amber);
+    }
+
+    .notice {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #dbe6ee;
+      background: #fbfdfe;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .notice.ok {
+      border-color: #bfe6d2;
+      background: #effaf4;
+      color: var(--green);
+    }
+
+    .notice.warn {
+      border-color: #f4ddb0;
+      background: #fff8e8;
+      color: var(--amber);
+    }
+
+    .notice.error {
+      border-color: #f0c1bb;
+      background: #fff0ef;
+      color: var(--red);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 880px) {
+      header,
+      .survey-card {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+      }
+
+      .builder,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <main>
     <header>
       <div>
-        <h1>Encuestas V4</h1>
-        <div class="muted">Foundation de encuestas versionadas, respuestas y resultados.</div>
+        <h1>Encuestas</h1>
+        <div class="muted">Crea, publica y revisa encuestas del evento sin usar codigos tecnicos.</div>
       </div>
-      <div class="producer-module-actions">
-        <a id="producerHomeLink" class="producer-home-return-link" href="/#home">Volver al Home</a>
-        <button id="refreshBtn" class="secondary">Actualizar</button>
+      <div class="actions">
+        <a id="producerHomeLink" class="button-link ghost" href="/#home">Volver al Home</a>
+        <button id="refreshBtn" class="secondary" type="button">Actualizar</button>
       </div>
     </header>
 
     <section>
-      <h2>Evento</h2>
+      <h2>Evento activo</h2>
       <div class="grid">
-        <label>Event ID <input id="eventId" type="number" min="1" value="1"></label>
-        <label>Nombre <input id="surveyName" value="Encuesta de satisfaccion"></label>
-        <label>Modo
+        <label>Evento
+          <select id="eventSelect"></select>
+        </label>
+        <label>Nombre de la encuesta
+          <input id="surveyName" value="Encuesta de satisfaccion">
+        </label>
+        <label>Modo de respuesta
           <select id="responseMode">
-            <option value="IDENTIFIED">Identificada</option>
-            <option value="ANONYMOUS">Anonima</option>
+            <option value="IDENTIFIED">Identificada por participante</option>
+            <option value="ANONYMOUS">Anonima por token</option>
           </select>
         </label>
       </div>
+      <p class="muted">La encuesta identificada permite saber quien respondio. La anonima protege identidad y usa token.</p>
     </section>
 
     <section>
-      <h2>Crear encuesta base</h2>
-      <div class="grid">
-        <label>Tipo <input id="typeCode" value="SATISFACTION"></label>
-        <label>Titulo version <input id="versionTitle" value="Encuesta posterior al evento"></label>
+      <div class="summary-grid">
+        <div class="metric"><span>Encuestas</span><strong id="metricSurveys">0</strong></div>
+        <div class="metric"><span>Abiertas</span><strong id="metricOpen">0</strong></div>
+        <div class="metric"><span>Publicadas</span><strong id="metricPublished">0</strong></div>
+        <div class="metric"><span>Respuestas</span><strong id="metricResponses">-</strong></div>
       </div>
-      <p class="muted">Crea tipo, encuesta, version con preguntas simples, publica y asigna al evento.</p>
-      <button id="createBtn">Crear y publicar</button>
     </section>
 
     <section>
-      <h2>Encuestas</h2>
-      <table>
-        <thead><tr><th>ID</th><th>Nombre</th><th>Modo</th><th>Estado</th><th>Version</th></tr></thead>
-        <tbody id="surveyRows"><tr><td colspan="5" class="muted">Sin datos cargados.</td></tr></tbody>
-      </table>
+      <h2>Crear encuesta</h2>
+      <div class="builder">
+        <div>
+          <h3>Plantilla</h3>
+          <div id="templateList" class="template-list"></div>
+        </div>
+        <div>
+          <div class="grid">
+            <label>Titulo de publicacion
+              <input id="versionTitle" value="Encuesta posterior al evento">
+            </label>
+            <label>Estado inicial
+              <select id="publishMode">
+                <option value="OPEN">Crear, publicar y abrir</option>
+                <option value="PUBLISHED">Crear y dejar publicada</option>
+              </select>
+            </label>
+          </div>
+          <p id="templateDescription" class="muted"></p>
+          <div id="questionPreview" class="question-preview"></div>
+          <div class="actions" style="margin-top: 12px;">
+            <button id="createBtn" type="button">Crear encuesta</button>
+            <button id="reuseBtn" class="ghost hidden" type="button">Abrir encuesta existente</button>
+          </div>
+          <div id="resultNotice" class="notice">Elegir plantilla y crear la encuesta para este evento.</div>
+        </div>
+      </div>
     </section>
 
     <section>
-      <h2>Resultado</h2>
-      <pre id="output" class="muted"></pre>
+      <h2>Encuestas del evento</h2>
+      <p class="muted">Listado operativo de encuestas disponibles para el evento seleccionado.</p>
+      <div id="surveyRows" class="survey-list">
+        <div class="notice">Sin datos cargados.</div>
+      </div>
     </section>
   </main>
+
   <script>
     const $ = (id) => document.getElementById(id);
-    function updateHomeLink() {
-      const eventId = $("eventId").value || new URLSearchParams(location.search).get("event_id") || "";
-      $("producerHomeLink").href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : "/#home";
+
+    const templates = {
+      SATISFACTION: {
+        name: "Satisfaccion general",
+        surveyName: "Encuesta de satisfaccion",
+        title: "Encuesta posterior al evento",
+        description: "Mide experiencia general, recomendacion y comentarios finales.",
+        questions: [
+          { key: "SAT", prompt: "Como calificas la experiencia general?", type: "SCALE", required: true, config: { min: 1, max: 5 } },
+          { key: "NPS", prompt: "Recomendarias el evento?", type: "YES_NO", required: true },
+          { key: "ROOM", prompt: "Que espacio te resulto mas util?", type: "SINGLE_CHOICE", required: true, options: [{ key: "A", label: "Sala principal" }, { key: "B", label: "Actividades paralelas" }] },
+          { key: "COMMENT", prompt: "Que mejorarias para la proxima edicion?", type: "LONG_TEXT", required: false }
+        ]
+      },
+      ACTIVITIES: {
+        name: "Opinion de actividades",
+        surveyName: "Encuesta de actividades",
+        title: "Opinion sobre actividades",
+        description: "Recolecta valoracion de charlas, salas y contenidos.",
+        questions: [
+          { key: "CONTENT", prompt: "Como calificas el contenido de las actividades?", type: "SCALE", required: true, config: { min: 1, max: 5 } },
+          { key: "SCHEDULE", prompt: "Los horarios fueron adecuados?", type: "YES_NO", required: true },
+          { key: "FORMAT", prompt: "Que formato preferis?", type: "SINGLE_CHOICE", required: true, options: [{ key: "TALK", label: "Charlas" }, { key: "WORKSHOP", label: "Talleres" }, { key: "MIXED", label: "Mixto" }] },
+          { key: "COMMENT", prompt: "Comentarios sobre actividades", type: "LONG_TEXT", required: false }
+        ]
+      },
+      ORGANIZATION: {
+        name: "Calidad de organizacion",
+        surveyName: "Encuesta de organizacion",
+        title: "Evaluacion de organizacion",
+        description: "Evalua recepcion, acreditacion, comunicacion y soporte.",
+        questions: [
+          { key: "CHECKIN", prompt: "Como fue el proceso de acreditacion?", type: "SCALE", required: true, config: { min: 1, max: 5 } },
+          { key: "INFO", prompt: "Recibiste informacion clara antes y durante el evento?", type: "YES_NO", required: true },
+          { key: "SUPPORT", prompt: "Que aspecto fue mas importante?", type: "SINGLE_CHOICE", required: true, options: [{ key: "ACCESS", label: "Ingreso" }, { key: "AGENDA", label: "Agenda" }, { key: "STAFF", label: "Atencion del equipo" }] },
+          { key: "COMMENT", prompt: "Sugerencias para la organizacion", type: "LONG_TEXT", required: false }
+        ]
+      }
+    };
+
+    let events = [];
+    let surveys = [];
+    let types = [];
+    let selectedTemplate = "SATISFACTION";
+
+    function eventId() {
+      return Number($("eventSelect").value || new URLSearchParams(location.search).get("event_id") || 0);
     }
-    const queryEventId = new URLSearchParams(location.search).get("event_id");
-    if (queryEventId) $("eventId").value = queryEventId;
-    const json = (url, options = {}) => fetch(url, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } }).then(async (r) => {
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || data.code || r.statusText);
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function json(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error || data.code || response.statusText);
+        error.code = data.code || "";
+        error.status = response.status;
+        throw error;
+      }
       return data;
-    });
-    const questions = [
-      { key: "SAT", prompt: "Satisfaccion general", type: "SCALE", required: true, config: { min: 1, max: 5 } },
-      { key: "NPS", prompt: "Recomendarias el evento", type: "YES_NO", required: true },
-      { key: "ROOM", prompt: "Sala preferida", type: "SINGLE_CHOICE", required: true, options: [{ key: "A", label: "Sala A" }, { key: "B", label: "Sala B" }] },
-      { key: "COMMENT", prompt: "Comentario", type: "LONG_TEXT", required: false }
-    ];
-    function body(data) { return { method: "POST", body: JSON.stringify(data) }; }
+    }
+
+    function body(data) {
+      return { method: "POST", body: JSON.stringify(data) };
+    }
+
+    function showNotice(message, kind = "") {
+      $("resultNotice").className = `notice ${kind}`.trim();
+      $("resultNotice").textContent = message;
+    }
+
+    function humanError(error) {
+      const raw = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+      if (raw.includes("duplicate") || raw.includes("duplicado") || raw.includes("unique")) return "Ya existe una encuesta similar para este evento. La dejamos visible para reutilizarla.";
+      if (error?.status === 403) return "Tu usuario no tiene permiso para crear o publicar encuestas.";
+      if (raw.includes("feature")) return "El modulo de encuestas no esta habilitado para este evento.";
+      if (raw.includes("invalid") || raw.includes("invalido")) return "Hay un dato invalido. Revisa nombre, plantilla y modo de respuesta.";
+      return error?.message || "No se pudo completar la accion.";
+    }
+
+    function updateHomeLink() {
+      const id = eventId();
+      $("producerHomeLink").href = id ? `/?event_id=${encodeURIComponent(id)}#home` : "/#home";
+    }
+
+    function renderTemplates() {
+      $("templateList").innerHTML = Object.entries(templates).map(([code, template]) => `
+        <button type="button" class="template-option ${code === selectedTemplate ? "active" : ""}" data-template="${code}">
+          <strong>${escapeHtml(template.name)}</strong>
+          <span>${escapeHtml(template.description)}</span>
+        </button>
+      `).join("");
+      document.querySelectorAll("[data-template]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selectedTemplate = button.dataset.template;
+          $("surveyName").value = templates[selectedTemplate].surveyName;
+          $("versionTitle").value = templates[selectedTemplate].title;
+          renderTemplates();
+          renderQuestionPreview();
+          updateExistingHint();
+        });
+      });
+    }
+
+    function questionTypeLabel(type) {
+      return { SCALE: "Escala", YES_NO: "Si / No", SINGLE_CHOICE: "Opcion unica", MULTIPLE_CHOICE: "Opcion multiple", LONG_TEXT: "Texto largo", SHORT_TEXT: "Texto corto" }[type] || type;
+    }
+
+    function renderQuestionPreview() {
+      const template = templates[selectedTemplate];
+      $("templateDescription").textContent = template.description;
+      $("questionPreview").innerHTML = template.questions.map((question, index) => `
+        <div class="question-card">
+          <strong>${index + 1}. ${escapeHtml(question.prompt)}</strong>
+          <span class="muted">${escapeHtml(questionTypeLabel(question.type))}${question.required ? " - obligatoria" : " - opcional"}</span>
+        </div>
+      `).join("");
+    }
+
+    function renderEvents() {
+      const requested = Number(new URLSearchParams(location.search).get("event_id") || 0);
+      $("eventSelect").innerHTML = events.map((event) => `<option value="${event.id}">${escapeHtml(event.name)}</option>`).join("");
+      if (requested && events.some((event) => Number(event.id) === requested)) $("eventSelect").value = String(requested);
+      if (!$("eventSelect").value && events[0]) $("eventSelect").value = String(events[0].id);
+      updateHomeLink();
+    }
+
+    function renderMetrics() {
+      const open = surveys.filter((item) => String(item.status).toUpperCase() === "OPEN").length;
+      const published = surveys.filter((item) => ["PUBLISHED", "OPEN"].includes(String(item.status).toUpperCase())).length;
+      $("metricSurveys").textContent = surveys.length;
+      $("metricOpen").textContent = open;
+      $("metricPublished").textContent = published;
+      $("metricResponses").textContent = "-";
+    }
+
+    function statusLabel(status) {
+      return { DRAFT: "Borrador", PUBLISHED: "Publicada", OPEN: "Abierta", CLOSED: "Cerrada", ARCHIVED: "Archivada" }[String(status || "").toUpperCase()] || status || "-";
+    }
+
+    function modeLabel(mode) {
+      return String(mode || "").toUpperCase() === "ANONYMOUS" ? "Anonima" : "Identificada";
+    }
+
+    function renderSurveys() {
+      renderMetrics();
+      if (!surveys.length) {
+        $("surveyRows").innerHTML = '<div class="notice">Todavia no hay encuestas para este evento.</div>';
+        return;
+      }
+      $("surveyRows").innerHTML = surveys.map((item) => `
+        <article class="survey-card">
+          <div>
+            <strong>${escapeHtml(item.name)}</strong>
+            <div class="muted">Modo: ${modeLabel(item.response_mode)} - Version activa: ${escapeHtml(item.current_version_id || "sin publicar")}</div>
+          </div>
+          <div class="row-actions">
+            <span class="pill ${String(item.status || "").toLowerCase()}">${statusLabel(item.status)}</span>
+            <a class="button-link ghost" href="/api/events/${encodeURIComponent(eventId())}/surveys/${encodeURIComponent(item.id)}/export.csv">Exportar CSV</a>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function matchingSurvey() {
+      const wantedName = $("surveyName").value.trim().toLowerCase();
+      return surveys.find((item) => String(item.name || "").trim().toLowerCase() === wantedName);
+    }
+
+    function updateExistingHint() {
+      const existing = matchingSurvey();
+      $("reuseBtn").classList.toggle("hidden", !existing);
+      if (existing) {
+        showNotice("Ya existe una encuesta con ese nombre en este evento. Podes reutilizarla o cambiar el nombre para crear otra.", "warn");
+      } else {
+        showNotice("Lista para crear una encuesta nueva con la plantilla seleccionada.");
+      }
+    }
+
+    async function loadAll() {
+      try {
+        events = await json("/api/events");
+        renderEvents();
+        await loadSurveys();
+      } catch (error) {
+        showNotice(humanError(error), "error");
+      }
+    }
+
     async function loadSurveys() {
-      const eventId = $("eventId").value;
-      const data = await json(`/api/surveys?event_id=${eventId}`);
-      $("surveyRows").innerHTML = data.items.length ? data.items.map((item) => `<tr><td>${item.id}</td><td>${item.name}</td><td>${item.response_mode}</td><td><span class="status">${item.status}</span></td><td>${item.current_version_id || ""}</td></tr>`).join("") : `<tr><td colspan="5" class="muted">No hay encuestas.</td></tr>`;
-      $("output").textContent = JSON.stringify(data, null, 2);
+      updateHomeLink();
+      const id = eventId();
+      if (!id) {
+        surveys = [];
+        types = [];
+        renderSurveys();
+        showNotice("Selecciona un evento para ver sus encuestas.", "warn");
+        return;
+      }
+      const [surveyData, typeData] = await Promise.all([
+        json(`/api/surveys?event_id=${encodeURIComponent(id)}`),
+        json(`/api/survey-types?event_id=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
+      ]);
+      surveys = surveyData.items || [];
+      types = typeData.items || [];
+      renderSurveys();
+      updateExistingHint();
     }
+
+    async function ensureType(code) {
+      const found = types.find((item) => String(item.code || "").toUpperCase() === code);
+      if (found) return found;
+      try {
+        const result = await json("/api/survey-types", body({ event_id: eventId(), code, name: templates[code].name, description: templates[code].description }));
+        types.push(result.item);
+        return result.item;
+      } catch (error) {
+        await loadSurveys();
+        const afterReload = types.find((item) => String(item.code || "").toUpperCase() === code);
+        if (afterReload) return afterReload;
+        throw error;
+      }
+    }
+
     async function createSurvey() {
-      const eventId = Number($("eventId").value);
-      const type = await json("/api/survey-types", body({ event_id: eventId, code: $("typeCode").value, name: $("typeCode").value }));
-      const survey = await json("/api/surveys", body({ event_id: eventId, survey_type_id: type.item.id, name: $("surveyName").value, response_mode: $("responseMode").value, access_policy: $("responseMode").value === "ANONYMOUS" ? "TOKEN" : "EVENT_PARTICIPANTS", duplicate_policy: $("responseMode").value === "ANONYMOUS" ? "ONE_PER_TOKEN" : "ONE_PER_PARTICIPANT" }));
-      const version = await json(`/api/surveys/${survey.item.id}/versions`, body({ event_id: eventId, title: $("versionTitle").value, questions }));
-      await json(`/api/surveys/${survey.item.id}/versions/${version.item.id}/publish`, body({ event_id: eventId, idempotency_key: `publish-${Date.now()}` }));
-      await json(`/api/events/${eventId}/surveys/${survey.item.id}/assign`, body({ version_id: version.item.id }));
-      await loadSurveys();
+      const id = eventId();
+      if (!id) {
+        showNotice("Selecciona un evento antes de crear la encuesta.", "warn");
+        return;
+      }
+      const existing = matchingSurvey();
+      if (existing) {
+        showNotice("Esa encuesta ya existe. La dejamos seleccionada en la lista para usarla.", "warn");
+        renderSurveys();
+        return;
+      }
+      const button = $("createBtn");
+      button.disabled = true;
+      showNotice("Creando encuesta...");
+      try {
+        const template = templates[selectedTemplate];
+        const type = await ensureType(selectedTemplate);
+        const responseMode = $("responseMode").value;
+        const survey = await json("/api/surveys", body({
+          event_id: id,
+          survey_type_id: type.id,
+          name: $("surveyName").value.trim(),
+          response_mode: responseMode,
+          access_policy: responseMode === "ANONYMOUS" ? "TOKEN" : "EVENT_PARTICIPANTS",
+          duplicate_policy: responseMode === "ANONYMOUS" ? "ONE_PER_TOKEN" : "ONE_PER_PARTICIPANT"
+        }));
+        const version = await json(`/api/surveys/${survey.item.id}/versions`, body({ event_id: id, title: $("versionTitle").value.trim(), questions: template.questions }));
+        await json(`/api/surveys/${survey.item.id}/versions/${version.item.id}/publish`, body({ event_id: id, idempotency_key: `publish-${id}-${survey.item.id}-${version.item.id}-${Date.now()}` }));
+        if ($("publishMode").value === "OPEN") {
+          await json(`/api/events/${id}/surveys/${survey.item.id}/assign`, body({ version_id: version.item.id, access_mode: responseMode === "ANONYMOUS" ? "TOKEN" : "EVENT_PARTICIPANTS" }));
+        }
+        await loadSurveys();
+        showNotice("Encuesta creada y disponible para el evento.", "ok");
+      } catch (error) {
+        await loadSurveys().catch(() => {});
+        showNotice(humanError(error), "error");
+      } finally {
+        button.disabled = false;
+      }
     }
-    $("refreshBtn").addEventListener("click", () => loadSurveys().catch((e) => $("output").textContent = e.message));
-    $("createBtn").addEventListener("click", () => createSurvey().catch((e) => $("output").textContent = e.message));
-    $("eventId").addEventListener("input", updateHomeLink);
-    updateHomeLink();
+
+    $("refreshBtn").addEventListener("click", loadSurveys);
+    $("createBtn").addEventListener("click", createSurvey);
+    $("reuseBtn").addEventListener("click", () => {
+      const existing = matchingSurvey();
+      showNotice(existing ? `Encuesta existente: ${existing.name}. Estado: ${statusLabel(existing.status)}.` : "No encontre una encuesta existente con ese nombre.", existing ? "ok" : "warn");
+    });
+    $("eventSelect").addEventListener("change", loadSurveys);
+    $("surveyName").addEventListener("input", updateExistingHint);
+    $("responseMode").addEventListener("change", updateExistingHint);
+
+    renderTemplates();
+    renderQuestionPreview();
+    loadAll();
   </script>
 </body>
 </html>

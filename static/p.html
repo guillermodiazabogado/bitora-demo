@@ -24,8 +24,8 @@
         <p id="eventSummary">Todo lo importante para participar esta aca.</p>
         <div id="portalStatusLine" class="participant-status-line"></div>
         <div class="participant-quick-actions">
-          <a href="#qr" class="button">Ver mi QR</a>
-          <a href="#agenda" class="button ghost">Ver agenda</a>
+          <a href="#qr" class="button" data-portal-tab="qr">Ver mi QR</a>
+          <a href="#agenda" class="button ghost" data-portal-tab="agenda">Ver agenda</a>
         </div>
       </div>
       <article class="participant-qr-card" aria-label="QR de ingreso">
@@ -36,34 +36,34 @@
     </section>
 
     <nav class="participant-section-nav" aria-label="Secciones del portal">
-      <a href="#inicio">Inicio</a>
-      <a href="#qr">Mi QR</a>
-      <a href="#agenda">Agenda</a>
-      <a href="#charlas">Mis charlas</a>
-      <a href="#asistencia">Asistencia</a>
-      <a href="#encuesta">Encuesta</a>
-      <a href="#certificado">Certificado</a>
-      <a href="#notificaciones">Notificaciones <span id="notificationBadge" class="participant-badge hidden">0</span></a>
-      <a href="#perfil">Perfil</a>
+      <a href="#inicio" data-portal-tab="inicio">Inicio</a>
+      <a href="#qr" data-portal-tab="qr">Mi QR</a>
+      <a href="#agenda" data-portal-tab="agenda">Agenda</a>
+      <a href="#charlas" data-portal-tab="charlas">Mis charlas</a>
+      <a href="#asistencia" data-portal-tab="asistencia">Asistencia</a>
+      <a href="#encuesta" data-portal-tab="encuesta">Encuesta</a>
+      <a href="#certificado" data-portal-tab="certificado">Certificado</a>
+      <a href="#notificaciones" data-portal-tab="notificaciones">Notificaciones <span id="notificationBadge" class="participant-badge hidden">0</span></a>
+      <a href="#perfil" data-portal-tab="perfil">Perfil</a>
     </nav>
 
     <section class="participant-home-grid" aria-label="Resumen del evento">
-      <article class="participant-card">
+      <article class="participant-card" data-portal-tab="agenda">
         <span>Ahora</span>
         <h3>Actividad actual</h3>
         <div id="currentActivity"></div>
       </article>
-      <article class="participant-card">
+      <article class="participant-card" data-portal-tab="charlas">
         <span>Proximo</span>
         <h3>Siguiente charla</h3>
         <div id="nextActivity"></div>
       </article>
-      <article class="participant-card">
+      <article class="participant-card" data-portal-tab="charlas">
         <span>Estado</span>
         <h3>Inscripciones</h3>
         <strong id="reservationCounter">0</strong>
       </article>
-      <article class="participant-card">
+      <article class="participant-card" data-portal-tab="notificaciones">
         <span>Avisos</span>
         <h3>Notificaciones</h3>
         <strong id="notificationCounter">0</strong>
@@ -71,7 +71,7 @@
     </section>
 
     <section class="participant-layout">
-      <article class="participant-panel participant-panel-qr" id="qr">
+      <article class="participant-panel participant-panel-qr" id="qr" data-portal-tab="qr">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Mi QR</span>
@@ -87,7 +87,7 @@
         </div>
       </article>
 
-      <article class="participant-panel" id="agenda">
+      <article class="participant-panel" id="agenda" data-portal-tab="agenda">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Agenda</span>
@@ -99,7 +99,7 @@
         <div id="availableActivities" class="participant-list"></div>
       </article>
 
-      <article class="participant-panel" id="charlas">
+      <article class="participant-panel" id="charlas" data-portal-tab="charlas">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Mis charlas</span>
@@ -109,7 +109,7 @@
         <div id="myAgenda" class="participant-list"></div>
       </article>
 
-      <article class="participant-panel" id="asistencia">
+      <article class="participant-panel" id="asistencia" data-portal-tab="asistencia">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Asistencia</span>
@@ -119,7 +119,7 @@
         <div id="myAttendances" class="participant-list"></div>
       </article>
 
-      <article class="participant-panel" id="encuesta">
+      <article class="participant-panel" id="encuesta" data-portal-tab="encuesta">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Encuesta</span>
@@ -129,7 +129,7 @@
         <div id="surveyStatus"></div>
       </article>
 
-      <article class="participant-panel" id="certificado">
+      <article class="participant-panel" id="certificado" data-portal-tab="certificado">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Certificado</span>
@@ -139,7 +139,7 @@
         <div id="certificateStatus"></div>
       </article>
 
-      <article class="participant-panel" id="notificaciones">
+      <article class="participant-panel" id="notificaciones" data-portal-tab="notificaciones">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Notificaciones</span>
@@ -149,7 +149,7 @@
         <div id="notificationsInbox" class="participant-list"></div>
       </article>
 
-      <article class="participant-panel" id="perfil">
+      <article class="participant-panel" id="perfil" data-portal-tab="perfil">
         <div class="participant-panel-head">
           <div>
             <span class="badge">Perfil</span>
@@ -214,12 +214,12 @@
   </main>
 
   <nav class="participant-bottom-nav" aria-label="Navegacion rapida">
-    <a href="#inicio">Inicio</a>
-    <a href="#agenda">Agenda</a>
-    <a href="#qr">QR</a>
-    <a href="#charlas">Charlas</a>
-    <a href="#encuesta">Encuesta</a>
-    <a href="#perfil">Perfil</a>
+    <a href="#inicio" data-portal-tab="inicio">Inicio</a>
+    <a href="#agenda" data-portal-tab="agenda">Agenda</a>
+    <a href="#qr" data-portal-tab="qr">QR</a>
+    <a href="#charlas" data-portal-tab="charlas">Charlas</a>
+    <a href="#encuesta" data-portal-tab="encuesta">Encuesta</a>
+    <a href="#perfil" data-portal-tab="perfil">Perfil</a>
   </nav>
 
   <script>
@@ -229,6 +229,7 @@
     const token = (pathToken || params.get("token") || "").trim();
     let portal = null;
     let reserveLockedUntil = 0;
+    const DEFAULT_PORTAL_VISIBLE_TABS = ["inicio", "qr", "agenda", "charlas", "asistencia", "encuesta", "certificado", "notificaciones", "perfil"];
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -285,6 +286,22 @@
 
     function activeReservationCount(data) {
       return (data.reservations || []).filter((row) => row.status !== "cancelled").length;
+    }
+
+    function visiblePortalTabs(data) {
+      const tabs = Array.isArray(data.portal_visible_tabs) ? data.portal_visible_tabs : DEFAULT_PORTAL_VISIBLE_TABS;
+      const selected = tabs.filter((key) => DEFAULT_PORTAL_VISIBLE_TABS.includes(key));
+      return new Set(selected.length ? selected : DEFAULT_PORTAL_VISIBLE_TABS);
+    }
+
+    function applyPortalTabVisibility(data) {
+      const visible = visiblePortalTabs(data);
+      document.querySelectorAll("[data-portal-tab]").forEach((node) => {
+        node.classList.toggle("hidden", !visible.has(node.dataset.portalTab));
+      });
+      if (location.hash && !visible.has(location.hash.replace("#", ""))) {
+        location.hash = visible.has("inicio") ? "#inicio" : `#${[...visible][0] || "ayuda"}`;
+      }
     }
 
     function minutesUntil(value) {
@@ -435,6 +452,7 @@
 
     function render(data) {
       portal = data;
+      applyPortalTabVisibility(data);
       const activitiesEnabled = Number(data.reservation_config?.activities_enabled ?? data.activities_enabled ?? 1) === 1;
       const notifications = buildNotifications(data);
       const activeReservations = activeReservationCount(data);
@@ -534,6 +552,7 @@
       profileForm.elements.email.value = data.email || "";
       profileForm.elements.phone.value = data.phone || "";
 
+      applyPortalTabVisibility(data);
       document.querySelectorAll(".portal-reserve").forEach((button) => button.addEventListener("click", () => openReservationDialog(button.dataset.id)));
       document.querySelectorAll(".portal-cancel").forEach((button) => button.addEventListener("click", () => cancelReservation(button.dataset.id)));
       document.querySelectorAll(".portal-survey-open").forEach((button) => button.addEventListener("click", () => openSurvey(button.dataset.id)));

@@ -842,6 +842,7 @@ def init_db() -> None:
                 show_waiting_position INTEGER NOT NULL DEFAULT 1,
                 show_estimated_time INTEGER NOT NULL DEFAULT 1,
                 waiting_message TEXT NOT NULL DEFAULT 'Estamos organizando el ingreso. Tu turno se habilitara pronto.',
+                portal_visible_tabs TEXT NOT NULL DEFAULT '["inicio","qr","agenda","charlas","asistencia","encuesta","certificado","notificaciones","perfil"]',
                 created_at TEXT NOT NULL
             );
 
@@ -2179,6 +2180,8 @@ def ensure_event_v3_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE events ADD COLUMN reserva_cooldown_segundos INTEGER NOT NULL DEFAULT 5")
     if "reserva_requiere_verificacion_simple" not in columns:
         db.execute("ALTER TABLE events ADD COLUMN reserva_requiere_verificacion_simple INTEGER NOT NULL DEFAULT 1")
+    if "portal_visible_tabs" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN portal_visible_tabs TEXT NOT NULL DEFAULT '[\"inicio\",\"qr\",\"agenda\",\"charlas\",\"asistencia\",\"encuesta\",\"certificado\",\"notificaciones\",\"perfil\"]'")
 
 
 def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
@@ -4069,6 +4072,31 @@ def truthy(value: object) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "si", "sí", "yes", "on"}
 
 
+PORTAL_TAB_KEYS = ["inicio", "qr", "agenda", "charlas", "asistencia", "encuesta", "certificado", "notificaciones", "perfil"]
+
+
+def normalize_portal_visible_tabs(value: object) -> list[str]:
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value) if value.strip().startswith("[") else [part.strip() for part in value.split(",")]
+        except json.JSONDecodeError:
+            parsed = []
+    elif isinstance(value, list):
+        parsed = value
+    else:
+        parsed = []
+    allowed = [str(item).strip().lower() for item in parsed if str(item).strip().lower() in PORTAL_TAB_KEYS]
+    unique = []
+    for key in allowed:
+        if key not in unique:
+            unique.append(key)
+    return unique or list(PORTAL_TAB_KEYS)
+
+
+def portal_visible_tabs_json(value: object) -> str:
+    return json.dumps(normalize_portal_visible_tabs(value), ensure_ascii=True)
+
+
 SOURCE_VALUES = {"landing", "whatsapp", "qr_fisico", "linkedin", "instagram", "facebook", "email", "empresa", "sponsor", "invitacion", "recepcion", "manual", "otro"}
 DEVICE_VALUES = {"mobile", "tablet", "desktop"}
 
@@ -5096,6 +5124,7 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
         "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
         "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
         "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
+        "portal_visible_tabs",
     ]
     return {
         "version": "8.0",
@@ -5156,8 +5185,9 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
             capacity_control_enabled, waitlist_enabled, created_at
+            , portal_visible_tabs
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -5183,6 +5213,7 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
             1 if truthy(data.get("waitlist_enabled", False)) else 0,
             now_iso(),
+            portal_visible_tabs_json(data.get("portal_visible_tabs")),
         ),
     )
     event_id = int(cur.lastrowid)
@@ -5489,7 +5520,8 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
                e.activity_selection_mode, e.permitir_reserva_actividades_desde_portal,
                e.reserva_requiere_confirmacion, e.reserva_cooldown_segundos,
                e.reserva_requiere_verificacion_simple,
-               e.activities_enabled, e.capacity_control_enabled, e.waitlist_enabled
+               e.activities_enabled, e.capacity_control_enabled, e.waitlist_enabled,
+               e.portal_visible_tabs
         FROM accreditations a
         JOIN people p ON p.id = a.person_id
         JOIN events e ON e.id = a.event_id
@@ -5624,6 +5656,7 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         ]
     data["portal_url"] = f"/p.html?token={data['token']}"
     data["qr_payload"] = data["token"]
+    data["portal_visible_tabs"] = normalize_portal_visible_tabs(data.get("portal_visible_tabs"))
     data["reservations"] = reservations
     data["activities"] = activities
     data["communication_preference"] = preference
@@ -13144,7 +13177,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             porcentaje_minimo_asistencia = ?, captation_mode = ?,
                             primary_action_label = ?, secondary_action_label = ?, whatsapp_number = ?,
                             activity_access_open_minutes_before = ?, activities_enabled = ?,
-                            capacity_control_enabled = ?, waitlist_enabled = ?
+                            capacity_control_enabled = ?, waitlist_enabled = ?, portal_visible_tabs = ?
                         WHERE id = ?
                         """,
                         (
@@ -13168,6 +13201,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             event_id,
                         ),
                     )
@@ -13195,9 +13229,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
-                            capacity_control_enabled, waitlist_enabled, created_at
+                            capacity_control_enabled, waitlist_enabled, portal_visible_tabs, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             organization_id,
@@ -13222,6 +13256,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             now_iso(),
                         ),
                     )
