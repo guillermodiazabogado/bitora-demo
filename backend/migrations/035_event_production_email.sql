@@ -1,0 +1,2 @@
+ALTER TABLE events
+ADD COLUMN IF NOT EXISTS production_email TEXT NOT NULL DEFAULT '';

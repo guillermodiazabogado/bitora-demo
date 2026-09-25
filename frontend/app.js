@@ -1344,6 +1344,7 @@ function renderEventConfigForm() {
   setFieldValue(form, "activity_access_open_minutes_before", event.activity_access_open_minutes_before || 10);
   setFieldValue(form, "generar_certificados", Number(event.generar_certificados ?? 1));
   setFieldValue(form, "captation_mode", event.captation_mode || "MIXTO");
+  setFieldValue(form, "production_email", event.production_email || "");
   setFieldValue(form, "whatsapp_number", event.whatsapp_number || "");
   setFieldValue(form, "primary_action_label", event.primary_action_label || "");
   setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
@@ -2023,7 +2024,7 @@ async function loadCommunications() {
       <div><strong>${emailProvider.provider || "demo"}</strong><span>Proveedor activo</span></div>
       <div><strong>${emailProvider.ready ? "Conectado" : "No configurado"}</strong><span>Estado</span></div>
       <div><strong>${emailProvider.from || "Sin remitente"}</strong><span>Remitente</span></div>
-      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a</span></div>
+      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a${emailProvider.event_reply_to ? " (evento)" : ""}</span></div>
       <div><strong>${emailProvider.last_success ? new Date(emailProvider.last_success).toLocaleString() : "Sin envios"}</strong><span>Ultimo exitoso</span></div>
       <div><strong>${emailProvider.last_error || "Sin errores"}</strong><span>Ultimo error</span></div>
     `;

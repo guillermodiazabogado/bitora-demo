@@ -826,6 +826,7 @@ def init_db() -> None:
                 capacity_control_enabled INTEGER NOT NULL DEFAULT 1,
                 waitlist_enabled INTEGER NOT NULL DEFAULT 0,
                 activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
+                production_email TEXT NOT NULL DEFAULT '',
                 landing_image_data TEXT NOT NULL DEFAULT '',
                 landing_image_name TEXT NOT NULL DEFAULT '',
                 landing_image_type TEXT NOT NULL DEFAULT '',
@@ -2182,6 +2183,8 @@ def ensure_event_v3_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE events ADD COLUMN reserva_requiere_verificacion_simple INTEGER NOT NULL DEFAULT 1")
     if "portal_visible_tabs" not in columns:
         db.execute("ALTER TABLE events ADD COLUMN portal_visible_tabs TEXT NOT NULL DEFAULT '[\"inicio\",\"qr\",\"agenda\",\"charlas\",\"asistencia\",\"encuesta\",\"certificado\",\"notificaciones\",\"perfil\"]'")
+    if "production_email" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN production_email TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
@@ -4268,6 +4271,22 @@ def forced_email_recipient() -> str:
     return os.environ.get("EMAIL_FORCE_RECIPIENT", "").strip()
 
 
+def normalized_optional_email(value: object) -> str:
+    email = normalize_email(str(value or ""))
+    if email and not valid_email_address(email):
+        raise ValueError("El email de produccion no es valido")
+    return email
+
+
+def event_production_email(db: sqlite3.Connection, event_id: int) -> str:
+    try:
+        row = db.execute("SELECT production_email FROM events WHERE id = ?", (event_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return ""
+    email = normalize_email(row["production_email"] if row else "")
+    return email if valid_email_address(email) else ""
+
+
 def email_is_suppressed(db: sqlite3.Connection, event_id: int, email: str) -> tuple[bool, str]:
     normalized = normalize_email(email)
     if not normalized:
@@ -4596,6 +4615,7 @@ def process_email_queue_item(queue_id: int) -> dict:
     original_recipient = recipient
     with connect() as db:
         safe_mode = effective_safe_mode(db, int(item["event_id"]), "email")
+        reply_to = event_production_email(db, int(item["event_id"])) or os.environ.get("EMAIL_REPLY_TO", "")
     safe_mode_enabled = bool(safe_mode["enabled"])
     forced_recipient = str(safe_mode.get("forced_recipient") or "").strip()
     if safe_mode_enabled and forced_recipient:
@@ -4621,7 +4641,7 @@ def process_email_queue_item(queue_id: int) -> dict:
             subject=("[SAFE] " if safe_mode_enabled else "") + item["subject"],
             html=item["content"],
             text=item["content"],
-            reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
+            reply_to=reply_to,
             metadata={
                 "event_id": str(item["event_id"]),
                 "organization_id": str(safe_mode.get("organization_id") or item.get("organization_id") or ""),
@@ -5123,7 +5143,7 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
         "generar_certificados", "controlar_asistencia", "attendance_mode",
         "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
         "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
-        "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
+        "production_email", "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
         "portal_visible_tabs",
     ]
     return {
@@ -5184,10 +5204,10 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
-            capacity_control_enabled, waitlist_enabled, created_at
+            capacity_control_enabled, waitlist_enabled, production_email, created_at
             , portal_visible_tabs
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -5212,6 +5232,7 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             1 if truthy(data.get("activities_enabled", True)) else 0,
             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+            normalized_optional_email(data.get("production_email")),
             now_iso(),
             portal_visible_tabs_json(data.get("portal_visible_tabs")),
         ),
@@ -10275,6 +10296,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()
+                    production_email = event_production_email(db, event_id)
                 if not can_view_personal:
                     logs = mask_communication_personal_data(logs)
                     queue = mask_communication_personal_data(queue)
@@ -10293,7 +10315,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "enabled": os.environ.get("EMAIL_ENABLED", "true").lower() in {"1", "true", "yes", "si"},
                             "safe_mode": email_safe_mode_enabled(),
                             "from": os.environ.get("EMAIL_FROM", "") or os.environ.get("EMAIL_FROM_ADDRESS", ""),
-                            "reply_to": os.environ.get("EMAIL_REPLY_TO", ""),
+                            "reply_to": production_email or os.environ.get("EMAIL_REPLY_TO", ""),
+                            "event_reply_to": production_email,
                             "verified_domain": os.environ.get("EMAIL_VERIFIED_DOMAIN", ""),
                             "last_success": email_last_success["processed_at"] if email_last_success else "",
                             "last_error": email_last_error["last_error"] if email_last_error else "",
@@ -13162,6 +13185,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/events/update":
                 event_id = int(data.get("event_id") or 0)
+                try:
+                    production_email = normalized_optional_email(data.get("production_email"))
+                except ValueError as exc:
+                    self.send_json({"error": str(exc)}, 400)
+                    return
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     ok, session = self.require_event_permission(db, event_id, "configure_event", "event.update", str(data.get("actor") or ""))
@@ -13177,7 +13205,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             porcentaje_minimo_asistencia = ?, captation_mode = ?,
                             primary_action_label = ?, secondary_action_label = ?, whatsapp_number = ?,
                             activity_access_open_minutes_before = ?, activities_enabled = ?,
-                            capacity_control_enabled = ?, waitlist_enabled = ?, portal_visible_tabs = ?
+                            capacity_control_enabled = ?, waitlist_enabled = ?, production_email = ?,
+                            portal_visible_tabs = ?
                         WHERE id = ?
                         """,
                         (
@@ -13201,6 +13230,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            production_email,
                             portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             event_id,
                         ),
@@ -13212,6 +13242,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/events":
                 actor = data.get("actor", "Admin")
+                try:
+                    production_email = normalized_optional_email(data.get("production_email"))
+                except ValueError as exc:
+                    self.send_json({"error": str(exc)}, 400)
+                    return
                 with connect() as db:
                     if not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
@@ -13229,9 +13264,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
-                            capacity_control_enabled, waitlist_enabled, portal_visible_tabs, created_at
+                            capacity_control_enabled, waitlist_enabled, production_email,
+                            portal_visible_tabs, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             organization_id,
@@ -13256,6 +13292,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            production_email,
                             portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             now_iso(),
                         ),
@@ -13629,9 +13666,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
-                            capacity_control_enabled, waitlist_enabled, created_at
+                            capacity_control_enabled, waitlist_enabled, production_email, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             name,
@@ -13654,6 +13691,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", True)) else 0,
+                            normalized_optional_email(data.get("production_email")),
                             now_iso(),
                         ),
                     )
