@@ -605,6 +605,10 @@ body.app-loading .topbar nav {
   visibility: hidden;
 }
 
+body.app-loading main {
+  visibility: hidden;
+}
+
 body.producer-mode .topbar nav {
   display: none;
 }
