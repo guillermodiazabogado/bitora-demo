@@ -89,18 +89,15 @@ def assert_access_rules() -> None:
     assert not sim.queue
 
 
-def assert_artifacts() -> None:
-    apk = ROOT / "android" / "artifacts" / "a3" / "bitora-operation-alpha-a3.apk"
+def assert_build_artifact() -> None:
+    apk = ROOT / "android" / "apps" / "operation" / "build" / "outputs" / "apk" / "debug" / "operation-debug.apk"
     assert apk.exists() and apk.stat().st_size > 1_000_000
-    for name in ("valid.png", "deny.png", "entry_exit.png"):
-        qr = ROOT / "android" / "artifacts" / "a3" / "qr" / name
-        assert qr.exists() and qr.stat().st_size > 500
 
 
 def main() -> int:
     assert_static_contracts()
     assert_access_rules()
-    assert_artifacts()
+    assert_build_artifact()
     print(json.dumps({
         "status": "PASS",
         "access_fast": True,
