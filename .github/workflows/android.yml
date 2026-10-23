@@ -1,0 +1,70 @@
+name: BITORA Android CI
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "verificar_android_a*.py"
+      - ".github/workflows/android.yml"
+  push:
+    paths:
+      - "android/**"
+      - "verificar_android_a*.py"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build, test and shrink
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            :shared:foundation:testDebugUnitTest \
+            :apps:operation:testDebugUnitTest \
+            :apps:operation:assembleDebug \
+            :apps:display:assembleDebug \
+            :apps:operation:assembleRelease \
+            :apps:display:assembleRelease
+      - name: Verify Android phases
+        working-directory: .
+        run: |
+          for verifier in verificar_android_a*.py; do
+            python3 "$verifier"
+          done
+
+  instrumented-recovery:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run recovery tests on API ${{ matrix.api-level }}
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          working-directory: ./android
+          script: ./gradlew :shared:foundation:connectedDebugAndroidTest

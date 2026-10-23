@@ -42,3 +42,12 @@ artifacts/
 Thumbs.db
 .idea/
 .vscode/
+
+# Android local/generated files and signing material
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/**/build/
+*.jks
+*.keystore
+keystore.properties
