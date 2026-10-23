@@ -4,6 +4,7 @@ import io
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,7 @@ WORKER = "bitora-upgrade-worker"
 MONITOR = "bitora-upgrade-monitor"
 DB = "bitora_upgrade"
 USER = "bitora_upgrade"
-PASSWORD = "bitora_upgrade_password"
+PASSWORD = os.environ.get("BITORA_UPGRADE_POSTGRES_PASSWORD") or secrets.token_urlsafe(24)
 APP_PORT = "8798"
 PG_PORT = "55442"
 

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA V4.7 - Historial y autocomplete</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel">
+      <h1>Historial</h1>
+      <div class="form-grid">
+        <label>Evento <input id="historyEventId" type="number" min="1"></label>
+        <label>Entidad <input id="entityType" value="event"></label>
+        <label>ID entidad <input id="entityId" type="number" min="1"></label>
+      </div>
+      <button id="loadHistory">Consultar historial</button>
+      <pre id="historyOutput"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Autocomplete</h2>
+      <div class="form-grid">
+        <label>Evento <input id="autocompleteEventId" type="number" min="1"></label>
+        <label>Buscar <input id="autocompleteQuery" autocomplete="off"></label>
+      </div>
+      <button id="searchParticipants">Participantes</button>
+      <button id="searchSpeakers">Disertantes</button>
+      <pre id="autocompleteOutput"></pre>
+    </section>
+  </main>
+  <script>
+    const show = (id, data) => { document.getElementById(id).textContent = JSON.stringify(data, null, 2); };
+    const getJson = async (url) => {
+      const res = await fetch(url);
+      return res.json();
+    };
+    document.getElementById('loadHistory').onclick = async () => {
+      const eventId = document.getElementById('historyEventId').value;
+      const entityType = encodeURIComponent(document.getElementById('entityType').value || 'event');
+      const entityId = document.getElementById('entityId').value || eventId;
+      show('historyOutput', await getJson(`/api/history/entities/${entityType}/${entityId}?event_id=${eventId}`));
+    };
+    document.getElementById('searchParticipants').onclick = async () => {
+      const eventId = document.getElementById('autocompleteEventId').value;
+      const q = encodeURIComponent(document.getElementById('autocompleteQuery').value || '');
+      show('autocompleteOutput', await getJson(`/api/autocomplete/participants?event_id=${eventId}&q=${q}`));
+    };
+    document.getElementById('searchSpeakers').onclick = async () => {
+      const eventId = document.getElementById('autocompleteEventId').value;
+      const q = encodeURIComponent(document.getElementById('autocompleteQuery').value || '');
+      show('autocompleteOutput', await getJson(`/api/autocomplete/speakers?event_id=${eventId}&q=${q}`));
+    };
+  </script>
+</body>
+</html>

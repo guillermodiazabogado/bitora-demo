@@ -12,7 +12,7 @@ class PostgresRepository(SQLiteRepository):
             SELECT a.*, COALESCE(t.access_enabled, 1) AS type_access_enabled
             FROM accreditations a
             LEFT JOIN accreditation_types t ON t.event_id = a.event_id AND t.name = a.type
-            WHERE a.token = ?
+            WHERE lower(a.token) = lower(?)
             FOR UPDATE OF a
             """,
             (token,),

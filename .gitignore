@@ -10,6 +10,7 @@ env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.wrangler/
 
 # Base local y archivos transitorios de SQLite
 *.sqlite3
@@ -33,6 +34,7 @@ output/
 tmp/
 deployment/logs/
 deployment/backup/artifacts/
+artifacts/
 ~$*
 
 # Sistema/editor
@@ -40,3 +42,12 @@ deployment/backup/artifacts/
 Thumbs.db
 .idea/
 .vscode/
+
+# Android local/generated files and signing material
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/**/build/
+*.jks
+*.keystore
+keystore.properties

@@ -18,7 +18,7 @@ def assert_true(condition: bool, message: str) -> None:
 
 def main() -> None:
     os.environ["BITORA_INTEGRATION_ENCRYPTION_KEY"] = Fernet.generate_key().decode("ascii")
-    with tempfile.TemporaryDirectory(prefix="bitora-multitenant-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="bitora-multitenant-", ignore_cleanup_errors=True) as tmp:
         db_path = Path(tmp) / "bitora.sqlite3"
         server.DB_CONFIG = DatabaseConfig(engine="sqlite", sqlite_path=str(db_path), postgres_dsn="")
         server.DB_PATH = db_path

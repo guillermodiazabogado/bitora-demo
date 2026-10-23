@@ -1,44 +1,60 @@
-# BITORA Release Final Status
+# BITORA_RELEASE_FINAL_STATUS
 
-Fecha: 2026-07-28
+Estado: `STAGING ONLINE CON R2 CERTIFICADO`
 
-Decision:
+Fecha: 2026-08-11
 
-```text
-BITORA RELEASE CANDIDATE: AUTHORIZED
-BITORA STABLE RELEASE: NOT CERTIFIED
-```
+Rama: `deployment/v4-online`
 
-Commit runtime certificado:
+HEAD evaluado: `961bedebc46238bcf527e00b759d6df08c94eb21`
 
-```text
-3e82a6ae0deddf64fd77ba16fb4721b21902b9b2
-```
+## Estado V4 online
 
-Estado de gates:
+- Render Blueprint: PASSED.
+- Render PostgreSQL: PASSED.
+- Render web service: PASSED.
+- URL publica: `https://bitora-staging.onrender.com`.
+- HTTPS: PASSED.
+- `/health`: PASSED, `storage=r2`, `backup=recent`.
+- `/ready`: PASSED, storage OK.
+- Login online: PASSED.
+- UI online: PASSED.
+- Safe Mode: ON.
+- Live Mode: OFF.
+- Comunicaciones reales en este sprint: 0.
+- Endurance 24h: DEFERRED.
+- Produccion: NOT DEPLOYED.
 
-```text
-seguridad_basica: PASSED
-multievent_isolation_20_events: PASSED
-email_organization_live: PASSED
-google_oauth_live: PASSED
-whatsapp_organization_live: PASSED
-webhook_tenant_resolution_live: PASSED
-backup_multitenant_live: PASSED
-restore_multitenant_live: PASSED
-disaster_recovery_live: PASSED
-upgrade_from_previous_version: PASSED
-endurance_24h: DEFERRED
-```
+## Estado R2
 
-Pendiente para Release estable:
+Render Free no soporta Persistent Disks. Se activo Cloudflare R2 como storage externo equivalente para staging.
 
-```text
-endurance_24h
-```
+- Storage backend remoto: PASSED.
+- Bucket R2: `bitora-staging-storage`.
+- Prefijo: `staging/`.
+- Backup remoto observado: `staging/backups/bitora-event-7-20260811-224929.zip`.
+- Certificado nuevo post-R2: PASSED.
+- Backup post-certificado: PASSED.
+- Restore aislado desde artefacto post-certificado: PASSED.
+- Efectos externos durante restore: 0.
 
-Uso autorizado:
+## PR #12
 
-```text
-staging, QA, demostraciones controladas y pilotos supervisados
-```
+- Estado GitHub: Ready to merge.
+- Checks: PASSED.
+- Conflictos: 0.
+- Decision: NOT MERGED.
+
+La PR no se fusiona porque la validacion operacional remota no esta completa.
+
+## Decision final admitida
+
+`STAGING ONLINE CON R2 CERTIFICADO`
+
+No se declara `BITORA V4.0.0 STABLE RELEASED AND STAGING ONLINE`.
+
+No se ejecuta Endurance 24h.
+
+No se despliega produccion.
+
+No se crea ni mueve tag estable.

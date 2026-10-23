@@ -18,6 +18,9 @@ const state = {
   users: [],
   eventUsers: [],
   permissions: null,
+  selectedUserId: null,
+  permissionDraft: null,
+  permissionChanges: {},
   audit: [],
   communications: null,
   googleOAuth: null,
@@ -27,6 +30,7 @@ const state = {
   visualizationLayouts: [],
   demoReal: null,
   eventRestore: null,
+  appConfig: null,
   currentUser: "Admin",
   eventId: null,
   cameraStream: null,
@@ -37,6 +41,7 @@ const MODULE_LABELS = {
   owner: "Mis eventos",
   organizations: "Organizaciones",
   dashboard: "Panel",
+  home: "Inicio",
   register: "Inscribir",
   reception: "Recepcion",
   agenda: "Agenda",
@@ -45,6 +50,13 @@ const MODULE_LABELS = {
   users: "Usuarios y Permisos",
   reports: "Reportes",
   communications: "Comunicaciones",
+  certificates: "Certificados",
+  surveys: "Encuestas",
+  speakers: "Speakers",
+  zones: "Zonas",
+  history: "Historial",
+  operations: "Operations Center",
+  analytics: "Analytics",
   audit: "Auditoria",
   diagnostics: "Diagnostico Tecnico",
   simulator: "Simulador Vivo",
@@ -114,6 +126,143 @@ const ACTION_LABELS = {
   "communications.send_test": "Comunicaciones: envio de prueba",
 };
 
+const PRODUCER_HOME_MODULES = [
+  {
+    key: "dashboard",
+    title: "Panel de Control",
+    description: "Resumen general del evento, indicadores clave y actividad en tiempo real.",
+    icon: "PC",
+    tone: "purple",
+    view: "dashboard",
+    metric: () => `${Number(currentEvent()?.checked_in_count || 0)} acreditados`,
+  },
+  {
+    key: "register",
+    title: "Inscripciones",
+    description: "Gestion de participantes, estados de inscripcion y datos de registro.",
+    icon: "IN",
+    tone: "green",
+    view: "register",
+    feature: "registration",
+    metric: () => `${Number(currentEvent()?.accreditation_count || 0)} inscriptos`,
+  },
+  {
+    key: "reception",
+    title: "Recepcion",
+    description: "Acreditacion de participantes y entrega de credenciales.",
+    icon: "RC",
+    tone: "blue",
+    view: "reception",
+    feature: "reception",
+    metric: () => `${state.accreditations.filter((row) => row.status === "checked_in").length} acreditados`,
+  },
+  {
+    key: "access",
+    title: "Acceso",
+    description: "Control de acceso con QR, validacion y monitoreo en tiempo real.",
+    icon: "QR",
+    tone: "teal",
+    view: "access",
+    feature: "access",
+    metric: () => "En vivo",
+  },
+  {
+    key: "attendance",
+    title: "Asistencia",
+    description: "Control de asistencia a actividades y sesiones del evento.",
+    icon: "AS",
+    tone: "orange",
+    route: "/attendance-closure.html",
+    action: "attendance.read",
+    feature: "agenda",
+    featureFlag: "attendance_closure_eligibility_v4_enabled",
+    metric: () => "Control activo",
+  },
+  {
+    key: "agenda",
+    title: "Actividades",
+    description: "Gestion de actividades, salas, horarios y cupos disponibles.",
+    icon: "AG",
+    tone: "indigo",
+    view: "agenda",
+    feature: "agenda",
+    metric: () => `${state.activities.length} actividades`,
+  },
+  {
+    key: "speakers",
+    title: "Speakers",
+    description: "Administracion de expositores y su participacion en el evento.",
+    icon: "SP",
+    tone: "yellow",
+    route: "/speakers-v4.html",
+    permissionModule: "speakers",
+    action: "speakers.read",
+    featureFlag: "speakers_v4_enabled",
+    metric: () => "Modulo habilitado",
+  },
+  {
+    key: "certificates",
+    title: "Certificados",
+    description: "Generacion y gestion de certificados para participantes.",
+    icon: "CE",
+    tone: "cyan",
+    route: "/certificates-v4.html",
+    permissionModule: "certificates",
+    action: "certificates.read",
+    featureFlag: "certificates_v4_enabled",
+    metric: () => "Elegibilidad",
+  },
+  {
+    key: "surveys",
+    title: "Encuestas",
+    description: "Creacion y analisis de encuestas de satisfaccion.",
+    icon: "EN",
+    tone: "pink",
+    route: "/surveys-v4.html",
+    permissionModule: "surveys",
+    action: "surveys.read",
+    featureFlag: "surveys_v4_enabled",
+    metric: () => "Modulo habilitado",
+  },
+  {
+    key: "communications",
+    title: "Comunicaciones",
+    description: "Envio de comunicaciones y campanas a participantes.",
+    icon: "CO",
+    tone: "red",
+    view: "communications",
+    permissionModule: "communications",
+    action: "communications.view",
+    featureFlag: "communications_automation_v4_enabled",
+    metric: () => "Safe Mode",
+  },
+  {
+    key: "operations",
+    title: "Operations Center",
+    description: "Monitoreo avanzado del evento y gestion operativa.",
+    icon: "OP",
+    tone: "mint",
+    route: "/operations-center-v4.html",
+    action: "operations_center.read",
+    featureFlag: "operations_center_v4_enabled",
+    metric: () => "Todo operativo",
+  },
+  {
+    key: "analytics",
+    title: "Analytics",
+    description: "Reportes, metricas y analisis del desempeno del evento.",
+    icon: "AN",
+    tone: "blue",
+    route: "/analytics-v4.html",
+    action: "analytics.read",
+    featureFlag: "analytics_v4_enabled",
+    fallbackView: "reports",
+    metric: () => "Ver reportes",
+  },
+];
+
+const DEFAULT_PORTAL_VISIBLE_TABS = ["inicio", "qr", "agenda", "charlas", "asistencia", "encuesta", "certificado", "notificaciones", "perfil"];
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -132,6 +281,7 @@ function setHref(selector, href) {
 }
 
 function applyAppConfig(config) {
+  state.appConfig = config || {};
   if (!config?.demo || document.querySelector(".demo-ribbon")) return;
   const ribbon = document.createElement("div");
   ribbon.className = "demo-ribbon";
@@ -149,7 +299,7 @@ async function api(path, options = {}) {
     location.href = "/login.html";
     throw new Error("Sesion requerida");
   }
-  if (!response.ok) throw new Error(data.error || "Error inesperado");
+  if (!response.ok) throw new Error(data.error || data.reason || "Error inesperado");
   return data;
 }
 
@@ -157,10 +307,21 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function updateProducerHomeReturn(name) {
+  const button = $("#producerHomeReturnBtn");
+  if (!button) return;
+  const show = producerHomeAllowed() && name !== "home";
+  button.classList.toggle("hidden", !show);
+}
+
 function setView(name) {
   if (name === "visualization") name = "reports";
+  if (state.authUser?.must_change_password && name !== "passwordChange") {
+    name = "passwordChange";
+  }
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  updateProducerHomeReturn(name);
 }
 
 function organizeReportAndDiagnosticViews() {
@@ -202,7 +363,7 @@ function eventOptionsHtml() {
 }
 
 function syncEventSelectors() {
-  ["eventSelect", "usersEventSelect"].forEach((id) => {
+  ["eventSelect", "usersEventSelect", "producerHomeEventSelect"].forEach((id) => {
     const select = $(`#${id}`);
     if (!select) return;
     if (select.options.length !== state.events.length) {
@@ -249,12 +410,143 @@ function canDo(action) {
   return permissionsFor().actions.includes(action);
 }
 
+function producerHomeAllowed() {
+  return Boolean(state.eventId && effectiveRole() === "Productor" && canSeeModule("dashboard"));
+}
+
+function producerDefaultView() {
+  return state.authUser?.role === "Productor" && producerHomeAllowed() ? "home" : "";
+}
+
+function updateProducerChrome() {
+  document.body.classList.toggle("producer-mode", producerHomeAllowed());
+}
+
+function moduleFeatureEnabled(module) {
+  if (!module.feature) return true;
+  const projectModules = currentProjectModules();
+  if (module.feature === "agenda") return Boolean(projectModules.agenda && eventFeature("activities_enabled", true));
+  return Boolean(projectModules[module.feature]);
+}
+
+function producerModuleAllowed(module) {
+  if (!moduleFeatureEnabled(module)) return false;
+  if (module.featureFlag && !eventFeatureFlag(module.featureFlag, false)) return false;
+  if (module.permissionModule && !canSeeModule(module.permissionModule)) return false;
+  if (module.action && !canDo(module.action)) return false;
+  if (module.view && !canSeeModule(module.view)) return false;
+  return Boolean(module.permissionModule || module.action || module.view);
+}
+
+function producerModuleUrl(module) {
+  if (module.view) return `#${module.view}`;
+  if (module.route) {
+    const separator = module.route.includes("?") ? "&" : "?";
+    return state.eventId ? `${module.route}${separator}event_id=${encodeURIComponent(state.eventId)}` : module.route;
+  }
+  return "#home";
+}
+
+function openProducerModule(moduleKey) {
+  const module = PRODUCER_HOME_MODULES.find((item) => item.key === moduleKey);
+  if (!module || !producerModuleAllowed(module)) return;
+  if (module.view) {
+    setView(module.view);
+    history.replaceState(null, "", module.view === "dashboard" ? `${location.pathname}${location.search}` : `#${module.view}`);
+    if (module.view === "reports") loadVisualization();
+    return;
+  }
+  location.href = producerModuleUrl(module);
+}
+
+function syncProducerHomeEventSelect() {
+  const select = $("#producerHomeEventSelect");
+  if (!select) return;
+  if (select.options.length !== state.events.length) {
+    select.innerHTML = eventOptionsHtml();
+  }
+  select.value = String(state.eventId || "");
+}
+
+function formatHomeDate(value) {
+  if (!value) return "Fecha sin definir";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function renderProducerHome() {
+  const grid = $("#producerHomeGrid");
+  if (!grid) return;
+  const event = currentEvent();
+  syncProducerHomeEventSelect();
+  $("#homeNav")?.classList.toggle("hidden", !producerHomeAllowed());
+  $("#producerHomeSideEvent").textContent = event?.name || "Sin evento activo";
+  $("#producerHomeSideDate").textContent = event ? `${formatHomeDate(event.starts_at)} - ${formatHomeDate(event.ends_at)}` : "Selecciona un evento";
+  $("#producerHomeRoleBadge").textContent = effectiveRole();
+  $("#producerHomeEnv").textContent = state.appConfig?.env || "Staging";
+  $("#producerHomeUpdated").textContent = new Date().toLocaleString("es-AR");
+  $$(".producer-home-side-link[data-view-target]").forEach((button) => {
+    const target = button.dataset.viewTarget;
+    const allowed = target === "home" ? producerHomeAllowed() : canSeeModule(target);
+    button.classList.toggle("hidden", !allowed);
+  });
+  updateProducerHomeReturn($(".view.active")?.id || "");
+  if (!producerHomeAllowed()) {
+    grid.innerHTML = `
+      <section class="panel owner-empty">
+        <h2>Home no disponible</h2>
+        <p>Selecciona un evento activo con permiso de panel para ver los modulos operativos.</p>
+      </section>
+    `;
+    return;
+  }
+  const modules = PRODUCER_HOME_MODULES.filter(producerModuleAllowed);
+  if (!modules.length) {
+    grid.innerHTML = `
+      <section class="panel owner-empty">
+        <h2>Sin modulos habilitados</h2>
+        <p>Este usuario no tiene modulos operativos disponibles para el evento activo.</p>
+      </section>
+    `;
+    return;
+  }
+  grid.innerHTML = modules.map((module) => `
+    <button type="button" class="producer-module-card" data-module="${module.key}" aria-label="Abrir ${escapeHtml(module.title)}">
+      <span class="producer-module-icon ${module.tone}">${escapeHtml(module.icon)}</span>
+      <span class="producer-module-copy">
+        <strong>${escapeHtml(module.title)}</strong>
+        <small>${escapeHtml(module.description)}</small>
+        <em>${escapeHtml(module.metric ? module.metric() : "Modulo habilitado")}</em>
+      </span>
+      <span class="producer-module-arrow">-></span>
+    </button>
+  `).join("");
+  grid.querySelectorAll("[data-module]").forEach((button) => {
+    button.addEventListener("click", () => openProducerModule(button.dataset.module));
+  });
+}
+
 async function loadPermissions() {
   if (!state.authUser) return;
   const suffix = state.eventId ? `?event_id=${state.eventId}` : "";
   state.permissions = await api(`/api/permissions${suffix}`);
+  state.permissionDraft = JSON.parse(JSON.stringify(state.permissions.matrix || {}));
+  state.permissionChanges = {};
   renderPermissionsMatrix();
   renderCurrentPermissionsSummary();
+  renderProducerHome();
+}
+
+function permissionDraftFor(role) {
+  return state.permissionDraft?.[role] || { modules: [], actions: [] };
+}
+
+function setPermissionsDirty() {
+  const count = Object.keys(state.permissionChanges || {}).length;
+  $("#permissionsDirtyNotice")?.classList.toggle("hidden", count === 0);
+  const saveButton = $("#savePermissionsBtn");
+  if (saveButton) saveButton.disabled = count === 0;
 }
 
 function renderPermissionsMatrix() {
@@ -268,16 +560,18 @@ function renderPermissionsMatrix() {
   const locked = state.permissions.locked || {};
   const editable = state.authUser?.role === "Super Admin";
   const renderCell = ({ role, code, allowed, lockedCell = false, kind }) => `
-    <button
-      type="button"
-      class="permission-cell ${allowed ? "yes" : "no"} ${lockedCell ? "locked" : ""}"
-      data-role="${escapeHtml(role)}"
-      data-${kind}="${escapeHtml(code)}"
-      data-kind="${kind}"
-      data-allowed="${allowed ? "1" : "0"}"
-      ${!editable || lockedCell ? "disabled" : ""}
-      title="${lockedCell ? "Permiso base del sistema" : "Cambiar permiso"}"
-    >${allowed ? "Si" : "No"}</button>
+    <label class="permission-check-cell ${allowed ? "yes" : "no"} ${lockedCell ? "locked" : ""}" title="${lockedCell ? "Este permiso esta definido por el sistema." : "Cambiar permiso"}">
+      <input
+        type="checkbox"
+        data-role="${escapeHtml(role)}"
+        data-${kind}="${escapeHtml(code)}"
+        data-kind="${kind}"
+        ${allowed ? "checked" : ""}
+        ${!editable || lockedCell ? "disabled" : ""}
+        aria-label="${escapeHtml(role)} - ${escapeHtml(kind === "module" ? (MODULE_LABELS[code] || code) : (ACTION_LABELS[code] || code))}"
+      >
+      <span aria-hidden="true"></span>
+    </label>
   `;
   target.innerHTML = `
     <h3 class="permissions-subtitle">Pestanas visibles</h3>
@@ -287,7 +581,7 @@ function renderPermissionsMatrix() {
         ${modules.map((module) => `<span>${MODULE_LABELS[module]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.modules || []);
+        const allowed = new Set(permissionDraftFor(role).modules || config.modules || []);
         return `
           <div class="permissions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -307,7 +601,7 @@ function renderPermissionsMatrix() {
         ${communicationActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.actions || []);
+        const allowed = new Set(permissionDraftFor(role).actions || config.actions || []);
         return `
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -323,7 +617,7 @@ function renderPermissionsMatrix() {
         ${backupActions.map((action) => `<span>${ACTION_LABELS[action]}</span>`).join("")}
       </div>
       ${rows.map(([role, config]) => {
-        const allowed = new Set(config.actions || []);
+        const allowed = new Set(permissionDraftFor(role).actions || config.actions || []);
         return `
           <div class="permissions-row permissions-actions-row ${role === effectiveRole() ? "current" : ""}">
             <strong>${escapeHtml(role)}</strong>
@@ -349,34 +643,59 @@ function renderPermissionsMatrix() {
       }).join("")}
     </div>
   `;
-  target.querySelectorAll(".permission-cell:not(:disabled)").forEach((button) => {
-    button.addEventListener("click", savePermissionCell);
+  target.querySelectorAll(".permission-check-cell input:not(:disabled)").forEach((input) => {
+    input.addEventListener("change", queuePermissionChange);
   });
+  setPermissionsDirty();
 }
 
-async function savePermissionCell(event) {
-  const button = event.currentTarget;
-  const role = button.dataset.role;
-  const module = button.dataset.module;
-  const action = button.dataset.action;
-  const kind = button.dataset.kind || (action ? "action" : "module");
-  const allowed = button.dataset.allowed !== "1";
-  button.disabled = true;
-  button.textContent = "...";
+function queuePermissionChange(event) {
+  const input = event.currentTarget;
+  const role = input.dataset.role;
+  const module = input.dataset.module;
+  const action = input.dataset.action;
+  const kind = input.dataset.kind || (action ? "action" : "module");
+  const code = kind === "action" ? action : module;
+  const allowed = input.checked;
+  const config = permissionDraftFor(role);
+  const key = kind === "action" ? "actions" : "modules";
+  const values = new Set(config[key] || []);
+  if (allowed) values.add(code);
+  else values.delete(code);
+  state.permissionDraft[role] = { ...config, [key]: Array.from(values) };
+  state.permissionChanges[`${role}:${kind}:${code}`] = { role, module, action, kind, allowed };
+  input.closest(".permission-check-cell")?.classList.toggle("yes", allowed);
+  input.closest(".permission-check-cell")?.classList.toggle("no", !allowed);
+  setPermissionsDirty();
+}
+
+async function savePermissionChanges() {
+  const changes = Object.values(state.permissionChanges || {});
+  const notice = $("#permissionsNotice");
+  if (!changes.length) return;
+  const button = $("#savePermissionsBtn");
+  if (button) button.disabled = true;
   try {
-    const result = await api("/api/permissions", {
-      method: "POST",
-      body: JSON.stringify({ actor: state.currentUser, role, module, action, kind, allowed }),
-    });
-    state.permissions.matrix = result.matrix;
-    state.permissions.locked = result.locked || state.permissions.locked || {};
+    let result = null;
+    for (const change of changes) {
+      result = await api("/api/permissions", {
+        method: "POST",
+        body: JSON.stringify({ actor: state.currentUser, ...change }),
+      });
+    }
+    if (result?.matrix) {
+      state.permissions.matrix = result.matrix;
+      state.permissions.locked = result.locked || state.permissions.locked || {};
+      state.permissionDraft = JSON.parse(JSON.stringify(result.matrix || {}));
+    }
+    state.permissionChanges = {};
+    if (notice) notice.innerHTML = `<div class="panel success">Cambios guardados.</div>`;
     renderPermissionsMatrix();
     renderCurrentPermissionsSummary();
     renderFeatureVisibility();
   } catch (err) {
-    button.disabled = false;
-    button.textContent = button.dataset.allowed === "1" ? "Si" : "No";
-    alert(err.message);
+    if (notice) notice.innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudieron guardar los permisos")}</div>`;
+    setPermissionsDirty();
   }
 }
 
@@ -764,14 +1083,21 @@ function eventFeature(name, fallback = true) {
   return Number(event[name]) === 1;
 }
 
+function eventFeatureFlag(name, fallback = false) {
+  const event = currentEvent();
+  if (!event || !event.feature_flags || event.feature_flags[name] === undefined) return fallback;
+  return Boolean(event.feature_flags[name]);
+}
+
 function renderFeatureVisibility() {
+  updateProducerChrome();
   const modules = currentProjectModules();
   const activitiesOn = eventFeature("activities_enabled", true);
   const capacityOn = eventFeature("capacity_control_enabled", true);
   const waitlistOn = eventFeature("waitlist_enabled", false);
   $$("nav button[data-view]").forEach((button) => {
     const view = button.dataset.view;
-    button.classList.toggle("hidden", !canSeeModule(view));
+    button.classList.toggle("hidden", view === "home" ? !producerHomeAllowed() : !canSeeModule(view));
   });
   document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration || !canSeeModule("register"));
   document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception || !canSeeModule("reception"));
@@ -787,14 +1113,16 @@ function renderFeatureVisibility() {
   $("#dashboard .layout")?.classList.toggle("ticketing-layout", modules.ticketing);
   const activeView = $(".view.active")?.id;
   if (
-    !canSeeModule(activeView)
+    (activeView === "home" && !producerHomeAllowed())
+    || (activeView !== "home" && !canSeeModule(activeView))
     || (activeView === "register" && !modules.registration)
     || (activeView === "reception" && !modules.reception)
     || (activeView === "agenda" && !modules.agenda)
     || (activeView === "access" && !modules.access)
   ) {
-    setView(canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard");
+    setView(producerHomeAllowed() ? "home" : canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard");
   }
+  renderProducerHome();
 }
 
 function updateControlRoomLink() {
@@ -842,6 +1170,8 @@ function updateMetrics() {
   renderFeatureVisibility();
   renderLandingConfig();
   renderWaitingRoomConfig();
+  renderEventConfigForm();
+  renderProducerHome();
 }
 
 function eventStatusLabel(status) {
@@ -904,22 +1234,28 @@ function renderOwnerDashboard() {
 
 async function reloadCurrentEventData() {
   if (!state.eventId) return;
-  await Promise.all([
-    loadTypes(),
-    loadAccreditations(),
-    loadAgenda(),
-    loadAlerts(),
-    loadSystemStatus(),
-    loadNetworkInfo(),
-    loadSummary(),
-    loadMarketing(),
-    loadReadiness(),
-    loadAudit(),
-    loadCommunications(),
-    loadDemoReal(),
-    loadLogs(),
-    loadEventUsers(),
-  ]);
+  const loaders = [
+    ["types", loadTypes],
+    ["accreditations", loadAccreditations],
+    ["agenda", loadAgenda],
+    ["alerts", loadAlerts],
+    ["system_status", loadSystemStatus],
+    ["network_info", loadNetworkInfo],
+    ["summary", loadSummary],
+    ["marketing", loadMarketing],
+    ["readiness", loadReadiness],
+    ["audit", loadAudit],
+    ["communications", loadCommunications],
+    ["demo_real", loadDemoReal],
+    ["logs", loadLogs],
+    ["event_users", loadEventUsers],
+  ];
+  const results = await Promise.allSettled(loaders.map(([, loader]) => loader()));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(`No se pudo cargar ${loaders[index][0]}`, result.reason);
+    }
+  });
 }
 
 function renderLandingConfig() {
@@ -951,6 +1287,68 @@ function renderWaitingRoomConfig() {
   form.show_position.checked = Number(event.show_waiting_position ?? 1) === 1;
   form.show_estimated_time.checked = Number(event.show_estimated_time ?? 1) === 1;
   form.waiting_message.value = event.waiting_message || "";
+}
+
+function setFieldValue(form, name, value) {
+  if (!form?.elements?.[name]) return;
+  form.elements[name].value = value ?? "";
+}
+
+function parsePortalTabs(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : DEFAULT_PORTAL_VISIBLE_TABS;
+  } catch (err) {
+    return DEFAULT_PORTAL_VISIBLE_TABS;
+  }
+}
+
+function setPortalTabCheckboxes(values) {
+  const selected = new Set(parsePortalTabs(values));
+  $$(".portal-tab-checkbox").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function selectedPortalTabs() {
+  const selected = $$(".portal-tab-checkbox").filter((input) => input.checked).map((input) => input.value);
+  return selected.length ? selected : DEFAULT_PORTAL_VISIBLE_TABS;
+}
+
+function renderEventConfigForm() {
+  const form = $("#eventForm");
+  if (!form) return;
+  const event = currentEvent();
+  const producerEdit = effectiveRole() === "Productor" && Boolean(event);
+  form.dataset.mode = producerEdit ? "edit" : "create";
+  $("#eventFormSubmitBtn").textContent = producerEdit ? "Guardar cambios" : "Crear evento";
+  $("#eventFormHelp").textContent = producerEdit
+    ? "Estos son los datos cargados por administracion. Corregilos si algo quedo mal."
+    : "Crea un evento nuevo con la configuracion inicial.";
+  if (!producerEdit || !event) return;
+  setPortalTabCheckboxes(event.portal_visible_tabs);
+  setFieldValue(form, "project_type", event.project_type || "conference");
+  setFieldValue(form, "name", event.name || "");
+  setFieldValue(form, "venue", event.venue || "");
+  setFieldValue(form, "starts_at", String(event.starts_at || "").slice(0, 16));
+  setFieldValue(form, "ends_at", String(event.ends_at || "").slice(0, 16));
+  setFieldValue(form, "capacity", event.capacity || 0);
+  setFieldValue(form, "activities_enabled", Number(event.activities_enabled ?? 1));
+  setFieldValue(form, "capacity_control_enabled", Number(event.capacity_control_enabled ?? 1));
+  setFieldValue(form, "waitlist_enabled", Number(event.waitlist_enabled || 0));
+  setFieldValue(form, "activity_selection_mode", event.activity_selection_mode || "optional_later");
+  setFieldValue(form, "controlar_asistencia", Number(event.controlar_asistencia ?? 1));
+  setFieldValue(form, "attendance_mode", event.attendance_mode || "entry_only");
+  setFieldValue(form, "porcentaje_minimo_asistencia", event.porcentaje_minimo_asistencia || 80);
+  setFieldValue(form, "activity_access_open_minutes_before", event.activity_access_open_minutes_before || 10);
+  setFieldValue(form, "generar_certificados", Number(event.generar_certificados ?? 1));
+  setFieldValue(form, "captation_mode", event.captation_mode || "MIXTO");
+  setFieldValue(form, "production_email", event.production_email || "");
+  setFieldValue(form, "whatsapp_number", event.whatsapp_number || "");
+  setFieldValue(form, "primary_action_label", event.primary_action_label || "");
+  setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
+  setFieldValue(form, "description", event.description || "");
 }
 
 async function saveWaitingRoomConfig(event) {
@@ -1164,9 +1562,12 @@ async function deleteLandingImage() {
 
 async function loadAccreditations() {
   if (!state.eventId) return;
+  const registerResult = $("#registerResult");
+  if (registerResult) registerResult.innerHTML = "";
   const q = encodeURIComponent($("#searchInput")?.value || "");
   const rows = filterAccreditations(await api(`/api/accreditations?event_id=${state.eventId}&q=${q}`));
   state.accreditations = await api(`/api/accreditations?event_id=${state.eventId}`);
+  if (registerResult) registerResult.innerHTML = "";
   $("#accreditations").innerHTML = rows.map((row) => renderAccreditationCard(row)).join("") || `<p class="empty">No hay acreditados para mostrar.</p>`;
   bindAccreditationActions($("#accreditations"));
   renderReservationSelectors();
@@ -1288,6 +1689,8 @@ function printOneWristband(token) {
 
 async function printManualCertificate(token) {
   const notice = $("#receptionNotice");
+  const registerResult = $("#registerResult");
+  if (registerResult) registerResult.innerHTML = "";
   const url = `/api/certificate.pdf?token=${encodeURIComponent(token)}&manual=1`;
   try {
     const response = await fetch(url);
@@ -1306,6 +1709,7 @@ async function printManualCertificate(token) {
     const objectUrl = URL.createObjectURL(blob);
     window.open(objectUrl, "_blank");
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    if (registerResult) registerResult.innerHTML = "";
     notice.innerHTML = `<div class="panel success">Certificado preparado para imprimir.</div>`;
   } catch (err) {
     notice.innerHTML = `<div class="panel danger">No se pudo preparar el certificado.</div>`;
@@ -1388,14 +1792,125 @@ async function loadUsers() {
   }
   select.value = state.currentUser;
   $("#operator").value = state.currentUser;
-  $("#usersList").innerHTML = state.users.map((row) => `
-    <div class="mini-row">
-      <strong>${row.name}</strong>
-      <span>${row.role}</span>
-    </div>
-  `).join("");
+  if (!state.selectedUserId || !state.users.some((row) => Number(row.id) === Number(state.selectedUserId))) {
+    state.selectedUserId = state.users.find((row) => row.name === state.currentUser)?.id || state.users[0]?.id || null;
+  }
+  renderUsersList();
+  renderSelectedUserDetail();
+  const resetSelect = $("#passwordResetUser");
+  if (resetSelect) {
+    resetSelect.innerHTML = state.users.map((row) => `<option value="${row.id}">${escapeHtml(row.name)} - ${escapeHtml(row.role)}</option>`).join("");
+    if (state.selectedUserId) resetSelect.value = String(state.selectedUserId);
+  }
 }
 
+function userInitials(row) {
+  const source = String(row.full_name || row.name || "?").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : source.slice(0, 2)).toUpperCase();
+}
+
+function selectedUser() {
+  return state.users.find((row) => Number(row.id) === Number(state.selectedUserId)) || null;
+}
+
+function renderUsersList() {
+  const list = $("#usersList");
+  if (!list) return;
+  const term = ($("#userSearchInput")?.value || "").trim().toLowerCase();
+  const rows = state.users.filter((row) => {
+    const text = `${row.name || ""} ${row.full_name || ""} ${row.email || ""} ${row.role || ""}`.toLowerCase();
+    return !term || text.includes(term);
+  });
+  list.innerHTML = rows.map((row) => `
+    <article class="user-clean-row ${Number(row.id) === Number(state.selectedUserId) ? "selected" : ""}" data-user-id="${row.id}">
+      <button type="button" class="user-select-button" data-user-id="${row.id}">
+        <span class="user-avatar">${escapeHtml(userInitials(row))}</span>
+        <span class="user-main">
+          <strong>${escapeHtml(row.name)}</strong>
+          <small>${escapeHtml(row.role)}${Number(row.active) ? "" : " · inactivo"}${Number(row.must_change_password) ? " · cambia clave" : ""}</small>
+        </span>
+      </button>
+      ${state.authUser?.role === "Super Admin" ? `
+        <button type="button" class="ghost user-edit-action" data-user-id="${row.id}">Editar</button>
+        <button type="button" class="danger-outline user-delete-action" data-user-id="${row.id}">Eliminar</button>
+      ` : ""}
+    </article>
+  `).join("") || `<p class="empty">No hay usuarios para esa busqueda.</p>`;
+  list.querySelectorAll(".user-select-button").forEach((button) => button.addEventListener("click", () => selectUser(button.dataset.userId)));
+  list.querySelectorAll(".user-edit-action").forEach((button) => button.addEventListener("click", () => editUser(button.dataset.userId)));
+  list.querySelectorAll(".user-delete-action").forEach((button) => button.addEventListener("click", () => deleteUser(button.dataset.userId)));
+}
+
+function renderSelectedUserDetail() {
+  const target = $("#selectedUserDetail");
+  if (!target) return;
+  const row = selectedUser();
+  if (!row) {
+    target.innerHTML = `<p class="empty">Selecciona un usuario para ver detalle.</p>`;
+    return;
+  }
+  target.innerHTML = `
+    <div class="selected-user-card">
+      <span class="user-avatar large">${escapeHtml(userInitials(row))}</span>
+      <div>
+        <span class="eyebrow">Usuario seleccionado</span>
+        <h2>${escapeHtml(row.name)}</h2>
+        <p>${escapeHtml(row.full_name || "Sin nombre completo")} · ${escapeHtml(row.email || "Sin email")}</p>
+      </div>
+      <span class="role-pill">${escapeHtml(row.role)}</span>
+    </div>
+    <div class="selected-user-actions">
+      <button type="button" class="ghost" id="selectedUserEditBtn">Editar usuario</button>
+      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="ghost user-status-action" data-user-id="${row.id}" data-active="${Number(row.active) ? "0" : "1"}">${Number(row.active) ? "Desactivar" : "Activar"}</button>` : ""}
+      ${state.authUser?.role === "Super Admin" ? `<button type="button" class="danger-outline" id="selectedUserDeleteBtn">Eliminar</button>` : ""}
+    </div>
+  `;
+  $("#selectedUserEditBtn")?.addEventListener("click", () => editUser(row.id));
+  $("#selectedUserDeleteBtn")?.addEventListener("click", () => deleteUser(row.id));
+  target.querySelector(".user-status-action")?.addEventListener("click", toggleUserStatus);
+}
+
+function selectUser(userId) {
+  state.selectedUserId = Number(userId);
+  const resetSelect = $("#passwordResetUser");
+  if (resetSelect) resetSelect.value = String(userId);
+  renderUsersList();
+  renderSelectedUserDetail();
+}
+
+function editUser(userId) {
+  selectUser(userId);
+  const row = selectedUser();
+  const form = $("#userForm");
+  if (!row || !form) return;
+  form.closest("details")?.setAttribute("open", "open");
+  form.elements.name.value = row.name || "";
+  form.elements.full_name.value = row.full_name || "";
+  form.elements.email.value = row.email || "";
+  form.elements.role.value = row.role || "Visualizador";
+  form.elements.pin.value = "";
+  form.elements.must_change_password.checked = Boolean(Number(row.must_change_password || 0));
+  form.elements.active.checked = Boolean(Number(row.active || 0));
+}
+
+async function deleteUser(userId) {
+  const row = state.users.find((item) => Number(item.id) === Number(userId));
+  if (!row) return;
+  const ok = confirm(`Eliminar usuario\n\nEstas seguro de que queres eliminar al usuario "${row.name}"?\n\nEsta accion no se puede deshacer.`);
+  if (!ok) return;
+  try {
+    await api("/api/users/delete", {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, user_id: userId }),
+    });
+    $("#userNotice").innerHTML = `<div class="panel success">Usuario eliminado correctamente.</div>`;
+    if (Number(state.selectedUserId) === Number(userId)) state.selectedUserId = null;
+    await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+  } catch (err) {
+    $("#userNotice").innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudo eliminar el usuario")}</div>`;
+  }
+}
 async function loadEventUsers() {
   const panel = $("#eventUsersList");
   if (!panel || !state.eventId) return;
@@ -1509,7 +2024,7 @@ async function loadCommunications() {
       <div><strong>${emailProvider.provider || "demo"}</strong><span>Proveedor activo</span></div>
       <div><strong>${emailProvider.ready ? "Conectado" : "No configurado"}</strong><span>Estado</span></div>
       <div><strong>${emailProvider.from || "Sin remitente"}</strong><span>Remitente</span></div>
-      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a</span></div>
+      <div><strong>${emailProvider.reply_to || "No definido"}</strong><span>Responder a${emailProvider.event_reply_to ? " (evento)" : ""}</span></div>
       <div><strong>${emailProvider.last_success ? new Date(emailProvider.last_success).toLocaleString() : "Sin envios"}</strong><span>Ultimo exitoso</span></div>
       <div><strong>${emailProvider.last_error || "Sin errores"}</strong><span>Ultimo error</span></div>
     `;
@@ -2278,6 +2793,16 @@ async function createEvent(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const data = formData(form);
+  data.portal_visible_tabs = selectedPortalTabs();
+  if (form.dataset.mode === "edit" && state.eventId) {
+    data.event_id = state.eventId;
+    data.actor = state.currentUser;
+    await api("/api/events/update", { method: "POST", body: JSON.stringify(data) });
+    await loadEvents();
+    $("#prepareNotice").innerHTML = `<div class="panel success">Configuracion del evento actualizada.</div>`;
+    setView("configure");
+    return;
+  }
   data.status = "published";
   data.actor = state.currentUser;
   const result = await api("/api/events", { method: "POST", body: JSON.stringify(data) });
@@ -2605,11 +3130,62 @@ async function changeAccreditationStatus(id, status) {
 async function saveUser(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const notice = $("#userNotice");
+  try {
+    const data = formData(form);
+    data.actor = state.currentUser;
+    data.must_change_password = form.elements.must_change_password.checked;
+    data.active = form.elements.active.checked;
+    const result = await api("/api/users", { method: "POST", body: JSON.stringify(data) });
+    form.reset();
+    form.elements.must_change_password.checked = true;
+    form.elements.active.checked = true;
+    if (notice) notice.innerHTML = `<div class="panel success">Usuario guardado: ${escapeHtml(result.user?.name || data.name)}</div>`;
+    const refreshes = await Promise.allSettled([loadUsers(), loadEventUsers(), loadAudit()]);
+    refreshes.forEach((refresh) => {
+      if (refresh.status === "rejected") console.warn("No se pudo refrescar usuarios despues de guardar", refresh.reason);
+    });
+  } catch (err) {
+    if (notice) notice.innerHTML = `<div class="panel danger">${escapeHtml(err.message || "No se pudo guardar el usuario")}</div>`;
+  }
+}
+
+async function resetUserPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
   const data = formData(form);
   data.actor = state.currentUser;
-  await api("/api/users", { method: "POST", body: JSON.stringify(data) });
+  data.generate_password = form.elements.generate_password.checked;
+  const result = await api("/api/users/password-reset", { method: "POST", body: JSON.stringify(data) });
+  $("#passwordResetNotice").innerHTML = result.temporary_password
+    ? `<div class="panel warning"><strong>Contraseña temporal:</strong> <code>${escapeHtml(result.temporary_password)}</code><br><small>Copiala ahora. BITORA no volvera a mostrarla.</small></div>`
+    : `<div class="panel success">Contraseña restablecida. El usuario debera cambiarla al ingresar.</div>`;
   form.reset();
+  await Promise.all([loadUsers(), loadAudit()]);
+}
+
+async function toggleUserStatus(event) {
+  const button = event.currentTarget;
+  await api("/api/users/status", {
+    method: "POST",
+    body: JSON.stringify({ actor: state.currentUser, user_id: button.dataset.userId, active: button.dataset.active === "1" }),
+  });
   await Promise.all([loadUsers(), loadEventUsers(), loadAudit()]);
+}
+
+async function changeOwnPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    await api("/api/auth/change-password", { method: "POST", body: JSON.stringify(formData(form)) });
+    $("#passwordChangeNotice").innerHTML = `<div class="panel success">Contraseña actualizada.</div>`;
+    state.authUser.must_change_password = 0;
+    form.reset();
+    await loadEvents();
+    setView(producerHomeAllowed() ? "home" : "dashboard");
+  } catch (err) {
+    $("#passwordChangeNotice").innerHTML = `<div class="panel danger">${err.message}</div>`;
+  }
 }
 
 async function sendDemoCommunication(event) {
@@ -2787,7 +3363,11 @@ function stopCameraScan() {
 document.addEventListener("DOMContentLoaded", async () => {
   organizeReportAndDiagnosticViews();
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
-    if (!canSeeModule(button.dataset.view)) return;
+    if (button.dataset.view === "home") {
+      if (!producerHomeAllowed()) return;
+    } else if (!canSeeModule(button.dataset.view)) {
+      return;
+    }
     setView(button.dataset.view);
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
@@ -2797,13 +3377,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }));
   $$("[data-view-target]").forEach((button) => button.addEventListener("click", () => {
     const target = button.dataset.viewTarget;
-    if (!canSeeModule(target)) return;
+    if (target === "home") {
+      if (!producerHomeAllowed()) return;
+    } else if (!canSeeModule(target)) {
+      return;
+    }
     setView(target);
     history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
     await selectActiveEvent(event.target.value);
   });
+  $("#producerHomeEventSelect")?.addEventListener("change", async (event) => {
+    await selectActiveEvent(event.target.value);
+  });
+  $("#producerHomeRefreshBtn")?.addEventListener("click", loadEvents);
   $("#usersEventSelect")?.addEventListener("change", async (event) => {
     await selectActiveEvent(event.target.value);
   });
@@ -2840,6 +3428,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#waitingRoomConfigForm")?.addEventListener("submit", saveWaitingRoomConfig);
   $("#deleteLandingImageBtn")?.addEventListener("click", deleteLandingImage);
   $("#userForm").addEventListener("submit", saveUser);
+  $("#userSearchInput")?.addEventListener("input", renderUsersList);
+  $("#passwordResetForm")?.addEventListener("submit", resetUserPassword);
+  $("#savePermissionsBtn")?.addEventListener("click", savePermissionChanges);
+  $("#passwordChangeForm")?.addEventListener("submit", changeOwnPassword);
   $("#communicationForm").addEventListener("submit", sendDemoCommunication);
   $("#emailTestForm")?.addEventListener("submit", sendTestEmail);
   $("#whatsappTestForm")?.addEventListener("submit", sendTestWhatsApp);
@@ -2884,11 +3476,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   await loadEvents();
   let initialView = new URLSearchParams(location.search).get("view") || location.hash.replace("#", "");
+  if (state.authUser?.must_change_password) {
+    initialView = "passwordChange";
+  }
   if (initialView === "visualization") initialView = "reports";
-  if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
+  if (!initialView && producerDefaultView()) {
+    initialView = producerDefaultView();
+  } else if (!initialView && state.authUser?.role === "Super Admin" && !new URLSearchParams(location.search).get("event_id")) {
     initialView = "owner";
   }
-  if (initialView && !canSeeModule(initialView)) {
+  if (initialView === "home" && !producerHomeAllowed()) {
+    initialView = canSeeModule("dashboard") ? "dashboard" : permissionsFor().modules[0] || "dashboard";
+  } else if (initialView && initialView !== "home" && !canSeeModule(initialView)) {
     initialView = permissionsFor().modules[0] || "dashboard";
   }
   if (initialView && document.getElementById(initialView)?.classList.contains("view")) {
@@ -2897,4 +3496,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (initialView === "simulator") await loadSimulator();
     if (initialView === "reports") await loadVisualization();
   }
+  document.body.classList.remove("app-loading");
 });

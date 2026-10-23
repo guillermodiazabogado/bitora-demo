@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA Networking Admin</title>
+  <link rel="stylesheet" href="/styles.css?v=20260814-networking-v1">
+</head>
+<body>
+  <main class="networking-admin-shell">
+    <header class="producer-module-header">
+      <div>
+        <span class="badge">BITORA Networking V1</span>
+        <h1>Importacion y control</h1>
+      </div>
+      <a href="/index.html" class="producer-home-return-link">Volver</a>
+    </header>
+    <section class="networking-admin-grid">
+      <article class="networking-panel">
+        <h2>Importar perfiles</h2>
+        <div class="networking-two">
+          <label>Evento
+            <input id="eventId" type="number" min="1" value="1">
+          </label>
+          <label>Origen
+            <input id="sourceSystem" value="BITORA">
+          </label>
+        </div>
+        <label>Filas JSON
+          <textarea id="rowsInput" rows="14">[
+  {"first_name":"Ana","last_name":"Demo","email":"ana.demo@example.test","organization":"BITORA Labs","title":"Directora Comercial","function":"COMMERCIAL","seniority":"MANAGEMENT","linkedin":"https://www.linkedin.com","whatsapp":"5491100000000"},
+  {"first_name":"Luis","last_name":"Demo","email":"luis.demo@example.test","organization":"Soluciones Evento","title":"CTO","function":"TECHNOLOGY","seniority":"EXECUTIVE","channel_visibility":{"email":"HIDDEN"}}
+]</textarea>
+        </label>
+        <div class="participant-actions-row">
+          <button id="previewBtn" type="button" class="ghost">Validar</button>
+          <button id="importBtn" type="button">Importar</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Jerarquia visual</h2>
+        <div class="networking-two">
+          <label>Evento
+            <input id="configEventId" type="number" min="1" value="1">
+          </label>
+          <label>Presentacion
+            <select id="profileMode">
+              <option value="AUTO">Automatico/default</option>
+              <option value="ORGANIZATION_FIRST">Organizacion primero</option>
+              <option value="PERSON_FIRST">Persona primero</option>
+            </select>
+          </label>
+        </div>
+        <p class="networking-status">Organizacion primero destaca empresa/institucion; Persona primero destaca al profesional. La privacidad no cambia.</p>
+        <label>Datos obligatorios de readiness
+          <textarea id="readinessRequired" rows="3" placeholder="Usar default del modo si queda vacio"></textarea>
+        </label>
+        <label>Datos recomendados de readiness
+          <textarea id="readinessRecommended" rows="3" placeholder="Usar default del modo si queda vacio"></textarea>
+        </label>
+        <div class="networking-two">
+          <label>Discovery
+            <select id="discoveryEnabled">
+              <option value="1">Habilitado</option>
+              <option value="0">Deshabilitado</option>
+            </select>
+          </label>
+          <label>Tarjetas por tanda
+            <input id="discoveryBatchSize" type="number" min="1" max="5" value="3">
+          </label>
+        </div>
+        <label>Exploracion cada N tarjetas
+          <input id="discoveryFrequency" type="number" min="2" max="12" value="4">
+        </label>
+        <div class="participant-actions-row">
+          <button id="loadConfigBtn" type="button" class="ghost">Leer config</button>
+          <button id="saveConfigBtn" type="button">Guardar config</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Lanzamiento y marca</h2>
+        <p class="networking-status">Configura identidad, URL publica y estado live sin tocar codigo.</p>
+        <div class="networking-two">
+          <label>Titulo publico
+            <input id="brandTitle" placeholder="Nombre publico del evento">
+          </label>
+          <label>Modo de marca
+            <select id="brandMode">
+              <option value="POWERED_BY_BITORA">Evento + Powered by BITORA</option>
+              <option value="BITORA">BITORA</option>
+              <option value="EVENT_BRANDED">Evento</option>
+            </select>
+          </label>
+        </div>
+        <label>Bienvenida breve
+          <input id="brandWelcome" maxlength="220" placeholder="Texto corto para credencial y perfil publico">
+        </label>
+        <div class="networking-two">
+          <label>Color principal
+            <input id="brandPrimary" placeholder="#13243a">
+          </label>
+          <label>Color acento
+            <input id="brandAccent" placeholder="#d7a63f">
+          </label>
+        </div>
+        <label>Logo / imagen de evento
+          <input id="brandLogo" placeholder="data:image..., /assets/logo.png o https://...">
+        </label>
+        <label>URL publica Networking
+          <input id="publicBaseUrl" placeholder="https://evento.example.com">
+        </label>
+        <div id="launchStatus" class="networking-status">Cargar launch check para ver estado.</div>
+        <div id="launchChecks" class="readiness-list"></div>
+        <div class="participant-actions-row">
+          <button id="loadBrandBtn" type="button" class="ghost">Leer marca</button>
+          <button id="saveBrandBtn" type="button">Guardar marca</button>
+          <button id="loadLaunchBtn" type="button" class="ghost">Launch check</button>
+        </div>
+        <div class="participant-actions-row">
+          <button id="launchNetworkingBtn" type="button">Lanzar Networking</button>
+          <button id="disableNetworkingBtn" type="button" class="ghost">Deshabilitar</button>
+          <button id="draftNetworkingBtn" type="button" class="ghost">Volver a prelaunch</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Preparacion del evento</h2>
+        <p class="networking-status">Resumen operativo de perfiles listos e incompletos. No publica un directorio.</p>
+        <div id="readinessCards" class="networking-report-cards"></div>
+        <button id="loadReadinessBtn" type="button" class="ghost">Ver readiness</button>
+      </article>
+      <article class="networking-panel">
+        <h2>Operaciones Networking</h2>
+        <p class="networking-status">Estado comercial y operativo del evento: preparacion, uso, Discovery, contactos y vocabulario. Solo agregados.</p>
+        <div id="operationsStatus" class="networking-status">Elegir evento y cargar operaciones.</div>
+        <div id="operationsWarnings" class="readiness-list"></div>
+        <div id="operationsCards" class="networking-report-cards"></div>
+        <div class="participant-actions-row">
+          <button id="loadOperationsBtn" type="button">Ver operaciones</button>
+          <button id="exportOperationsBtn" type="button" class="ghost">Exportar CSV</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Vocabulario semantico</h2>
+        <p class="networking-status">Conceptos disponibles para este evento. Configura significado, no participantes.</p>
+        <textarea id="taxonomyInput" rows="12">[
+  {"type":"INDUSTRY","label":"Construccion","aliases":["construction"],"enabled":true},
+  {"type":"SPECIALTY","label":"Hormigon elaborado","aliases":["ready mix"],"enabled":true},
+  {"type":"OFFER","label":"Provision de hormigon elaborado","enabled":true},
+  {"type":"SEEK","label":"Constructoras","enabled":true},
+  {"type":"INTEREST","label":"Infraestructura","enabled":true}
+]</textarea>
+        <div class="participant-actions-row">
+          <button id="loadTaxonomyBtn" type="button" class="ghost">Leer vocabulario</button>
+          <button id="saveTaxonomyBtn" type="button">Guardar vocabulario</button>
+        </div>
+      </article>
+      <article class="networking-panel">
+        <h2>Vocabulario vivo</h2>
+        <p class="networking-status">Valores configurados y candidatos reales declarados en el evento. No lista participantes.</p>
+        <div id="liveVocabularyCards" class="networking-report-cards"></div>
+        <button id="loadLiveVocabularyBtn" type="button" class="ghost">Ver vocabulario vivo</button>
+      </article>
+      <article class="networking-panel">
+        <h2>Resultado</h2>
+        <div id="summaryCards" class="networking-report-cards"></div>
+        <pre id="adminOutput" class="networking-admin-output"></pre>
+      </article>
+    </section>
+  </main>
+  <script>
+    const output = document.getElementById("adminOutput");
+    const cards = document.getElementById("summaryCards");
+    const readinessCards = document.getElementById("readinessCards");
+    const liveVocabularyCards = document.getElementById("liveVocabularyCards");
+    const operationsCards = document.getElementById("operationsCards");
+    const operationsWarnings = document.getElementById("operationsWarnings");
+    const operationsStatus = document.getElementById("operationsStatus");
+    const launchChecks = document.getElementById("launchChecks");
+    const launchStatus = document.getElementById("launchStatus");
+    function rows() { return JSON.parse(document.getElementById("rowsInput").value || "[]"); }
+    function payload() {
+      return {
+        actor: "Admin",
+        event_id: Number(document.getElementById("eventId").value),
+        source_system: document.getElementById("sourceSystem").value,
+        rows: rows(),
+      };
+    }
+    async function post(path) {
+      output.textContent = "Procesando...";
+      const response = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload())});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      cards.replaceChildren();
+      ["valid", "complete", "incomplete", "created", "updated", "errors"].forEach((key) => {
+        if (data[key] === undefined) return;
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${key}</span><strong>${Array.isArray(data[key]) ? data[key].length : data[key]}</strong>`;
+        cards.appendChild(card);
+      });
+    }
+    async function loadConfig() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo configuracion...";
+      const response = await fetch(`/api/networking/config?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        document.getElementById("profileMode").value = data.networking_profile_mode;
+        document.getElementById("readinessRequired").value = (data.networking_readiness_required || []).join(", ");
+        document.getElementById("readinessRecommended").value = (data.networking_readiness_recommended || []).join(", ");
+        document.getElementById("discoveryEnabled").value = data.networking_discovery_enabled ? "1" : "0";
+        document.getElementById("discoveryBatchSize").value = data.networking_discovery_batch_size || 3;
+        document.getElementById("discoveryFrequency").value = data.networking_discovery_exploration_frequency || 4;
+        document.getElementById("eventId").value = eventId;
+      }
+    }
+    function splitKeys(value) {
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+    }
+    async function saveConfig() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Guardando configuracion...";
+      const response = await fetch("/api/networking/config", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          actor: "Admin",
+          event_id: eventId,
+          networking_profile_mode: document.getElementById("profileMode").value,
+          networking_readiness_required: splitKeys(document.getElementById("readinessRequired").value),
+          networking_readiness_recommended: splitKeys(document.getElementById("readinessRecommended").value),
+          networking_discovery_enabled: document.getElementById("discoveryEnabled").value,
+          networking_discovery_batch_size: Number(document.getElementById("discoveryBatchSize").value || 3),
+          networking_discovery_exploration_frequency: Number(document.getElementById("discoveryFrequency").value || 4),
+        }),
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+    async function loadReadiness() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo preparacion...";
+      const response = await fetch(`/api/networking/readiness?actor=Admin&event_id=${encodeURIComponent(eventId)}&include_participants=1`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      readinessCards.replaceChildren();
+      ["total", "passive", "active", "ready", "incomplete"].forEach((key) => {
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${key}</span><strong>${data[key] || 0}</strong>`;
+        readinessCards.appendChild(card);
+      });
+    }
+    function addOperationsCard(label, value) {
+      const card = document.createElement("div");
+      card.className = "networking-report-card";
+      card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+      operationsCards.appendChild(card);
+    }
+    async function loadOperations() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo operaciones...";
+      operationsStatus.textContent = "Cargando...";
+      const response = await fetch(`/api/networking/operations?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      operationsCards.replaceChildren();
+      operationsWarnings.replaceChildren();
+      if (!data.ok) {
+        operationsStatus.textContent = data.error || "No se pudo leer operaciones.";
+        return;
+      }
+      operationsStatus.textContent = `${data.status_label}: ${data.event.name} - Discovery ${data.discovery.enabled ? "habilitado" : "deshabilitado"} - Launch ${data.launch?.status || data.configuration?.networking_launch_state || "DRAFT"}`;
+      (data.warnings || []).forEach((warning) => {
+        const item = document.createElement("div");
+        item.className = `readiness-item ${warning.severity === "CRITICAL" ? "warn" : "ok"}`;
+        item.innerHTML = `<strong>${warning.severity}</strong><span>${warning.message}</span>`;
+        operationsWarnings.appendChild(item);
+      });
+      addOperationsCard("Participantes", data.participants.total);
+      addOperationsCard("Activos", data.participants.active);
+      addOperationsCard("Ready", data.participants.ready);
+      addOperationsCard("Incompletos", data.participants.incomplete);
+      addOperationsCard("Contactos", data.networking.contacts_total);
+      addOperationsCard("Contactos QR", data.networking.scan_contact_events);
+      addOperationsCard("Discovery listo", data.discovery.configured_participants);
+      addOperationsCard("Discovery usado", data.discovery.users);
+      addOperationsCard("Tarjetas vistas", data.discovery.profiles_shown);
+      addOperationsCard("Guardados Discovery", data.discovery.saved);
+      addOperationsCard("Agotamiento", data.discovery.exhausted_users);
+      addOperationsCard("Vocabulario activo", data.vocabulary.active_concepts);
+      addOperationsCard("Vocabulario pendiente", data.vocabulary.unresolved_candidates);
+      addOperationsCard("Launch", data.launch?.status || data.configuration?.networking_launch_state || "DRAFT");
+    }
+    function brandPayload() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      return {
+        actor: "Admin",
+        event_id: eventId,
+        networking_brand_title: document.getElementById("brandTitle").value,
+        networking_brand_welcome: document.getElementById("brandWelcome").value,
+        networking_brand_mode: document.getElementById("brandMode").value,
+        landing_primary_color: document.getElementById("brandPrimary").value,
+        landing_secondary_color: document.getElementById("brandAccent").value,
+        landing_logo_data: document.getElementById("brandLogo").value,
+        networking_public_base_url: document.getElementById("publicBaseUrl").value,
+      };
+    }
+    function renderLaunch(data) {
+      launchChecks.replaceChildren();
+      if (!data.ok) {
+        launchStatus.textContent = data.error || "No se pudo evaluar lanzamiento.";
+        return;
+      }
+      launchStatus.textContent = `${data.status_label || data.status} - Estado: ${data.launch_state}`;
+      (data.checks || []).forEach((check) => {
+        const item = document.createElement("div");
+        item.className = `readiness-item ${check.severity === "BLOCKING" ? "warn" : "ok"}`;
+        item.innerHTML = `<strong>${check.severity}</strong><span>${check.message}${check.action ? ` Accion: ${check.action}` : ""}</span>`;
+        launchChecks.appendChild(item);
+      });
+    }
+    async function loadBrand() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo marca...";
+      const response = await fetch(`/api/networking/brand?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        const brand = data.branding || {};
+        document.getElementById("brandTitle").value = brand.title || "";
+        document.getElementById("brandWelcome").value = brand.welcome || "";
+        document.getElementById("brandMode").value = brand.mode || "POWERED_BY_BITORA";
+        document.getElementById("brandPrimary").value = brand.primary_color || "";
+        document.getElementById("brandAccent").value = brand.accent_color || "";
+        document.getElementById("brandLogo").value = brand.logo || "";
+        document.getElementById("publicBaseUrl").value = data.networking_public_base_url || "";
+      }
+    }
+    async function saveBrand() {
+      output.textContent = "Guardando marca...";
+      const response = await fetch("/api/networking/brand", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(brandPayload())});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) await loadLaunch();
+    }
+    async function loadLaunch() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Evaluando lanzamiento...";
+      const response = await fetch(`/api/networking/launch?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      renderLaunch(data);
+    }
+    async function launchAction(action) {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Actualizando estado...";
+      const response = await fetch("/api/networking/launch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({actor: "Admin", event_id: eventId, action})});
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      renderLaunch(data.readiness || data);
+    }
+    function exportOperations() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      window.location.href = `/api/networking/operations.csv?actor=Admin&event_id=${encodeURIComponent(eventId)}`;
+    }
+    async function loadTaxonomy() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo vocabulario...";
+      const response = await fetch(`/api/networking/taxonomy?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        document.getElementById("taxonomyInput").value = JSON.stringify(data.concepts || [], null, 2);
+      }
+    }
+    async function saveTaxonomy() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Guardando vocabulario...";
+      const response = await fetch("/api/networking/taxonomy", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({actor: "Admin", event_id: eventId, concepts: JSON.parse(document.getElementById("taxonomyInput").value || "[]")}),
+      });
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+    async function loadLiveVocabulary() {
+      const eventId = Number(document.getElementById("configEventId").value || document.getElementById("eventId").value);
+      output.textContent = "Leyendo vocabulario vivo...";
+      const response = await fetch(`/api/networking/live-vocabulary?actor=Admin&event_id=${encodeURIComponent(eventId)}`);
+      const data = await response.json();
+      output.textContent = JSON.stringify(data, null, 2);
+      liveVocabularyCards.replaceChildren();
+      Object.entries(data.vocabulary || {}).forEach(([dimension, options]) => {
+        const card = document.createElement("div");
+        card.className = "networking-report-card";
+        card.innerHTML = `<span>${dimension}</span><strong>${options.length}</strong>`;
+        liveVocabularyCards.appendChild(card);
+      });
+    }
+    document.getElementById("previewBtn").addEventListener("click", () => post("/api/networking/import/preview").catch((error) => output.textContent = error.message));
+    document.getElementById("importBtn").addEventListener("click", () => post("/api/networking/import").catch((error) => output.textContent = error.message));
+    document.getElementById("loadConfigBtn").addEventListener("click", () => loadConfig().catch((error) => output.textContent = error.message));
+    document.getElementById("saveConfigBtn").addEventListener("click", () => saveConfig().catch((error) => output.textContent = error.message));
+    document.getElementById("loadReadinessBtn").addEventListener("click", () => loadReadiness().catch((error) => output.textContent = error.message));
+    document.getElementById("loadOperationsBtn").addEventListener("click", () => loadOperations().catch((error) => output.textContent = error.message));
+    document.getElementById("exportOperationsBtn").addEventListener("click", exportOperations);
+    document.getElementById("loadBrandBtn").addEventListener("click", () => loadBrand().catch((error) => output.textContent = error.message));
+    document.getElementById("saveBrandBtn").addEventListener("click", () => saveBrand().catch((error) => output.textContent = error.message));
+    document.getElementById("loadLaunchBtn").addEventListener("click", () => loadLaunch().catch((error) => output.textContent = error.message));
+    document.getElementById("launchNetworkingBtn").addEventListener("click", () => launchAction("launch").catch((error) => output.textContent = error.message));
+    document.getElementById("disableNetworkingBtn").addEventListener("click", () => launchAction("disable").catch((error) => output.textContent = error.message));
+    document.getElementById("draftNetworkingBtn").addEventListener("click", () => launchAction("draft").catch((error) => output.textContent = error.message));
+    document.getElementById("loadTaxonomyBtn").addEventListener("click", () => loadTaxonomy().catch((error) => output.textContent = error.message));
+    document.getElementById("saveTaxonomyBtn").addEventListener("click", () => saveTaxonomy().catch((error) => output.textContent = error.message));
+    document.getElementById("loadLiveVocabularyBtn").addEventListener("click", () => loadLiveVocabulary().catch((error) => output.textContent = error.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA - Speakers V4.5</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="container">
+    <div class="producer-module-header">
+      <h1>Disertantes</h1>
+      <a id="producerHomeLink" class="producer-home-return-link" href="/#home">Volver al Home</a>
+    </div>
+    <section class="panel">
+      <label>Evento <input id="eventId" type="number" min="1"></label>
+      <button id="loadBtn">Cargar</button>
+      <button id="createBtn">Crear demo</button>
+    </section>
+    <section class="panel">
+      <h2>Listado</h2>
+      <div id="speakers"></div>
+    </section>
+  </main>
+  <script>
+    const eventInput = document.getElementById('eventId');
+    const list = document.getElementById('speakers');
+    const queryEventId = new URLSearchParams(location.search).get('event_id');
+    if (queryEventId) eventInput.value = queryEventId;
+    function updateHomeLink() {
+      const eventId = eventInput.value || new URLSearchParams(location.search).get('event_id') || '';
+      document.getElementById('producerHomeLink').href = eventId ? `/?event_id=${encodeURIComponent(eventId)}#home` : '/#home';
+    }
+    async function loadSpeakers() {
+      const eventId = Number(eventInput.value || 0);
+      if (!eventId) return;
+      const res = await fetch(`/api/speakers?event_id=${eventId}`);
+      const data = await res.json();
+      list.innerHTML = (data.items || []).map(item => `
+        <article class="card">
+          <strong>${item.display_name}</strong>
+          <div>${item.title || ''} ${item.company || ''}</div>
+          <small>${item.status} · ${item.visibility}</small>
+        </article>
+      `).join('') || '<p>Sin disertantes.</p>';
+    }
+    eventInput.addEventListener('input', updateHomeLink);
+    updateHomeLink();
+    document.getElementById('loadBtn').addEventListener('click', loadSpeakers);
+    document.getElementById('createBtn').addEventListener('click', async () => {
+      const eventId = Number(eventInput.value || 0);
+      if (!eventId) return;
+      await fetch('/api/speakers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({event_id: eventId, display_name: 'Disertante demo', title: 'Speaker', company: 'BITORA', actor: 'Admin'})
+      });
+      loadSpeakers();
+    });
+  </script>
+</body>
+</html>

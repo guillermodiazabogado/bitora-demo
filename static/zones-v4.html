@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA - Zones V4.6</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Zonas</h1>
+    <section class="panel">
+      <label>Evento <input id="eventId" type="number" min="1"></label>
+      <button id="loadBtn">Cargar</button>
+    </section>
+    <section class="panel"><div id="zones"></div></section>
+  </main>
+  <script>
+    document.getElementById('loadBtn').addEventListener('click', async () => {
+      const eventId = Number(document.getElementById('eventId').value || 0);
+      if (!eventId) return;
+      const data = await (await fetch(`/api/events/${eventId}/zones`)).json();
+      document.getElementById('zones').innerHTML = (data.items || []).map(zone => `<article class="card"><strong>${zone.code}</strong><div>${zone.name}</div><small>${zone.status}</small></article>`).join('') || '<p>Sin zonas.</p>';
+    });
+  </script>
+</body>
+</html>

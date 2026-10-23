@@ -17,10 +17,10 @@ class QRService:
             match = re.search(r"EVT-[A-Z0-9]+", candidate, re.IGNORECASE)
             if match:
                 return match.group(0).upper()
-        return raw.upper()
+        return raw
 
     def token_exists(self, db, token: str) -> bool:
-        return bool(db.execute("SELECT 1 FROM accreditations WHERE token = ?", (self.payload_for_token(token),)).fetchone())
+        return bool(db.execute("SELECT 1 FROM accreditations WHERE lower(token) = lower(?)", (self.payload_for_token(token),)).fetchone())
 
     def svg(self, db, token: str, renderer: Callable[[str], str]) -> str | None:
         payload = self.payload_for_token(token)

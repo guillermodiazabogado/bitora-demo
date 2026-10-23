@@ -49,6 +49,12 @@ def main() -> None:
         server.AppHandler.log_message = lambda self, format, *args: None
         server.init_db()
         server.seed_if_empty()
+        admin_pin = server.generate_temporary_password()
+        with server.connect() as db:
+            db.execute(
+                "UPDATE users SET pin_hash = ?, active = 1, must_change_password = 0 WHERE name = 'Admin'",
+                (server.hash_pin(admin_pin),),
+            )
 
         httpd = server.OperationalHTTPServer(("127.0.0.1", 0), server.AppHandler)
         httpd.require_login = True
@@ -63,7 +69,7 @@ def main() -> None:
             raise AssertionError("El evento publico no respondio")
 
         jar = Jar()
-        jar.request(base, "POST", "/api/auth/login", {"name": "Admin", "pin": "1234"})
+        jar.request(base, "POST", "/api/auth/login", {"name": "Admin", "pin": admin_pin})
         me = jar.request(base, "GET", "/api/auth/me")
         if not me["authenticated"] or me["user"]["name"] != "Admin":
             raise AssertionError("Login no dejo sesion Admin")

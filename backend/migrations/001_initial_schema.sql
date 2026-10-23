@@ -57,7 +57,14 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
-    pin_hash TEXT NOT NULL DEFAULT ''
+    pin_hash TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    full_name TEXT NOT NULL DEFAULT '',
+    must_change_password INTEGER NOT NULL DEFAULT 0,
+    last_login_at TEXT,
+    password_changed_at TEXT,
+    updated_at TEXT,
+    disabled_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS accreditations (

@@ -204,13 +204,14 @@ def _live_result() -> dict:
             },
         )
         rows = server.communication_audience_rows(db, event_id, "all")
+        live_template_code = "registration_confirmation" if os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE", "").strip() else "webhook_live"
         queued = server.queue_communication(
             db,
             event_id=event_id,
             actor="Admin",
             audience="webhook_live",
             channel="whatsapp",
-            template_code="webhook_live",
+            template_code=live_template_code,
             subject=f"BITORA WhatsApp Webhook Live {run_id}",
             content=f"BITORA STAGING - prueba webhook live {run_id}. Safe Mode activo.",
             rows=rows,

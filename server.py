@@ -16,6 +16,7 @@ import random
 import re
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from html import escape
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -40,16 +41,23 @@ from reportlab.platypus import (
 from backend.database import connect_database, integrity_error_types, load_database_config, run_postgres_migrations
 from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
-from backend.services.attendance import AttendanceService
+from backend.services.analytics_closure import AnalyticsClosureError, AnalyticsClosureService
+from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
+from backend.services.certificates import CertificateDomainError, CertificateService
+from backend.services.communications_automation import CommunicationsAutomationError, CommunicationsAutomationService
+from backend.services.speakers import SpeakerDomainError, SpeakerService
+from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
+from backend.services.demo_full import DEMO_FLAGS, DemoFullService
 from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
 from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
+from backend.services.networking import NetworkingService
 from backend.services.google_oauth import (
     GoogleOAuthClient,
     GoogleOAuthError,
@@ -59,6 +67,8 @@ from backend.services.google_oauth import (
     sanitize_google_error,
     token_expires_at,
 )
+from backend.services.history_autocomplete import HistoryAutocompleteError, HistoryAutocompleteService
+from backend.services.operations_center import OperationsCenterError, OperationsCenterService
 from backend.services.jobs import JobQueueService, JobWorker
 from backend.services.qr import QRService
 from backend.services.qrcodegen import QrCode
@@ -72,6 +82,7 @@ from backend.services.whatsapp import (
     verify_meta_signature,
     whatsapp_safe_mode_enabled,
 )
+from backend.services.zones import ZoneDomainError, ZonePermissionService
 from backend.storage import StorageService
 from backend.verticals import normalize_project_type, registered_verticals, vertical_config
 
@@ -84,11 +95,13 @@ if not DB_PATH.is_absolute():
 FRONTEND_DIR = ROOT / "frontend"
 LEGACY_STATIC_DIR = ROOT / "static"
 STATIC_DIR = FRONTEND_DIR if FRONTEND_DIR.exists() else LEGACY_STATIC_DIR
-BACKUP_DIR = ROOT / "backups"
+BACKUP_DIR = Path(os.environ.get("BITORA_BACKUP_PATH", str(ROOT / "backups")))
+if not BACKUP_DIR.is_absolute():
+    BACKUP_DIR = ROOT / BACKUP_DIR
 STORAGE_ROOT = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage")))
 if not STORAGE_ROOT.is_absolute():
     STORAGE_ROOT = ROOT / STORAGE_ROOT
-STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local").strip().lower() or "local"
+STORAGE_BACKEND = os.environ.get("BITORA_STORAGE_PROVIDER", os.environ.get("STORAGE_BACKEND", "local")).strip().lower() or "local"
 DB_LOCK = threading.Lock()
 BACKUP_STOP = threading.Event()
 WORKER: JobWorker | None = None
@@ -103,6 +116,8 @@ HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "
 STARTED_AT = now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(timespec="seconds")
 AUTH_SESSIONS: dict[str, dict] = {}
 REQUIRE_LOGIN = os.environ.get("QR_REQUIRE_LOGIN", "").lower() in {"1", "true", "si", "yes"}
+ONLINE_ENVS = {"staging", "production"}
+WEAK_BOOTSTRAP_PASSWORDS = {"1234", "2222", "3333", "4444", "5555", "6666", "admin", "password", "bitora"}
 QR_ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 ADMIN_ROLES = {"Super Admin"}
 CONFIG_ROLES = {"Super Admin", "Productor", "Coordinador"}
@@ -167,34 +182,163 @@ MULTITENANT_PERMISSION_CODES = [
     "communications.configure",
     "communications.send_test",
 ]
+ATTENDANCE_PERMISSION_CODES = [
+    "attendance.read",
+    "attendance.record",
+    "attendance.correct",
+    "attendance.invalidate",
+    "attendance.read_audit",
+    "attendance.rules.read",
+    "attendance.rules.manage",
+    "attendance.rules.publish",
+    "attendance.closure.read",
+    "attendance.closure.execute",
+    "attendance.closure.reopen",
+    "attendance.evaluation.read",
+    "attendance.eligibility.read",
+    "attendance.eligibility.override",
+    "attendance.snapshot.read",
+]
+CERTIFICATE_PERMISSION_CODES = [
+    "certificates.types.read",
+    "certificates.types.manage",
+    "certificates.templates.read",
+    "certificates.templates.manage",
+    "certificates.templates.publish",
+    "certificates.preview",
+    "certificates.issue",
+    "certificates.batch.issue",
+    "certificates.read",
+    "certificates.download",
+    "certificates.revoke",
+    "certificates.reissue",
+    "certificates.verify",
+    "certificates.audit.read",
+]
+SURVEY_PERMISSION_CODES = [
+    "surveys.types.read",
+    "surveys.types.manage",
+    "surveys.read",
+    "surveys.create",
+    "surveys.edit",
+    "surveys.publish",
+    "surveys.assign",
+    "surveys.open",
+    "surveys.close",
+    "surveys.results.view",
+    "surveys.export",
+    "surveys.archive",
+    "surveys.audit.view",
+]
+SPEAKER_PERMISSION_CODES = [
+    "speakers.read",
+    "speakers.manage",
+    "speakers.publish",
+    "speakers.assign",
+    "speakers.documents.read",
+    "speakers.documents.manage",
+    "speakers.private.read",
+    "speakers.access_tokens.manage",
+    "speakers.audit.read",
+]
+ZONE_PERMISSION_CODES = [
+    "zones.read",
+    "zones.manage",
+    "zones.assign",
+    "zones.validate",
+    "zones.override",
+    "zones.access_log.read",
+    "zones.audit.read",
+]
+HISTORY_AUTOCOMPLETE_PERMISSION_CODES = [
+    "history.read",
+    "history.sensitive.read",
+    "autocomplete.use",
+    "autocomplete.private.use",
+    "duplicates.read",
+    "duplicates.resolve",
+    "history.audit.read",
+]
+OPERATIONS_CENTER_PERMISSION_CODES = [
+    "operations_center.read",
+    "operations_center.metrics.read",
+    "operations_center.readiness.read",
+    "operations_center.alerts.read",
+    "operations_center.alerts.manage",
+    "operations_center.incidents.read",
+    "operations_center.incidents.manage",
+    "operations_center.tasks.read",
+    "operations_center.tasks.manage",
+    "operations_center.actions.execute",
+    "operations_center.sensitive.read",
+    "operations_center.audit.read",
+]
+COMMUNICATIONS_AUTOMATION_PERMISSION_CODES = [
+    "communications.templates.read",
+    "communications.templates.manage",
+    "communications.templates.approve",
+    "communications.segments.read",
+    "communications.segments.manage",
+    "communications.campaigns.read",
+    "communications.campaigns.manage",
+    "communications.campaigns.approve",
+    "communications.campaigns.execute",
+    "communications.campaigns.cancel",
+    "communications.deliveries.read",
+    "communications.automations.read",
+    "communications.automations.manage",
+    "communications.automations.activate",
+    "communications.suppressions.read",
+    "communications.suppressions.manage",
+    "communications.audit.read",
+    "communications.live_mode.use",
+]
+ANALYTICS_PERMISSION_CODES = [
+    "analytics.read",
+    "analytics.executive.read",
+    "analytics.operational.read",
+    "analytics.attendance.read",
+    "analytics.certificates.read",
+    "analytics.surveys.read",
+    "analytics.communications.read",
+    "analytics.data_quality.read",
+    "analytics.compare",
+    "analytics.export",
+    "analytics.sensitive.read",
+    "analytics.definitions.read",
+    "analytics.audit.read",
+    "functional_closure.read",
+    "functional_closure.manage",
+    "functional_closure.approve",
+]
 PERMISSION_MATRIX = {
     "Super Admin": {
-        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit", "diagnostics", "simulator"],
-        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES],
+        "modules": ["owner", "organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit", "diagnostics", "simulator"],
+        "actions": ["create_event", "manage_users", "configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "technical_diagnostics", *COMMUNICATION_PERMISSION_CODES, *BACKUP_PERMISSION_CODES, *MULTITENANT_PERMISSION_CODES, *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES, *ANALYTICS_PERMISSION_CODES],
     },
     "Productor": {
-        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "audit"],
-        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test"],
+        "modules": ["organizations", "dashboard", "register", "reception", "agenda", "access", "configure", "users", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
+        "actions": ["configure_event", "import_export", "communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "manage_event_team", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.approve_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "communications.manage_consent", "backups.view", "backups.create_event", "backups.download", "backups.verify", "backups.view_manifest", "organizations.view", "organizations.edit", "organizations.manage_users", "integrations.view", "integrations.create", "integrations.edit", "integrations.test", "integrations.disable", "integrations.google_connect", "integrations.google_disconnect", "integrations.google_refresh", "event_integrations.view", "event_integrations.assign", "communications.configure", "communications.send_test", *ATTENDANCE_PERMISSION_CODES, *CERTIFICATE_PERMISSION_CODES, *SURVEY_PERMISSION_CODES, *SPEAKER_PERMISSION_CODES, *ZONE_PERMISSION_CODES, *HISTORY_AUTOCOMPLETE_PERMISSION_CODES, *OPERATIONS_CENTER_PERMISSION_CODES, *COMMUNICATIONS_AUTOMATION_PERMISSION_CODES, *ANALYTICS_PERMISSION_CODES],
     },
     "Coordinador": {
-        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "audit"],
-        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data"],
+        "modules": ["dashboard", "register", "reception", "agenda", "access", "reports", "communications", "certificates", "surveys", "speakers", "zones", "history", "audit"],
+        "actions": ["communicate", "manual_accredit", "scan_qr", "view_reports", "view_audit", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.retry_failed", "communications.view_personal_data", "attendance.read", "attendance.record", "attendance.correct", "attendance.read_audit", "attendance.rules.read", "attendance.closure.read", "attendance.evaluation.read", "attendance.eligibility.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "certificates.download", "surveys.types.read", "surveys.read", "surveys.results.view", "speakers.read", "speakers.assign", "speakers.documents.read", "zones.read", "zones.assign", "zones.validate", "zones.access_log.read", "history.read", "autocomplete.use", "duplicates.read", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read", "analytics.read", "analytics.operational.read", "analytics.attendance.read", "analytics.certificates.read", "analytics.surveys.read", "analytics.communications.read", "analytics.data_quality.read", "analytics.definitions.read", "functional_closure.read"],
     },
     "Operador de recepcion": {
         "modules": ["dashboard", "register", "reception", "agenda"],
-        "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data"],
+        "actions": ["manual_accredit", "register_participants", "communications.resend_individual", "communications.view_history", "communications.view_personal_data", "attendance.read"],
     },
     "Operador de acceso": {
-        "modules": ["access"],
-        "actions": ["scan_qr"],
+        "modules": ["access", "zones"],
+        "actions": ["scan_qr", "attendance.record", "zones.validate"],
     },
     "Visualizador": {
-        "modules": ["dashboard", "agenda", "reports"],
-        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics"],
+        "modules": ["dashboard", "agenda", "reports", "certificates", "surveys", "speakers", "history"],
+        "actions": ["view_reports", "communications.view", "communications.view_history", "communications.view_metrics", "attendance.read", "certificates.types.read", "certificates.templates.read", "certificates.read", "surveys.read", "speakers.read", "history.read", "autocomplete.use", "operations_center.read", "operations_center.metrics.read", "operations_center.readiness.read", "operations_center.alerts.read", "operations_center.incidents.read", "operations_center.tasks.read", "communications.templates.read", "communications.segments.read", "communications.campaigns.read", "communications.deliveries.read", "communications.automations.read", "analytics.read", "analytics.executive.read", "analytics.definitions.read"],
     },
     "Comunicaciones": {
         "modules": ["dashboard", "agenda", "reports", "communications"],
-        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "integrations.google_connect", "integrations.google_disconnect", "integrations.test", "event_integrations.view", "communications.configure", "communications.send_test"],
+        "actions": ["communicate", "view_reports", "communications.view", "communications.create", "communications.edit", "communications.preview", "communications.select_audience", "communications.send", "communications.schedule", "communications.pause", "communications.resume", "communications.cancel", "communications.resend_individual", "communications.view_history", "communications.view_metrics", "communications.manage_templates", "communications.retry_failed", "communications.export", "communications.view_personal_data", "integrations.view", "integrations.google_connect", "integrations.google_disconnect", "integrations.test", "event_integrations.view", "communications.configure", "communications.send_test", "communications.templates.read", "communications.templates.manage", "communications.segments.read", "communications.segments.manage", "communications.campaigns.read", "communications.campaigns.manage", "communications.campaigns.execute", "communications.deliveries.read", "communications.automations.read", "communications.automations.manage", "communications.suppressions.read", "communications.suppressions.manage"],
     },
     "Soporte tecnico": {
         "modules": ["dashboard", "audit", "diagnostics"],
@@ -232,8 +376,51 @@ def attendance_service() -> AttendanceService:
     return AttendanceService(audit_service=audit_service(), now=now_iso)
 
 
+def certificate_service() -> CertificateService:
+    return CertificateService(audit_service=audit_service(), storage=STORAGE, now=now_iso)
+
+
+def speaker_service() -> SpeakerService:
+    return SpeakerService(audit_service=audit_service(), storage=STORAGE, now=now_iso, secret=os.environ.get("BITORA_SPEAKER_SECRET", "bitora-speakers-local-secret"))
+
+
+def zone_permission_service() -> ZonePermissionService:
+    return ZonePermissionService(audit_service=audit_service(), now=now_iso)
+
+
+def history_autocomplete_service() -> HistoryAutocompleteService:
+    return HistoryAutocompleteService(audit_service=audit_service(), now=now_iso)
+
+
+def operations_center_service() -> OperationsCenterService:
+    return OperationsCenterService(audit_service=audit_service(), now=now_iso)
+
+
+def communications_automation_service() -> CommunicationsAutomationService:
+    live_mode = os.environ.get("BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED", "").lower() in {"1", "true", "yes", "si"}
+    return CommunicationsAutomationService(
+        audit_service=audit_service(),
+        now=now_iso,
+        live_mode=live_mode,
+        force_email=os.environ.get("EMAIL_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_EMAIL_RECIPIENT", ""),
+        force_phone=os.environ.get("WHATSAPP_FORCE_RECIPIENT", "") or os.environ.get("COMMUNICATIONS_FORCE_WHATSAPP_RECIPIENT", ""),
+    )
+
+
+def analytics_closure_service() -> AnalyticsClosureService:
+    return AnalyticsClosureService(audit_service=audit_service(), now=now_iso)
+
+
+def survey_service() -> SurveyService:
+    return SurveyService(audit_service=audit_service(), now=now_iso, secret=os.environ.get("BITORA_SURVEY_SECRET", "bitora-surveys-local-secret"))
+
+
 def qr_service() -> QRService:
     return QRService()
+
+
+def networking_service() -> NetworkingService:
+    return NetworkingService(now=now_iso)
 
 
 def backup_service():
@@ -242,8 +429,28 @@ def backup_service():
     return BackupService(DB_PATH, BACKUP_DIR, connect, DB_LOCK, keep_last=lambda: BACKUP_KEEP_LAST)
 
 
+def env_value(env: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = str(env.get(name, "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def env_truthy(env: dict[str, str], *names: str) -> bool:
+    return env_value(env, *names).lower() in {"1", "true", "yes", "si"}
+
+
+def staging_or_production(env_name: str | None = None) -> bool:
+    return (env_name or APP_ENV).strip().lower() in ONLINE_ENVS
+
+
+def bootstrap_password_is_strong(password: str) -> bool:
+    return len(password) >= 12 and password.lower() not in WEAK_BOOTSTRAP_PASSWORDS
+
+
 def production_backup_manager() -> ProductionBackupManager:
-    return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT)
+    return ProductionBackupManager(backup_service(), BACKUP_DIR, STORAGE_ROOT, storage=STORAGE)
 
 
 def event_backup_service() -> EventBackupService:
@@ -293,12 +500,12 @@ def cache_snapshot() -> dict:
 def validate_production_configuration(environment: dict[str, str] | None = None) -> dict:
     env = environment or os.environ
     app_env = str(env.get("APP_ENV", APP_ENV)).strip().lower()
-    base_url = str(env.get("BASE_URL", BASE_URL)).strip().rstrip("/")
+    base_url = env_value(env, "BITORA_PUBLIC_URL", "BASE_URL").rstrip("/")
     db_engine = str(env.get("QR_DB_ENGINE", DB_CONFIG.engine)).strip().lower()
-    postgres_dsn = str(env.get("QR_POSTGRES_DSN", "")).strip()
-    https_required = str(env.get("HTTPS_REQUIRED", "")).lower() in {"1", "true", "yes", "si"}
-    require_login = str(env.get("QR_REQUIRE_LOGIN", "")).lower() in {"1", "true", "yes", "si"}
-    storage_backend = str(env.get("STORAGE_BACKEND", STORAGE_BACKEND)).strip().lower()
+    postgres_dsn = env_value(env, "QR_POSTGRES_DSN", "DATABASE_URL")
+    https_required = env_truthy(env, "HTTPS_REQUIRED", "BITORA_COOKIE_SECURE")
+    require_login = env_truthy(env, "QR_REQUIRE_LOGIN", "BITORA_REQUIRE_LOGIN")
+    storage_backend = str(env.get("BITORA_STORAGE_PROVIDER", env.get("STORAGE_BACKEND", STORAGE_BACKEND))).strip().lower()
     email_enabled = str(env.get("EMAIL_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
     email_provider = str(env.get("EMAIL_PROVIDER", "demo")).strip().lower()
     email_from = str(env.get("EMAIL_FROM") or env.get("EMAIL_FROM_ADDRESS") or "").strip()
@@ -306,23 +513,56 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     whatsapp_enabled = str(env.get("WHATSAPP_ENABLED", "")).lower() in {"1", "true", "yes", "si"}
     whatsapp_provider = str(env.get("WHATSAPP_PROVIDER", "demo")).strip().lower()
     whatsapp_safe_mode = str(env.get("WHATSAPP_SAFE_MODE", "true")).lower() in {"1", "true", "yes", "si"}
+    bitora_safe_mode = env_truthy(env, "BITORA_SAFE_MODE")
+    bitora_live_mode = env_truthy(env, "BITORA_LIVE_MODE", "BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED")
+    bootstrap_user = env_value(env, "BITORA_ADMIN_BOOTSTRAP_USER")
+    bootstrap_password = env_value(env, "BITORA_ADMIN_BOOTSTRAP_PASSWORD")
+    allowed_hosts = env_value(env, "BITORA_ALLOWED_HOSTS")
     errors = []
     warnings = []
-    if app_env not in {"development", "demo", "production"}:
+    if app_env not in {"development", "demo", "staging", "production"}:
         errors.append("APP_ENV invalido")
-    if app_env == "production":
+    if app_env in ONLINE_ENVS:
         if not base_url.startswith("https://"):
-            errors.append("BASE_URL debe usar HTTPS")
+            errors.append("BITORA_PUBLIC_URL/BASE_URL debe usar HTTPS")
         if not https_required:
             errors.append("HTTPS_REQUIRED debe estar activo")
         if db_engine != "postgres":
-            errors.append("Produccion requiere PostgreSQL")
+            errors.append(f"{app_env} requiere PostgreSQL")
         if not postgres_dsn:
             errors.append("Falta QR_POSTGRES_DSN")
         if not require_login:
             errors.append("QR_REQUIRE_LOGIN debe estar activo")
+        if not env_value(env, "SECRET_KEY"):
+            errors.append("Falta SECRET_KEY")
+        if not env_value(env, "SESSION_SECRET"):
+            errors.append("Falta SESSION_SECRET")
+        if not allowed_hosts:
+            errors.append("Falta BITORA_ALLOWED_HOSTS")
+        if not bitora_safe_mode:
+            errors.append("BITORA_SAFE_MODE debe estar activo")
+        if bitora_live_mode:
+            errors.append("BITORA_LIVE_MODE debe permanecer OFF")
+        if not bootstrap_user:
+            errors.append("Falta BITORA_ADMIN_BOOTSTRAP_USER")
+        if not bootstrap_password:
+            errors.append("Falta BITORA_ADMIN_BOOTSTRAP_PASSWORD")
+        elif not bootstrap_password_is_strong(bootstrap_password):
+            errors.append("BITORA_ADMIN_BOOTSTRAP_PASSWORD debe ser fuerte")
         if storage_backend == "local":
             warnings.append("Storage local requiere disco persistente y backup externo")
+        if storage_backend in {"r2", "cloudflare_r2", "cloudflare-r2", "s3"}:
+            required_storage = [
+                ("R2_BUCKET", "S3_BUCKET"),
+                ("R2_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"),
+                ("R2_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY"),
+            ]
+            if not (env.get("R2_ENDPOINT") or env.get("S3_ENDPOINT_URL") or env.get("R2_ACCOUNT_ID")):
+                errors.append("Falta R2_ENDPOINT/S3_ENDPOINT_URL o R2_ACCOUNT_ID")
+            for primary, fallback in required_storage:
+                if not (env.get(primary) or env.get(fallback)):
+                    errors.append(f"Falta {primary} o {fallback}")
+    if app_env == "production":
         if email_enabled and email_provider != "demo":
             if not env.get("EMAIL_API_KEY", "").strip():
                 errors.append("EMAIL_API_KEY es obligatorio para email real")
@@ -383,6 +623,8 @@ def production_health_payload() -> tuple[dict, int]:
             reverse=True,
         )
     backup_status = "recent" if backup_files else "missing"
+    if not backup_files and STORAGE_BACKEND in {"r2", "cloudflare_r2", "cloudflare-r2", "s3"} and STORAGE.ready:
+        backup_status = "configured"
     if backup_files and time.time() - backup_files[0].stat().st_mtime > 86400 * 2:
         backup_status = "stale"
     payload = {
@@ -403,12 +645,51 @@ def production_health_payload() -> tuple[dict, int]:
     return payload, 200 if db_status == "online" else 503
 
 
+def readiness_payload() -> tuple[dict, int]:
+    configuration = validate_production_configuration()
+    db_ok = False
+    migrations_ok = False
+    storage_check = STORAGE.check()
+    storage_ok = bool(storage_check.get("ok"))
+    try:
+        with connect() as db:
+            db.execute("SELECT 1 AS ok").fetchone()
+            if DB_CONFIG.engine == "postgres":
+                db.execute("SELECT COUNT(*) AS c FROM schema_migrations").fetchone()
+            migrations_ok = True
+            db_ok = True
+    except Exception:
+        db_ok = False
+        migrations_ok = False
+    checks = {
+        "configuration": configuration["ok"],
+        "database": db_ok,
+        "migrations": migrations_ok,
+        "storage": storage_ok,
+        "safe_mode": env_truthy(os.environ, "BITORA_SAFE_MODE"),
+        "live_mode_off": not env_truthy(os.environ, "BITORA_LIVE_MODE", "BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED"),
+    }
+    ok = all(checks.values())
+    return {
+        "status": "ready" if ok else "not_ready",
+        "env": APP_ENV,
+        "version": APP_VERSION,
+        "checks": checks,
+        "configuration_errors": configuration["errors"],
+        "configuration_warnings": configuration["warnings"],
+    }, 200 if ok else 503
+
+
 def verify_backup_file(path: Path) -> dict:
     return backup_service().verify_backup(path)
 
 
 def demo_real_service() -> DemoRealService:
     return DemoRealService(now=now_iso, make_token=make_token, hash_pin=hash_pin)
+
+
+def demo_full_service() -> DemoFullService:
+    return DemoFullService(now=now_iso, hash_pin=hash_pin, make_public_id=make_public_id, public_link=public_link)
 
 
 def now_iso() -> str:
@@ -432,7 +713,7 @@ def request_uses_https(handler: SimpleHTTPRequestHandler) -> bool:
 
 
 def should_force_https(handler: SimpleHTTPRequestHandler) -> bool:
-    if APP_ENV != "production" or not HTTPS_REQUIRED or request_uses_https(handler):
+    if APP_ENV not in ONLINE_ENVS or not HTTPS_REQUIRED or request_uses_https(handler):
         return False
     host = (handler.headers.get("Host") or "").split(":", 1)[0].lower()
     return host not in {"localhost", "127.0.0.1", "::1"}
@@ -445,7 +726,7 @@ def absolute_url(path: str, handler: SimpleHTTPRequestHandler | None = None) -> 
 
 
 def public_link(path: str, handler: SimpleHTTPRequestHandler | None = None) -> str:
-    if BASE_URL or (handler and APP_ENV in {"demo", "production"}):
+    if BASE_URL or (handler and APP_ENV in {"demo", "staging", "production"}):
         return absolute_url(path, handler)
     return path if path.startswith("/") else "/" + path
 
@@ -479,6 +760,7 @@ def init_db() -> None:
             ensure_default_spaces(db)
             ensure_capacity_bags(db)
             ensure_communication_templates(db)
+            networking_service().ensure_taxonomy(db)
         return
     with connect() as db:
         db.executescript(
@@ -544,6 +826,7 @@ def init_db() -> None:
                 capacity_control_enabled INTEGER NOT NULL DEFAULT 1,
                 waitlist_enabled INTEGER NOT NULL DEFAULT 0,
                 activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
+                production_email TEXT NOT NULL DEFAULT '',
                 landing_image_data TEXT NOT NULL DEFAULT '',
                 landing_image_name TEXT NOT NULL DEFAULT '',
                 landing_image_type TEXT NOT NULL DEFAULT '',
@@ -560,6 +843,7 @@ def init_db() -> None:
                 show_waiting_position INTEGER NOT NULL DEFAULT 1,
                 show_estimated_time INTEGER NOT NULL DEFAULT 1,
                 waiting_message TEXT NOT NULL DEFAULT 'Estamos organizando el ingreso. Tu turno se habilitara pronto.',
+                portal_visible_tabs TEXT NOT NULL DEFAULT '["inicio","qr","agenda","charlas","asistencia","encuesta","certificado","notificaciones","perfil"]',
                 created_at TEXT NOT NULL
             );
 
@@ -759,6 +1043,13 @@ def init_db() -> None:
                 name TEXT NOT NULL UNIQUE,
                 role TEXT NOT NULL,
                 pin_hash TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                full_name TEXT NOT NULL DEFAULT '',
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                last_login_at TEXT,
+                password_changed_at TEXT,
+                updated_at TEXT,
+                disabled_at TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             );
@@ -980,6 +1271,221 @@ def init_db() -> None:
                 UNIQUE(activity_id, accreditation_id)
             );
 
+            CREATE TABLE IF NOT EXISTS feature_flags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                flag_key TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                scope_id INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                updated_by TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL,
+                UNIQUE(flag_key, scope_type, scope_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                attendance_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                recorded_by TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                invalidated_at TEXT,
+                invalidated_by TEXT,
+                invalidation_reason TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attendance_id INTEGER NOT NULL REFERENCES attendance_records(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                event_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL DEFAULT '',
+                correlation_id TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_corrections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attendance_id INTEGER NOT NULL REFERENCES attendance_records(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                previous_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                previous_metadata_json TEXT NOT NULL DEFAULT '{}',
+                new_metadata_json TEXT NOT NULL DEFAULT '{}',
+                reason TEXT NOT NULL,
+                corrected_by TEXT NOT NULL,
+                corrected_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_rule_sets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                name TEXT NOT NULL,
+                scope_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'DRAFT',
+                current_version_id INTEGER,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, event_id, scope_type, activity_id, name)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_rule_set_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_set_id INTEGER NOT NULL REFERENCES attendance_rule_sets(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                version_number INTEGER NOT NULL,
+                configuration_json TEXT NOT NULL,
+                configuration_hash TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'DRAFT',
+                published_at TEXT,
+                published_by TEXT,
+                idempotency_key TEXT NOT NULL DEFAULT '',
+                request_hash TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(rule_set_id, version_number),
+                UNIQUE(rule_set_id, configuration_hash)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_closures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                scope_type TEXT NOT NULL,
+                rule_set_version_id INTEGER NOT NULL REFERENCES attendance_rule_set_versions(id) ON DELETE RESTRICT,
+                status TEXT NOT NULL,
+                closed_at TEXT,
+                closed_by TEXT NOT NULL,
+                closure_reason TEXT NOT NULL DEFAULT '',
+                cutoff_at TEXT NOT NULL,
+                algorithm_version TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL DEFAULT '{}',
+                snapshot_hash TEXT NOT NULL DEFAULT '',
+                supersedes_closure_id INTEGER REFERENCES attendance_closures(id) ON DELETE SET NULL,
+                reopened_at TEXT,
+                reopened_by TEXT,
+                reopening_reason TEXT,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+                result_status TEXT NOT NULL,
+                attendance_percentage TEXT NOT NULL DEFAULT '0.00',
+                attended_count INTEGER NOT NULL DEFAULT 0,
+                required_count INTEGER NOT NULL DEFAULT 0,
+                duration_minutes INTEGER NOT NULL DEFAULT 0,
+                eligible INTEGER NOT NULL DEFAULT 0,
+                failure_reasons_json TEXT NOT NULL DEFAULT '[]',
+                calculation_details_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                UNIQUE(closure_id, participant_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_evaluation_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+                attendance_record_id INTEGER REFERENCES attendance_records(id) ON DELETE SET NULL,
+                unit_key TEXT NOT NULL,
+                status TEXT NOT NULL,
+                weight TEXT NOT NULL DEFAULT '1.00',
+                details_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_eligibility_decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                automatic_result TEXT NOT NULL,
+                effective_result TEXT NOT NULL,
+                override_id INTEGER,
+                status TEXT NOT NULL,
+                reasons_json TEXT NOT NULL DEFAULT '[]',
+                decided_at TEXT NOT NULL,
+                decided_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(evaluation_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_overrides (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                evaluation_id INTEGER NOT NULL REFERENCES attendance_evaluations(id) ON DELETE CASCADE,
+                participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+                previous_effective_result TEXT NOT NULL,
+                manual_result TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                evidence_json TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS attendance_reopenings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                closure_id INTEGER NOT NULL REFERENCES attendance_closures(id) ON DELETE CASCADE,
+                reason TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                reopened_by TEXT NOT NULL,
+                reopened_at TEXT NOT NULL,
+                UNIQUE(organization_id, idempotency_key)
+            );
+
             CREATE TABLE IF NOT EXISTS technical_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 level TEXT NOT NULL DEFAULT 'info',
@@ -1061,7 +1567,10 @@ def init_db() -> None:
         ensure_event_v3_columns(db)
         ensure_v4_1_columns(db)
         ensure_v4_2_columns(db)
+        ensure_v4_3_columns(db)
         ensure_v4_4_columns(db)
+        ensure_v4_9_schema(db)
+        ensure_v4_10_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -1074,6 +1583,7 @@ def init_db() -> None:
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
         ensure_multitenant_schema(db)
+        networking_service().ensure_schema(db)
         ensure_indexes(db)
         ensure_default_users(db)
         bootstrap_default_organization(db)
@@ -1116,6 +1626,24 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_attendance_event_activity ON activity_attendance(event_id, activity_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_accreditation ON activity_attendance(accreditation_id);
         CREATE INDEX IF NOT EXISTS idx_certificate_event ON certificate_eligibility(event_id, estado);
+        CREATE INDEX IF NOT EXISTS idx_feature_flags_lookup ON feature_flags(flag_key, scope_type, scope_id, enabled);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_org_event ON attendance_records(organization_id, event_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_event_participant ON attendance_records(event_id, participant_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_event_activity ON attendance_records(event_id, activity_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_participant_time ON attendance_records(participant_id, occurred_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_status ON attendance_records(status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_records_created ON attendance_records(created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_events_attendance ON attendance_events(attendance_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_events_event ON attendance_events(event_id, event_type, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_corrections_attendance ON attendance_corrections(attendance_id, corrected_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_rule_sets_scope ON attendance_rule_sets(organization_id, event_id, scope_type, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_rule_versions_set ON attendance_rule_set_versions(rule_set_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_attendance_closures_scope ON attendance_closures(organization_id, event_id, scope_type, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_closures_rule_version ON attendance_closures(rule_set_version_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_evaluations_closure ON attendance_evaluations(closure_id, participant_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_eligibility_event_participant ON attendance_eligibility_decisions(event_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_attendance_overrides_evaluation ON attendance_overrides(evaluation_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_attendance_reopenings_closure ON attendance_reopenings(closure_id, reopened_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_source ON captation_events(event_id, source, action);
         CREATE INDEX IF NOT EXISTS idx_conversation_source_event ON conversation_sources(event_id, source);
         CREATE INDEX IF NOT EXISTS idx_visualization_layouts_event_owner ON visualization_layouts(event_id, owner, updated_at);
@@ -1135,6 +1663,297 @@ def ensure_indexes(db: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_type, entity_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_activities_event_status_start ON activities(event_id, status, starts_at);
         CREATE INDEX IF NOT EXISTS idx_captation_event_action_created ON captation_events(event_id, action, created_at);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS operations_center_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            alert_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            source TEXT NOT NULL DEFAULT '',
+            dedupe_key TEXT NOT NULL,
+            message TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT '',
+            entity_id INTEGER,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            acknowledged_at TEXT,
+            resolved_at TEXT,
+            actor TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_operations_alert_open ON operations_center_alerts(organization_id, event_id, dedupe_key, status);
+        CREATE INDEX IF NOT EXISTS idx_operations_alert_scope ON operations_center_alerts(organization_id, event_id, status, created_at);
+        CREATE TABLE IF NOT EXISTS operations_center_incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'GENERAL',
+            severity TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            reporter TEXT NOT NULL DEFAULT '',
+            assignee TEXT NOT NULL DEFAULT '',
+            related_entity TEXT NOT NULL DEFAULT '',
+            resolution TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            resolved_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_operations_incident_scope ON operations_center_incidents(organization_id, event_id, status, created_at);
+        CREATE TABLE IF NOT EXISTS operations_center_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            priority TEXT NOT NULL DEFAULT 'MEDIUM',
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            assignee TEXT NOT NULL DEFAULT '',
+            due_at TEXT,
+            alert_id INTEGER REFERENCES operations_center_alerts(id) ON DELETE SET NULL,
+            incident_id INTEGER REFERENCES operations_center_incidents(id) ON DELETE SET NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_operations_task_scope ON operations_center_tasks(organization_id, event_id, status, due_at);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS event_zones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            parent_zone_id INTEGER REFERENCES event_zones(id) ON DELETE SET NULL,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            capacity INTEGER,
+            access_mode TEXT NOT NULL DEFAULT 'QR',
+            valid_from TEXT,
+            valid_until TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            accreditation_id INTEGER NOT NULL REFERENCES accreditations(id) ON DELETE CASCADE,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            valid_from TEXT,
+            valid_until TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, zone_id, person_id, accreditation_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_validations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            accreditation_id INTEGER REFERENCES accreditations(id) ON DELETE SET NULL,
+            decision TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS zone_access_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            zone_id INTEGER NOT NULL REFERENCES event_zones(id) ON DELETE CASCADE,
+            person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            accreditation_id INTEGER NOT NULL REFERENCES accreditations(id) ON DELETE CASCADE,
+            override_type TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            valid_until TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_event_zones_scope ON event_zones(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_zone_assignments_zone ON zone_access_assignments(organization_id, event_id, zone_id, status);
+        CREATE INDEX IF NOT EXISTS idx_zone_validations_event ON zone_access_validations(organization_id, event_id, zone_id, decision);
+        CREATE INDEX IF NOT EXISTS idx_zone_overrides_zone ON zone_access_overrides(organization_id, event_id, zone_id);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS speaker_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            public_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            professional_name TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            position TEXT NOT NULL DEFAULT '',
+            company TEXT NOT NULL DEFAULT '',
+            short_bio TEXT NOT NULL DEFAULT '',
+            long_bio TEXT NOT NULL DEFAULT '',
+            photo_storage_key TEXT NOT NULL DEFAULT '',
+            country TEXT NOT NULL DEFAULT '',
+            city TEXT NOT NULL DEFAULT '',
+            links_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            visibility TEXT NOT NULL DEFAULT 'EVENT',
+            current_version_id INTEGER,
+            created_by TEXT NOT NULL DEFAULT '',
+            archived_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, public_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_private_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            email TEXT NOT NULL DEFAULT '',
+            phone TEXT NOT NULL DEFAULT '',
+            document_id TEXT NOT NULL DEFAULT '',
+            internal_notes TEXT NOT NULL DEFAULT '',
+            technical_needs TEXT NOT NULL DEFAULT '',
+            logistics_notes TEXT NOT NULL DEFAULT '',
+            documentation_status TEXT NOT NULL DEFAULT 'PENDING',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, speaker_profile_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_profile_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            snapshot_json TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PUBLISHED',
+            published_at TEXT,
+            published_by TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(speaker_profile_id, version_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_event_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            roles_json TEXT NOT NULL DEFAULT '["SPEAKER"]',
+            status TEXT NOT NULL DEFAULT 'INVITED',
+            visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+            internal_notes TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, speaker_profile_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_activity_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            activity_id INTEGER NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            role TEXT NOT NULL DEFAULT 'SPEAKER',
+            status TEXT NOT NULL DEFAULT 'INVITED',
+            visibility TEXT NOT NULL DEFAULT 'PUBLIC',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            starts_at TEXT,
+            ends_at TEXT,
+            internal_notes TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, activity_id, speaker_profile_id, role)
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            document_type TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            storage_key TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            visibility TEXT NOT NULL DEFAULT 'PRIVATE',
+            uploaded_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS speaker_access_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            speaker_profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            scope TEXT NOT NULL DEFAULT 'PROFILE_SELF_SERVICE',
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            expires_at TEXT,
+            used_at TEXT,
+            revoked_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_speaker_profiles_scope ON speaker_profiles(organization_id, status, visibility);
+        CREATE INDEX IF NOT EXISTS idx_speaker_private_profile ON speaker_private_details(organization_id, speaker_profile_id);
+        CREATE INDEX IF NOT EXISTS idx_speaker_versions_profile ON speaker_profile_versions(speaker_profile_id, version_number);
+        CREATE INDEX IF NOT EXISTS idx_speaker_event_assignments_event ON speaker_event_assignments(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_speaker_activity_assignments_event ON speaker_activity_assignments(organization_id, event_id, activity_id, status);
+        CREATE INDEX IF NOT EXISTS idx_speaker_documents_event ON speaker_documents(organization_id, event_id, speaker_profile_id);
+        CREATE INDEX IF NOT EXISTS idx_speaker_access_tokens_hash ON speaker_access_tokens(token_hash, status);
+        """
+    )
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS duplicate_resolution_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+            candidate_person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+            decision TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_duplicate_decisions_scope ON duplicate_resolution_decisions(organization_id, event_id, candidate_person_id);
+        CREATE INDEX IF NOT EXISTS idx_duplicate_decisions_created ON duplicate_resolution_decisions(created_at);
         """
     )
 
@@ -1212,9 +2031,6 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_email_suppressions_lookup
             ON email_suppressions(normalized_email, active, scope, event_id);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
-            ON email_delivery_events(provider, external_event_id)
-            WHERE external_event_id <> '';
         CREATE UNIQUE INDEX IF NOT EXISTS idx_communication_queue_idempotency
             ON communication_queue(idempotency_key)
             WHERE idempotency_key <> '';
@@ -1223,6 +2039,13 @@ def ensure_v6_1_email_schema(db: sqlite3.Connection) -> None:
     event_columns = {row["name"] for row in db.execute("PRAGMA table_info(email_delivery_events)").fetchall()}
     if "external_event_id" not in event_columns:
         db.execute("ALTER TABLE email_delivery_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''")
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_unique_event
+        ON email_delivery_events(provider, external_event_id)
+        WHERE external_event_id <> ''
+        """
+    )
 
 
 def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
@@ -1270,6 +2093,22 @@ def ensure_v7_whatsapp_schema(db: sqlite3.Connection) -> None:
             ON whatsapp_suppressions(normalized_phone, active, scope, event_id);
         """
     )
+
+
+def ensure_v4_9_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "024_v4_9_communications_automation.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v4_10_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "025_v4_10_analytics_functional_closure.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -1342,6 +2181,10 @@ def ensure_event_v3_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE events ADD COLUMN reserva_cooldown_segundos INTEGER NOT NULL DEFAULT 5")
     if "reserva_requiere_verificacion_simple" not in columns:
         db.execute("ALTER TABLE events ADD COLUMN reserva_requiere_verificacion_simple INTEGER NOT NULL DEFAULT 1")
+    if "portal_visible_tabs" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN portal_visible_tabs TEXT NOT NULL DEFAULT '[\"inicio\",\"qr\",\"agenda\",\"charlas\",\"asistencia\",\"encuesta\",\"certificado\",\"notificaciones\",\"perfil\"]'")
+    if "production_email" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN production_email TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
@@ -1370,6 +2213,189 @@ def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE certificate_eligibility ADD COLUMN certificate_generated_at TEXT")
 
 
+def ensure_v4_3_columns(db: sqlite3.Connection) -> None:
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS certificate_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            requires_eligibility INTEGER NOT NULL DEFAULT 1,
+            requires_closure INTEGER NOT NULL DEFAULT 1,
+            allow_override INTEGER NOT NULL DEFAULT 1,
+            allow_batch INTEGER NOT NULL DEFAULT 1,
+            allow_reissue INTEGER NOT NULL DEFAULT 1,
+            requires_numbering INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            current_version_id INTEGER,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_template_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL REFERENCES certificate_templates(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            content_schema TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            renderer_version TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            published_at TEXT,
+            published_by TEXT,
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            request_hash TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(template_id, version_number),
+            UNIQUE(template_id, content_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_number_sequences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            scope_key TEXT NOT NULL,
+            next_value INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, scope_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            template_version_id INTEGER NOT NULL REFERENCES certificate_template_versions(id) ON DELETE RESTRICT,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            total_count INTEGER NOT NULL DEFAULT 0,
+            success_count INTEGER NOT NULL DEFAULT 0,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_issuances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            participant_id INTEGER NOT NULL REFERENCES people(id) ON DELETE RESTRICT,
+            certificate_type_id INTEGER NOT NULL REFERENCES certificate_types(id) ON DELETE RESTRICT,
+            template_version_id INTEGER NOT NULL REFERENCES certificate_template_versions(id) ON DELETE RESTRICT,
+            eligibility_decision_id INTEGER REFERENCES attendance_eligibility_decisions(id) ON DELETE RESTRICT,
+            attendance_closure_id INTEGER REFERENCES attendance_closures(id) ON DELETE RESTRICT,
+            evaluation_id INTEGER REFERENCES attendance_evaluations(id) ON DELETE RESTRICT,
+            batch_id INTEGER REFERENCES certificate_batches(id) ON DELETE SET NULL,
+            certificate_number TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            issued_at TEXT,
+            issued_by TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            correlation_id TEXT NOT NULL DEFAULT '',
+            supersedes_issuance_id INTEGER REFERENCES certificate_issuances(id) ON DELETE SET NULL,
+            logical_hash TEXT NOT NULL DEFAULT '',
+            failure_code TEXT NOT NULL DEFAULT '',
+            failure_message TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, certificate_number),
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            storage_key TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            sha256_hash TEXT NOT NULL,
+            logical_hash TEXT NOT NULL DEFAULT '',
+            renderer_version TEXT NOT NULL,
+            generated_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_verification_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash),
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_revocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            reason TEXT NOT NULL,
+            revoked_at TEXT NOT NULL,
+            revoked_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(issuance_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS certificate_reissuances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            previous_issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            new_issuance_id INTEGER NOT NULL REFERENCES certificate_issuances(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            reason TEXT NOT NULL DEFAULT '',
+            reissued_by TEXT NOT NULL,
+            reissued_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(previous_issuance_id, new_issuance_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_certificate_types_scope ON certificate_types(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_templates_scope ON certificate_templates(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_template_versions_template ON certificate_template_versions(template_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_certificate_batches_event_status ON certificate_batches(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_issuances_event_participant ON certificate_issuances(organization_id, event_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_issuances_batch ON certificate_issuances(batch_id, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_documents_issuance ON certificate_documents(issuance_id);
+        CREATE INDEX IF NOT EXISTS idx_certificate_verification_token_hash ON certificate_verification_tokens(token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_certificate_revocations_issuance ON certificate_revocations(issuance_id);
+        """
+    )
+
+
 def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
     event_columns = [row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()]
     if "captation_mode" not in event_columns:
@@ -1394,6 +2420,195 @@ def ensure_v4_4_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE accreditations ADD COLUMN source_detail TEXT NOT NULL DEFAULT ''")
     if "device_type" not in acc_columns:
         db.execute("ALTER TABLE accreditations ADD COLUMN device_type TEXT NOT NULL DEFAULT ''")
+
+    db.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS survey_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS surveys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            survey_type_id INTEGER NOT NULL REFERENCES survey_types(id) ON DELETE RESTRICT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            response_mode TEXT NOT NULL DEFAULT 'IDENTIFIED',
+            access_policy TEXT NOT NULL DEFAULT 'EVENT_PARTICIPANTS',
+            duplicate_policy TEXT NOT NULL DEFAULT 'ONE_PER_PARTICIPANT',
+            current_version_id INTEGER,
+            opens_at TEXT,
+            closes_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            archived_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, event_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            instructions TEXT NOT NULL DEFAULT '',
+            content_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            published_at TEXT,
+            published_by TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(survey_id, version_number),
+            UNIQUE(survey_id, content_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            question_key TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            question_type TEXT NOT NULL,
+            required INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            config_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            UNIQUE(version_id, question_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_question_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            option_key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            value TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            UNIQUE(question_id, option_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            activity_id INTEGER REFERENCES activities(id) ON DELETE SET NULL,
+            status TEXT NOT NULL DEFAULT 'DRAFT',
+            access_mode TEXT NOT NULL DEFAULT 'EVENT_PARTICIPANTS',
+            opens_at TEXT,
+            closes_at TEXT,
+            closed_at TEXT,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_access_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            participant_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            anonymous_subject_hash TEXT NOT NULL,
+            token_hash TEXT NOT NULL,
+            token_hint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            expires_at TEXT,
+            used_at TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(token_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_response_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE RESTRICT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            response_mode TEXT NOT NULL,
+            participant_id INTEGER REFERENCES people(id) ON DELETE SET NULL,
+            anonymous_subject_hash TEXT NOT NULL DEFAULT '',
+            token_hash TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+            started_at TEXT NOT NULL,
+            submitted_at TEXT,
+            idempotency_key TEXT NOT NULL,
+            request_hash TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(organization_id, idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES survey_response_sessions(id) ON DELETE CASCADE,
+            assignment_id INTEGER NOT NULL REFERENCES survey_assignments(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            answer_text TEXT,
+            answer_number REAL,
+            answer_bool INTEGER,
+            created_at TEXT NOT NULL,
+            UNIQUE(session_id, question_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS survey_answer_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            answer_id INTEGER NOT NULL REFERENCES survey_answers(id) ON DELETE CASCADE,
+            session_id INTEGER NOT NULL REFERENCES survey_response_sessions(id) ON DELETE CASCADE,
+            option_id INTEGER NOT NULL REFERENCES survey_question_options(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES survey_questions(id) ON DELETE CASCADE,
+            survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+            version_id INTEGER NOT NULL REFERENCES survey_versions(id) ON DELETE CASCADE,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            UNIQUE(answer_id, option_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_survey_types_scope ON survey_types(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_surveys_scope ON surveys(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_versions_survey ON survey_versions(survey_id, status, version_number);
+        CREATE INDEX IF NOT EXISTS idx_survey_questions_version ON survey_questions(version_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_survey_options_question ON survey_question_options(question_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_survey_assignments_event ON survey_assignments(organization_id, event_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_access_tokens_hash ON survey_access_tokens(token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_sessions_event ON survey_response_sessions(organization_id, event_id, survey_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_sessions_participant ON survey_response_sessions(assignment_id, participant_id, status);
+        CREATE INDEX IF NOT EXISTS idx_survey_answers_session ON survey_answers(session_id, question_id);
+        CREATE INDEX IF NOT EXISTS idx_survey_answer_options_session ON survey_answer_options(session_id, option_id);
+        """
+    )
 
 
 def ensure_landing_config_columns(db: sqlite3.Connection) -> None:
@@ -1443,6 +2658,19 @@ def ensure_user_pin_column(db: sqlite3.Connection) -> None:
     columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
     if "pin_hash" not in columns:
         db.execute("ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''")
+    additions = {
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "full_name": "TEXT NOT NULL DEFAULT ''",
+        "must_change_password": "INTEGER NOT NULL DEFAULT 0",
+        "last_login_at": "TEXT",
+        "password_changed_at": "TEXT",
+        "updated_at": "TEXT",
+        "disabled_at": "TEXT",
+    }
+    columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
+    for column, definition in additions.items():
+        if column not in columns:
+            db.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
 
 
 def ensure_user_event_roles_schema(db: sqlite3.Connection) -> None:
@@ -1850,27 +3078,76 @@ def public_activity_status(activity: dict) -> str:
 
 
 def ensure_default_users(db: sqlite3.Connection) -> None:
+    if staging_or_production():
+        bootstrap_user = os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER", "").strip()
+        bootstrap_password = os.environ.get("BITORA_ADMIN_BOOTSTRAP_PASSWORD", "").strip()
+        if not bootstrap_user or not bootstrap_password_is_strong(bootstrap_password):
+            raise RuntimeError("Bootstrap seguro requerido para staging/production")
+        existing_count = int(db.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0)
+        if existing_count == 0:
+            db.execute(
+                """
+                INSERT INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
+                VALUES (?, 'Super Admin', ?, 1, 1, ?, ?)
+                """,
+                (bootstrap_user, hash_pin(bootstrap_password), now_iso(), now_iso()),
+            )
+            return
+        reset_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+        if APP_ENV == "staging" and reset_token:
+            token_hash = hashlib.sha256(reset_token.encode("utf-8")).hexdigest()
+            already_used = db.execute(
+                "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset' AND payload LIKE ? LIMIT 1",
+                (f"%{token_hash}%",),
+            ).fetchone()
+            if already_used:
+                return
+            user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+            if not user:
+                raise RuntimeError("Usuario bootstrap inexistente para reset controlado")
+            now = now_iso()
+            db.execute(
+                """
+                UPDATE users
+                SET role = 'Super Admin',
+                    pin_hash = ?,
+                    active = 1,
+                    must_change_password = 1,
+                    password_changed_at = ?,
+                    updated_at = ?,
+                    disabled_at = NULL
+                WHERE id = ?
+                """,
+                (hash_pin(bootstrap_password), now, now, int(user["id"])),
+            )
+            audit(db, "bootstrap", "user.bootstrap_admin_reset", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+        return
     defaults = [
-        ("Admin", "Super Admin", "1234"),
-        ("Productor", "Productor", "2000"),
-        ("Coordinador", "Coordinador", "3000"),
-        ("Recepcion", "Operador de recepcion", "2222"),
-        ("Acceso", "Operador de acceso", "3333"),
-        ("Visualizador", "Visualizador", "4444"),
-        ("Comunicaciones", "Comunicaciones", "5555"),
-        ("Soporte", "Soporte tecnico", "6666"),
+        ("Admin", "Super Admin"),
+        ("Productor", "Productor"),
+        ("Coordinador", "Coordinador"),
+        ("Recepcion", "Operador de recepcion"),
+        ("Acceso", "Operador de acceso"),
+        ("Visualizador", "Visualizador"),
+        ("Comunicaciones", "Comunicaciones"),
+        ("Soporte", "Soporte tecnico"),
     ]
-    for name, role, pin in defaults:
+    now = now_iso()
+    for name, role in defaults:
+        generated_hash = hash_pin(generate_temporary_password())
         db.execute(
             """
-            INSERT OR IGNORE INTO users (name, role, pin_hash, active, created_at)
-            VALUES (?, ?, ?, 1, ?)
+            INSERT OR IGNORE INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
+            VALUES (?, ?, ?, 1, 1, ?, ?)
             """,
-            (name, role, hash_pin(pin), now_iso()),
+            (name, role, generated_hash, now, now),
         )
         row = db.execute("SELECT pin_hash FROM users WHERE name = ?", (name,)).fetchone()
         if row and not row["pin_hash"]:
-            db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
+            db.execute(
+                "UPDATE users SET pin_hash = ?, must_change_password = 1, updated_at = ? WHERE name = ?",
+                (generated_hash, now, name),
+            )
 
 
 def user_by_name(db: sqlite3.Connection, name: str) -> sqlite3.Row | None:
@@ -1957,6 +3234,133 @@ def event_organization_id(db: sqlite3.Connection, event_id: int) -> int:
     except sqlite3.OperationalError:
         return 0
     return int(row["organization_id"] or bootstrap_default_organization(db)) if row else 0
+
+
+def feature_flag_enabled(db: sqlite3.Connection, flag_key: str, *, organization_id: int = 0, event_id: int = 0) -> bool:
+    env_key = f"BITORA_{flag_key.upper()}"
+    if os.environ.get(env_key, "").strip().lower() in {"1", "true", "yes", "si"}:
+        return True
+    rows = db.execute(
+        """
+        SELECT scope_type, scope_id, enabled
+        FROM feature_flags
+        WHERE flag_key = ? AND enabled = 1
+        """,
+        (flag_key,),
+    ).fetchall()
+    for row in rows:
+        scope_type = str(row["scope_type"] or "").lower()
+        scope_id = int(row["scope_id"] or 0)
+        if scope_type == "platform":
+            return True
+        if scope_type == "organization" and organization_id and scope_id == int(organization_id):
+            return True
+        if scope_type == "event" and event_id and scope_id == int(event_id):
+            return True
+    return False
+
+
+def attendance_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "attendance_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def attendance_closure_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return attendance_v4_enabled(db, event_id) and feature_flag_enabled(db, "attendance_closure_eligibility_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def certificates_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "certificates_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def certificates_v4_dependencies_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    return certificates_v4_enabled(db, event_id) and attendance_closure_v4_enabled(db, event_id)
+
+
+def surveys_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "surveys_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def speakers_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "speakers_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def zone_permissions_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "zone_permissions_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def history_autocomplete_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "history_autocomplete_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def operations_center_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "operations_center_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def communications_automation_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "communications_v4_enabled", organization_id=organization_id, event_id=event_id) and feature_flag_enabled(db, "communications_automation_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def analytics_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "analytics_v4_enabled", organization_id=organization_id, event_id=event_id)
+
+
+def event_feature_flags_payload(db: sqlite3.Connection, event_id: int) -> dict:
+    return {
+        "attendance_v4_enabled": attendance_v4_enabled(db, event_id),
+        "attendance_closure_eligibility_v4_enabled": attendance_closure_v4_enabled(db, event_id),
+        "certificates_v4_enabled": certificates_v4_enabled(db, event_id),
+        "surveys_v4_enabled": surveys_v4_enabled(db, event_id),
+        "speakers_v4_enabled": speakers_v4_enabled(db, event_id),
+        "operations_center_v4_enabled": operations_center_v4_enabled(db, event_id),
+        "communications_automation_v4_enabled": communications_automation_v4_enabled(db, event_id),
+        "analytics_v4_enabled": analytics_v4_enabled(db, event_id),
+    }
+
+
+def operations_center_error_payload(exc: OperationsCenterError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def communications_automation_error_payload(exc: CommunicationsAutomationError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def analytics_closure_error_payload(exc: AnalyticsClosureError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def attendance_error_payload(exc: AttendanceDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def certificate_error_payload(exc: CertificateDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def speaker_error_payload(exc: SpeakerDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def zone_error_payload(exc: ZoneDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def history_autocomplete_error_payload(exc: HistoryAutocompleteError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
+
+
+def survey_error_payload(exc: SurveyDomainError) -> dict:
+    return {"ok": False, "error": exc.message, "code": exc.code}
 
 
 def sanitize_integration(row: sqlite3.Row | dict) -> dict:
@@ -2340,6 +3744,51 @@ def verify_pin(pin: str, stored: str) -> bool:
     return hmac.compare_digest(hash_pin(pin), stored or "")
 
 
+def sanitize_user_row(row: sqlite3.Row | dict, *, public: bool = False) -> dict:
+    data = dict(row)
+    clean = {
+        "id": int(data.get("id") or 0),
+        "name": str(data.get("name") or ""),
+        "role": str(data.get("role") or ""),
+        "active": int(data.get("active") or 0),
+    }
+    if not public:
+        clean.update({
+            "email": str(data.get("email") or ""),
+            "full_name": str(data.get("full_name") or ""),
+            "must_change_password": int(data.get("must_change_password") or 0),
+            "last_login_at": data.get("last_login_at"),
+            "password_changed_at": data.get("password_changed_at"),
+            "created_at": data.get("created_at"),
+            "updated_at": data.get("updated_at"),
+            "disabled_at": data.get("disabled_at"),
+        })
+    return clean
+
+
+def validate_password_policy(password: str) -> str | None:
+    value = str(password or "")
+    if len(value) < 10:
+        return "La contraseña debe tener al menos 10 caracteres"
+    if not re.search(r"[A-Z]", value):
+        return "La contraseña debe incluir una mayuscula"
+    if not re.search(r"[a-z]", value):
+        return "La contraseña debe incluir una minuscula"
+    if not re.search(r"\d", value):
+        return "La contraseña debe incluir un numero"
+    if not re.search(r"[^A-Za-z0-9]", value):
+        return "La contraseña debe incluir un simbolo"
+    return None
+
+
+def generate_temporary_password(length: int = 16) -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*-_"
+    while True:
+        candidate = "".join(secrets.choice(alphabet) for _ in range(length))
+        if not validate_password_policy(candidate):
+            return candidate
+
+
 def parse_local_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
@@ -2626,6 +4075,31 @@ def truthy(value: object) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "si", "sí", "yes", "on"}
 
 
+PORTAL_TAB_KEYS = ["inicio", "qr", "agenda", "charlas", "asistencia", "encuesta", "certificado", "notificaciones", "perfil"]
+
+
+def normalize_portal_visible_tabs(value: object) -> list[str]:
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value) if value.strip().startswith("[") else [part.strip() for part in value.split(",")]
+        except json.JSONDecodeError:
+            parsed = []
+    elif isinstance(value, list):
+        parsed = value
+    else:
+        parsed = []
+    allowed = [str(item).strip().lower() for item in parsed if str(item).strip().lower() in PORTAL_TAB_KEYS]
+    unique = []
+    for key in allowed:
+        if key not in unique:
+            unique.append(key)
+    return unique or list(PORTAL_TAB_KEYS)
+
+
+def portal_visible_tabs_json(value: object) -> str:
+    return json.dumps(normalize_portal_visible_tabs(value), ensure_ascii=True)
+
+
 SOURCE_VALUES = {"landing", "whatsapp", "qr_fisico", "linkedin", "instagram", "facebook", "email", "empresa", "sponsor", "invitacion", "recepcion", "manual", "otro"}
 DEVICE_VALUES = {"mobile", "tablet", "desktop"}
 
@@ -2795,6 +4269,22 @@ def email_safe_mode_enabled() -> bool:
 
 def forced_email_recipient() -> str:
     return os.environ.get("EMAIL_FORCE_RECIPIENT", "").strip()
+
+
+def normalized_optional_email(value: object) -> str:
+    email = normalize_email(str(value or ""))
+    if email and not valid_email_address(email):
+        raise ValueError("El email de produccion no es valido")
+    return email
+
+
+def event_production_email(db: sqlite3.Connection, event_id: int) -> str:
+    try:
+        row = db.execute("SELECT production_email FROM events WHERE id = ?", (event_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return ""
+    email = normalize_email(row["production_email"] if row else "")
+    return email if valid_email_address(email) else ""
 
 
 def email_is_suppressed(db: sqlite3.Connection, event_id: int, email: str) -> tuple[bool, str]:
@@ -3125,6 +4615,7 @@ def process_email_queue_item(queue_id: int) -> dict:
     original_recipient = recipient
     with connect() as db:
         safe_mode = effective_safe_mode(db, int(item["event_id"]), "email")
+        reply_to = event_production_email(db, int(item["event_id"])) or os.environ.get("EMAIL_REPLY_TO", "")
     safe_mode_enabled = bool(safe_mode["enabled"])
     forced_recipient = str(safe_mode.get("forced_recipient") or "").strip()
     if safe_mode_enabled and forced_recipient:
@@ -3150,7 +4641,7 @@ def process_email_queue_item(queue_id: int) -> dict:
             subject=("[SAFE] " if safe_mode_enabled else "") + item["subject"],
             html=item["content"],
             text=item["content"],
-            reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
+            reply_to=reply_to,
             metadata={
                 "event_id": str(item["event_id"]),
                 "organization_id": str(safe_mode.get("organization_id") or item.get("organization_id") or ""),
@@ -3652,7 +5143,8 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
         "generar_certificados", "controlar_asistencia", "attendance_mode",
         "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
         "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
-        "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
+        "production_email", "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
+        "portal_visible_tabs",
     ]
     return {
         "version": "8.0",
@@ -3712,9 +5204,10 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
-            capacity_control_enabled, waitlist_enabled, created_at
+            capacity_control_enabled, waitlist_enabled, production_email, created_at
+            , portal_visible_tabs
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -3739,7 +5232,9 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             1 if truthy(data.get("activities_enabled", True)) else 0,
             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+            normalized_optional_email(data.get("production_email")),
             now_iso(),
+            portal_visible_tabs_json(data.get("portal_visible_tabs")),
         ),
     )
     event_id = int(cur.lastrowid)
@@ -4046,11 +5541,12 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
                e.activity_selection_mode, e.permitir_reserva_actividades_desde_portal,
                e.reserva_requiere_confirmacion, e.reserva_cooldown_segundos,
                e.reserva_requiere_verificacion_simple,
-               e.activities_enabled, e.capacity_control_enabled, e.waitlist_enabled
+               e.activities_enabled, e.capacity_control_enabled, e.waitlist_enabled,
+               e.portal_visible_tabs
         FROM accreditations a
         JOIN people p ON p.id = a.person_id
         JOIN events e ON e.id = a.event_id
-        WHERE a.token = ?
+        WHERE lower(a.token) = lower(?)
         """,
         (token,),
     ).fetchone()
@@ -4181,13 +5677,15 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         ]
     data["portal_url"] = f"/p.html?token={data['token']}"
     data["qr_payload"] = data["token"]
+    data["portal_visible_tabs"] = normalize_portal_visible_tabs(data.get("portal_visible_tabs"))
     data["reservations"] = reservations
     data["activities"] = activities
     data["communication_preference"] = preference
     data["communications"] = communications
     data["announcements"] = announcements
     data["attendances"] = attendances
-    data["certificates"] = [
+    data["surveys"] = participant_survey_payloads(db, int(data["event_id"]), int(data["person_id"]))
+    certificates = [
         {
             "id": item["certificate_id"],
             "activity_id": item["activity_id"],
@@ -4198,6 +5696,18 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         for item in attendances
         if item.get("certificate_generated_at")
     ]
+    if data.get("checked_in_at") and not any(str(item.get("id")) == f"M-{data['id']}" for item in certificates):
+        certificates.insert(
+            0,
+            {
+                "id": f"M-{data['id']}",
+                "activity_id": None,
+                "title": f"Participacion en {data['event_name']}",
+                "percentage": 100,
+                "url": f"/api/certificate.pdf?token={data['token']}&manual=1",
+            },
+        )
+    data["certificates"] = certificates
     data["next_activity"] = next_activity
     data["current_activity"] = current_activity
     data["certificate"] = {
@@ -4217,6 +5727,49 @@ def portal_payload(db: sqlite3.Connection, token: str) -> dict | None:
         "waitlist_enabled": int(data.get("waitlist_enabled") or 0),
     }
     return data
+
+
+def participant_survey_payloads(db: sqlite3.Connection, event_id: int, participant_id: int) -> list[dict]:
+    if not surveys_v4_enabled(db, event_id):
+        return []
+    rows = db.execute(
+        """
+        SELECT sa.id AS assignment_id, sa.survey_id, sa.version_id,
+               s.name, s.description, s.response_mode, s.duplicate_policy,
+               sv.title, sv.instructions,
+               srs.id AS session_id, srs.status AS response_status, srs.submitted_at
+        FROM survey_assignments sa
+        JOIN surveys s ON s.id = sa.survey_id
+        JOIN survey_versions sv ON sv.id = sa.version_id
+        LEFT JOIN survey_response_sessions srs
+          ON srs.assignment_id = sa.id
+         AND srs.participant_id = ?
+         AND srs.status = 'SUBMITTED'
+        WHERE sa.event_id = ?
+          AND sa.status = 'OPEN'
+          AND s.status = 'OPEN'
+          AND s.response_mode = 'IDENTIFIED'
+          AND sa.access_mode = 'EVENT_PARTICIPANTS'
+        ORDER BY sa.id
+        """,
+        (participant_id, event_id),
+    ).fetchall()
+    return [
+        {
+            "assignment_id": int(row["assignment_id"]),
+            "survey_id": int(row["survey_id"]),
+            "version_id": int(row["version_id"]),
+            "name": row["name"],
+            "title": row["title"],
+            "description": row["description"],
+            "instructions": row["instructions"],
+            "response_mode": row["response_mode"],
+            "duplicate_policy": row["duplicate_policy"],
+            "status": "SUBMITTED" if row["response_status"] == "SUBMITTED" else "PENDING",
+            "submitted_at": row["submitted_at"],
+        }
+        for row in rows
+    ]
 
 
 def reservation_status_label(status: str) -> str:
@@ -4272,8 +5825,8 @@ def release_available_certificates(db: sqlite3.Connection, event_id: int | None 
 
 def certificate_payload(db: sqlite3.Connection, token: str, activity_id: int | None = None, manual: bool = False) -> dict | None:
     release_available_certificates(db)
-    params: list[object] = [token.strip().upper()]
-    where = "ac.token = ?"
+    params: list[object] = [token.strip()]
+    where = "lower(ac.token) = lower(?)"
     if activity_id:
         where += " AND ce.activity_id = ?"
         params.append(activity_id)
@@ -4312,10 +5865,10 @@ def certificate_payload(db: sqlite3.Connection, token: str, activity_id: int | N
         FROM accreditations ac
         JOIN events e ON e.id = ac.event_id
         JOIN people p ON p.id = ac.person_id
-        WHERE ac.token = ? AND ac.status = 'active'
+        WHERE lower(ac.token) = lower(?) AND ac.status = 'active'
         LIMIT 1
         """,
-        [token.strip().upper()],
+        [token.strip()],
     ).fetchone()
     if not fallback:
         return None
@@ -4385,6 +5938,9 @@ def technical_log(level: str, module: str, message: str, detail: str = "", reque
         "WHATSAPP_VERIFY_TOKEN",
         "WHATSAPP_APP_SECRET",
         "S3_SECRET_ACCESS_KEY",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_ACCESS_KEY_ID",
+        "S3_ACCESS_KEY_ID",
     ):
         secret = os.environ.get(secret_name, "")
         if secret:
@@ -4414,7 +5970,7 @@ def safe_public_error(exc: Exception) -> str:
         return "Error interno controlado"
     text = str(exc)
     text = re.sub(r"(?i)postgres(?:ql)?://[^\s,;]+", "postgresql://[REDACTED]", text)
-    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET"):
+    for secret_name in ("EMAIL_API_KEY", "QR_POSTGRES_DSN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "R2_SECRET_ACCESS_KEY", "R2_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_ACCESS_KEY_ID"):
         secret = os.environ.get(secret_name, "")
         if secret:
             text = text.replace(secret, "[REDACTED]")
@@ -4459,6 +6015,26 @@ def handle_export_job(payload: dict) -> dict:
     return {"file": path.name, "rows": len(rows)}
 
 
+def handle_communications_campaign_job(payload: dict) -> dict:
+    event_id = int(payload.get("event_id") or 0)
+    organization_id = int(payload.get("organization_id") or 0) or None
+    campaign_id = int(payload.get("campaign_id") or 0)
+    actor = str(payload.get("actor") or "worker")
+    with DB_LOCK, connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        organization_id = organization_id or event_organization_id(db, event_id)
+        result = communications_automation_service().execute_campaign(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            campaign_id=campaign_id,
+            actor=actor,
+            correlation_id=str(payload.get("correlation_id") or ""),
+        )
+        db.execute("COMMIT")
+        return result
+
+
 def start_job_worker() -> JobWorker:
     global WORKER
     queue = job_queue_service()
@@ -4467,6 +6043,7 @@ def start_job_worker() -> JobWorker:
         {
             "email.send": handle_email_job,
             "whatsapp.send": handle_whatsapp_job,
+            "communications.campaign.execute": handle_communications_campaign_job,
             "backup.create": handle_backup_job,
             "certificate.generate": handle_certificate_job,
             "export.generate": handle_export_job,
@@ -5108,7 +6685,7 @@ def executive_report_data(db: sqlite3.Connection, event_id: int) -> dict | None:
         LEFT JOIN reservations r ON r.activity_id = a.id
         LEFT JOIN activity_attendance at ON at.activity_id = a.id
         WHERE a.event_id = ? AND a.status <> 'cancelled'
-        GROUP BY a.id
+        GROUP BY a.id, a.title, s.name, a.capacity, a.starts_at
         ORDER BY present DESC, reserved DESC, a.starts_at
         LIMIT 10
         """,
@@ -5492,6 +7069,12 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     return dict(row) if row else None
 
 
+def json_default(value):
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def parse_cookies(header: str | None) -> dict[str, str]:
     cookies: dict[str, str] = {}
     for part in (header or "").split(";"):
@@ -5509,6 +7092,9 @@ def public_static_path(path: str) -> bool:
         "/scan.html",
         "/web.html",
         "/web",
+        "/networking.html",
+        "/networking-register.html",
+        "/networking-public.html",
         "/e.html",
         "/p.html",
         "/styles.css",
@@ -5516,23 +7102,43 @@ def public_static_path(path: str) -> bool:
         "/app.js",
         "/jsQR.min.js",
         "/html5-qrcode.min.js",
-    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/api/")
+    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
 
 
 def public_api_get(path: str) -> bool:
-    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook"}
+    if path.startswith("/api/public/certificates/verify/"):
+        return True
+    if path.startswith("/api/public/surveys/access/"):
+        return True
+    if path.startswith("/api/public/speakers/"):
+        return True
+    return path in {"/api/app-config", "/api/event", "/api/portal", "/api/qr.svg", "/api/credential.svg", "/api/credential.png", "/api/credential.pdf", "/api/certificate.pdf", "/api/users", "/api/auth/me", "/api/network-info", "/api/public-display", "/api/participant-metrics", "/api/waiting-room/status", "/api/communications/whatsapp/webhook", "/api/networking/session", "/api/networking/contacts", "/api/networking/profile", "/api/networking/qr.svg", "/api/networking/live-vocabulary", "/api/networking/discovery"}
 
 
 def public_api_post(path: str) -> bool:
+    if path.startswith("/api/public/surveys/access/") or path.startswith("/api/public/surveys/sessions/"):
+        return True
+    if path.startswith("/api/public/speakers/access/"):
+        return True
     return path in {
         "/api/register",
         "/api/captation/event",
         "/api/auth/login",
         "/api/auth/logout",
+        "/api/admin/bootstrap-reset",
+        "/api/admin/demo-full/prepare",
         "/api/portal/reserve",
         "/api/portal/reservations/status",
         "/api/portal/preferences",
         "/api/portal/profile",
+        "/api/portal/surveys/start",
+        "/api/portal/surveys/submit",
+        "/api/networking/external-register",
+        "/api/networking/onboarding",
+        "/api/networking/complete-profile",
+        "/api/networking/scan",
+        "/api/networking/discovery-onboarding",
+        "/api/networking/discovery-action",
         "/api/communications/whatsapp/webhook",
         "/api/communications/email/webhook",
         "/api/waiting-room/join",
@@ -5573,6 +7179,10 @@ class AppHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         if args and isinstance(args[0], str) and "/api/integrations/google/callback?" in args[0]:
             args = (re.sub(r"(/api/integrations/google/callback)\?[^ ]*", r"\1?[redacted]", args[0]), *args[1:])
+        if args and isinstance(args[0], str) and "/api/communications/whatsapp/webhook?" in args[0]:
+            sanitized = re.sub(r"([?&](?:hub\.)?verify_token=)[^ &]*", r"\1[redacted]", args[0])
+            sanitized = re.sub(r"([?&]hub_verify_token=)[^ &]*", r"\1[redacted]", sanitized)
+            args = (sanitized, *args[1:])
         super().log_message(format, *args)
 
     def send_response(self, code: int, message: str | None = None) -> None:
@@ -5609,6 +7219,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "role": actor_user["role"],
                     "local": True,
                 }
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
         if not session or not event:
@@ -5631,6 +7243,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             actor_user = user_by_name(db, actor_override)
             if actor_user:
                 session = {"id": int(actor_user["id"]), "name": actor_user["name"], "role": actor_user["role"], "local": True}
+            else:
+                session = None
         actor = (session or {}).get("name", "anonimo")
         organization = db.execute("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL", (organization_id,)).fetchone()
         if not session or not organization:
@@ -5667,10 +7281,16 @@ class AppHandler(SimpleHTTPRequestHandler):
             return str(STATIC_DIR / "reports-display.html")
         if clean.startswith("/p/"):
             return str(STATIC_DIR / "p.html")
+        if clean.startswith("/n/"):
+            return str(STATIC_DIR / "networking-public.html")
         target = STATIC_DIR / clean.lstrip("/")
         if target.exists():
             return str(target)
         return str(LEGACY_STATIC_DIR / clean.lstrip("/"))
+
+    def list_directory(self, path: str):
+        self.send_error(HTTPStatus.NOT_FOUND, "Listado de directorio deshabilitado")
+        return None
 
     def do_GET(self) -> None:
         started = RUNTIME_METRICS.begin()
@@ -5679,6 +7299,10 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if parsed.path == "/health":
                 payload, status = production_health_payload()
+                self.send_json(payload, status)
+                return
+            if parsed.path == "/ready":
+                payload, status = readiness_payload()
                 self.send_json(payload, status)
                 return
             if should_force_https(self):
@@ -5714,8 +7338,23 @@ class AppHandler(SimpleHTTPRequestHandler):
         finally:
             RUNTIME_METRICS.finish(started, "POST", parsed.path, getattr(self, "_response_status", 200))
 
+    def do_PATCH(self) -> None:
+        started = RUNTIME_METRICS.begin()
+        self._response_status = 200
+        parsed = urlparse(self.path)
+        try:
+            if should_force_https(self):
+                self.send_json({"error": "HTTPS requerido"}, 426)
+                return
+            if parsed.path.startswith("/api/"):
+                self.handle_api_post(parsed.path)
+                return
+            self.send_error(HTTPStatus.NOT_FOUND)
+        finally:
+            RUNTIME_METRICS.finish(started, "PATCH", parsed.path, getattr(self, "_response_status", 200))
+
     def send_json(self, data: dict | list, status: int = 200) -> None:
-        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(data, ensure_ascii=False, default=json_default).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -5737,6 +7376,151 @@ class AppHandler(SimpleHTTPRequestHandler):
         try:
             if not self.require_api_auth(path, is_post=False):
                 return
+            operations_match = re.fullmatch(r"/api/events/(\d+)/operations-center(?:/(readiness|metrics|alerts|incidents|tasks))?", path)
+            if operations_match:
+                event_id = int(operations_match.group(1))
+                view = operations_match.group(2) or "center"
+                with connect() as db:
+                    if not operations_center_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    permission = {"center": "operations_center.read", "readiness": "operations_center.readiness.read", "metrics": "operations_center.metrics.read", "alerts": "operations_center.alerts.read", "incidents": "operations_center.incidents.read", "tasks": "operations_center.tasks.read"}[view]
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or "operations")
+                    service = operations_center_service()
+                    if view == "center": result = service.center(db, organization_id=organization_id, event_id=event_id, actor=actor)
+                    elif view == "readiness": result = service.readiness(db, organization_id=organization_id, event_id=event_id, actor=actor)
+                    elif view == "metrics": result = {"ok": True, "metrics": service.metrics(db, organization_id=organization_id, event_id=event_id), "updated_at": now_iso()}
+                    elif view == "alerts": result = {"ok": True, "items": service.alerts(db, organization_id=organization_id, event_id=event_id)}
+                    elif view == "incidents": result = {"ok": True, "items": service.incidents(db, organization_id=organization_id, event_id=event_id)}
+                    else: result = {"ok": True, "items": service.tasks(db, organization_id=organization_id, event_id=event_id)}
+                self.send_json(result)
+                return
+            communications_v4_match = re.fullmatch(r"/api/events/(\d+)/communications-v4(?:/(templates|segments|campaigns|recipients|messages|deliveries|automations|suppressions))?", path)
+            if communications_v4_match:
+                event_id = int(communications_v4_match.group(1))
+                resource = communications_v4_match.group(2) or "summary"
+                permission = {
+                    "summary": "communications.campaigns.read",
+                    "templates": "communications.templates.read",
+                    "segments": "communications.segments.read",
+                    "campaigns": "communications.campaigns.read",
+                    "recipients": "communications.campaigns.read",
+                    "messages": "communications.deliveries.read",
+                    "deliveries": "communications.deliveries.read",
+                    "automations": "communications.automations.read",
+                    "suppressions": "communications.suppressions.read",
+                }[resource]
+                with connect() as db:
+                    if not communications_automation_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "COMMUNICATIONS_V4_FEATURE_DISABLED", "error": "Communications V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    if resource == "summary":
+                        result = communications_automation_service().summary(db, organization_id=organization_id, event_id=event_id)
+                    else:
+                        table = {
+                            "templates": "communication_v4_templates",
+                            "segments": "communication_v4_segments",
+                            "campaigns": "communication_v4_campaigns",
+                            "recipients": "communication_v4_campaign_recipients",
+                            "messages": "communication_v4_messages",
+                            "deliveries": "communication_v4_deliveries",
+                            "automations": "communication_v4_automations",
+                            "suppressions": "communication_v4_suppressions",
+                        }[resource]
+                        rows = db.execute(f"SELECT * FROM {table} WHERE organization_id = ? AND event_id = ? ORDER BY id DESC LIMIT 250", (organization_id, event_id)).fetchall()
+                        result = {"ok": True, "items": [dict(row) for row in rows]}
+                self.send_json(result)
+                return
+            analytics_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4(?:/(overview|registrations|reservations|attendance|zones|speakers|certificates|surveys|communications|operations|data-quality|snapshots|reports|closure|definitions))?", path)
+            if analytics_match:
+                event_id = int(analytics_match.group(1))
+                resource = analytics_match.group(2) or "overview"
+                permission = {
+                    "overview": "analytics.read",
+                    "registrations": "analytics.read",
+                    "reservations": "analytics.operational.read",
+                    "attendance": "analytics.attendance.read",
+                    "zones": "analytics.operational.read",
+                    "speakers": "analytics.read",
+                    "certificates": "analytics.certificates.read",
+                    "surveys": "analytics.surveys.read",
+                    "communications": "analytics.communications.read",
+                    "operations": "analytics.operational.read",
+                    "data-quality": "analytics.data_quality.read",
+                    "snapshots": "analytics.read",
+                    "reports": "analytics.read",
+                    "closure": "functional_closure.read",
+                    "definitions": "analytics.definitions.read",
+                }[resource]
+                with connect() as db:
+                    if not analytics_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or "analytics")
+                    service = analytics_closure_service()
+                    filters = {key: values[0] for key, values in query.items() if values}
+                    try:
+                        if resource == "definitions":
+                            result = service.metric_definitions()
+                        elif resource == "overview":
+                            result = service.overview(db, organization_id=org_id, event_id=event_id, actor=actor, filters=filters)
+                        elif resource == "registrations":
+                            result = service.registrations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "reservations":
+                            result = service.reservations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "attendance":
+                            result = service.attendance(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "zones":
+                            result = service.zones(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "speakers":
+                            result = service.speakers(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "certificates":
+                            result = service.certificates(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "surveys":
+                            result = service.surveys(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "communications":
+                            result = service.communications(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "operations":
+                            result = service.operations(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "data-quality":
+                            result = service.data_quality(db, organization_id=org_id, event_id=event_id, filters=filters)
+                        elif resource == "snapshots":
+                            result = service.list_snapshots(db, organization_id=org_id, event_id=event_id)
+                        elif resource == "reports":
+                            result = service.list_reports(db, organization_id=org_id, event_id=event_id)
+                        else:
+                            result = service.list_closure_reviews(db, organization_id=org_id, event_id=event_id)
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+            if path == "/api/analytics-v4/compare-events":
+                event_ids = [int(value) for value in query.get("event_id", []) if str(value).isdigit()]
+                organization_id = int(query.get("organization_id", ["0"])[0] or 0)
+                with connect() as db:
+                    ok, session = self.require_organization_permission(db, organization_id, "analytics.compare", "analytics.compare")
+                    if not ok:
+                        return
+                    try:
+                        result = analytics_closure_service().compare_events(db, organization_id=organization_id, event_ids=event_ids, actor=str((session or {}).get("name") or "analytics"))
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
             if self.login_required() and not public_api_get(path) and "event_id" in query:
                 session = self.effective_user()
                 event_id_for_access = int(query.get("event_id", ["0"])[0] or 0)
@@ -5748,6 +7532,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                 session = self.effective_user()
                 if not session and not self.login_required():
                     session = {"id": 0, "name": "Admin", "role": "Super Admin", "local": True}
+                if session and session.get("id"):
+                    with connect() as db:
+                        row = db.execute("SELECT * FROM users WHERE id = ?", (int(session["id"]),)).fetchone()
+                    if row:
+                        session = {**session, **sanitize_user_row(row)}
                 self.send_json({"authenticated": bool(session), "user": session, "config": runtime_config(self)})
                 return
 
@@ -5829,6 +7618,594 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (org_id,),
                     ).fetchall()
                 self.send_json({"items": [dict(row) for row in rows], "available": [sanitize_integration(row) for row in available], "organization_id": org_id})
+                return
+
+            certificate_public_verify_match = re.fullmatch(r"/api/public/certificates/verify/([A-Za-z0-9_.~:-]+)", path)
+            if certificate_public_verify_match:
+                token = certificate_public_verify_match.group(1)
+                with connect() as db:
+                    result = certificate_service().verify_public(db, token=token)
+                    audit(db, "public", "certificates.verification_checked", "certificate", None, {"valid": bool(result.get("valid")), "token_hint": token[:8]})
+                self.send_json(result)
+                return
+
+            survey_public_access_match = re.fullmatch(r"/api/public/surveys/access/([A-Za-z0-9_.~:-]+)", path)
+            if survey_public_access_match:
+                token = survey_public_access_match.group(1)
+                with connect() as db:
+                    try:
+                        result = survey_service().public_access(db, token=token)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            speaker_public_event_match = re.fullmatch(r"/api/public/events/(\d+)/speakers", path)
+            speaker_public_profile_match = re.fullmatch(r"/api/public/speakers/([A-Za-z0-9_.:-]+)", path)
+            speaker_self_service_match = re.fullmatch(r"/api/public/speakers/access/([A-Za-z0-9_.~:-]+)", path)
+            if speaker_public_event_match:
+                event_id = int(speaker_public_event_match.group(1))
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    try:
+                        result = speaker_service().public_event_speakers(db, event_id=event_id)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if speaker_public_profile_match:
+                public_id = speaker_public_profile_match.group(1)
+                with connect() as db:
+                    try:
+                        result = speaker_service().public_profile(db, public_id=public_id)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if speaker_self_service_match:
+                token = speaker_self_service_match.group(1)
+                with connect() as db:
+                    try:
+                        result = speaker_service().self_service_profile(db, token=token)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/speakers":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    permission = "speakers.private.read" if include_private else "speakers.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().list_profiles(db, organization_id=org_id, event_id=event_id, include_private=include_private)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            speaker_detail_match = re.fullmatch(r"/api/speakers/(\d+)", path)
+            if speaker_detail_match:
+                profile_id = int(speaker_detail_match.group(1))
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                with connect() as db:
+                    if not speakers_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    permission = "speakers.private.read" if include_private else "speakers.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().get_profile_detail(db, organization_id=org_id, profile_id=profile_id, include_private=include_private)
+                    except SpeakerDomainError as exc:
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            zone_list_match = re.fullmatch(r"/api/events/(\d+)/zones", path)
+            if zone_list_match:
+                event_id = int(zone_list_match.group(1))
+                with connect() as db:
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "zones.read", "zones.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().list_zones(db, organization_id=org_id, event_id=event_id)
+                    except ZoneDomainError as exc:
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            history_event_match = re.fullmatch(r"/api/events/(\d+)/history", path)
+            if history_event_match:
+                event_id = int(history_event_match.group(1))
+                include_sensitive = str(query.get("include_sensitive", ["0"])[0]).lower() in {"1", "true", "yes"}
+                limit = int(query.get("limit", ["100"])[0] or 100)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "history.sensitive.read" if include_sensitive else "history.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().event_history(db, organization_id=org_id, event_id=event_id, include_sensitive=include_sensitive, limit=limit)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            history_entity_match = re.fullmatch(r"/api/history/entities/([a-zA-Z_]+)/(\d+)", path)
+            if history_entity_match:
+                entity_type = history_entity_match.group(1)
+                entity_id = int(history_entity_match.group(2))
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_sensitive = str(query.get("include_sensitive", ["0"])[0]).lower() in {"1", "true", "yes"}
+                limit = int(query.get("limit", ["100"])[0] or 100)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "history.sensitive.read" if include_sensitive else "history.read"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().entity_history(db, organization_id=org_id, event_id=event_id, entity_type=entity_type, entity_id=entity_id, include_sensitive=include_sensitive, limit=limit)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/autocomplete/participants":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                search = str(query.get("q", [""])[0] or "")
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "autocomplete.private.use" if include_private else "autocomplete.use"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().autocomplete_participants(db, organization_id=org_id, event_id=event_id, query=search, include_private=include_private)
+                self.send_json(result)
+                return
+
+            if path == "/api/autocomplete/speakers":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                include_private = str(query.get("include_private", ["0"])[0]).lower() in {"1", "true", "yes"}
+                search = str(query.get("q", [""])[0] or "")
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    permission = "autocomplete.private.use" if include_private else "autocomplete.use"
+                    ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().autocomplete_speakers(db, organization_id=org_id, query=search, include_private=include_private)
+                self.send_json(result)
+                return
+
+            autocomplete_value_match = re.fullmatch(r"/api/autocomplete/(organizations|cities|roles)", path)
+            if autocomplete_value_match:
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                search = str(query.get("q", [""])[0] or "")
+                field = autocomplete_value_match.group(1)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "autocomplete.use", "autocomplete.use")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().autocomplete_values(db, organization_id=org_id, field=field, query=search)
+                    except HistoryAutocompleteError as exc:
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if path == "/api/duplicate-candidates":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "duplicates.read", "duplicates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = history_autocomplete_service().duplicate_candidates(
+                        db,
+                        organization_id=org_id,
+                        first_name=str(query.get("first_name", [""])[0] or ""),
+                        last_name=str(query.get("last_name", [""])[0] or ""),
+                        email=str(query.get("email", [""])[0] or ""),
+                        document=str(query.get("document", [""])[0] or ""),
+                    )
+                self.send_json(result)
+                return
+
+            if path == "/api/survey-types":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.types.read", "surveys.types.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = survey_service().list_types(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/surveys":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.read", "surveys.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = survey_service().list_surveys(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            survey_detail_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)", path)
+            survey_results_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/results", path)
+            survey_export_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/export.csv", path)
+            if survey_detail_match:
+                event_id = int(survey_detail_match.group(1))
+                survey_id = int(survey_detail_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.read", "surveys.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().get_survey_detail(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if survey_results_match:
+                event_id = int(survey_results_match.group(1))
+                survey_id = int(survey_results_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "surveys.results.view", "surveys.results.view")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().results(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if survey_export_match:
+                event_id = int(survey_export_match.group(1))
+                survey_id = int(survey_export_match.group(2))
+                with connect() as db:
+                    if not surveys_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "surveys.export", "surveys.export")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        csv_body = survey_service().export_csv(db, organization_id=org_id, event_id=event_id, survey_id=survey_id)
+                    except SurveyDomainError as exc:
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, (session or {}).get("name", "system"), "surveys.exported", "survey", survey_id, {"organization_id": org_id, "event_id": event_id})
+                send_download(self, f"encuesta-{survey_id}.csv", "text/csv; charset=utf-8", csv_body.encode("utf-8"))
+                return
+
+            if path == "/api/certificate-types":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.types.read", "certificates.types.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_types(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if path == "/api/certificate-templates":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.templates.read", "certificates.templates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_templates(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            certificate_issuances_match = re.fullmatch(r"/api/events/(\d+)/certificates", path)
+            certificate_issuance_detail_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)", path)
+            certificate_issuance_download_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/download", path)
+            if certificate_issuances_match:
+                event_id = int(certificate_issuances_match.group(1))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.read", "certificates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = certificate_service().list_issuances(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if certificate_issuance_detail_match:
+                event_id = int(certificate_issuance_detail_match.group(1))
+                issuance_id = int(certificate_issuance_detail_match.group(2))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.read", "certificates.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = certificate_service().get_issuance_detail(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if certificate_issuance_download_match:
+                event_id = int(certificate_issuance_download_match.group(1))
+                issuance_id = int(certificate_issuance_download_match.group(2))
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "certificates.download", "certificates.download")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item, body = certificate_service().document_bytes(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, (session or {}).get("name", "system"), "certificates.downloaded", "certificate_issuance", issuance_id, {"organization_id": org_id, "event_id": event_id})
+                send_download(self, f"{item['certificate_number']}.pdf", "application/pdf", body)
+                return
+
+            attendance_list_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
+            attendance_detail_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)", path)
+            attendance_events_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/events", path)
+            participant_attendance_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/attendance", path)
+            attendance_rule_sets_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets", path)
+            attendance_closures_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
+            attendance_closure_detail_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)", path)
+            attendance_closure_evaluations_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/evaluations", path)
+            participant_eligibility_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility", path)
+            if attendance_rule_sets_match:
+                event_id = int(attendance_rule_sets_match.group(1))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.rules.read", "attendance.rules.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().list_rule_sets(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_closures_match:
+                event_id = int(attendance_closures_match.group(1))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.closure.read", "attendance.closure.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().list_closures(db, organization_id=org_id, event_id=event_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_closure_detail_match:
+                event_id = int(attendance_closure_detail_match.group(1))
+                closure_id = int(attendance_closure_detail_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.snapshot.read", "attendance.snapshot.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = attendance_service().get_closure(db, organization_id=org_id, event_id=event_id, closure_id=closure_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if attendance_closure_evaluations_match:
+                event_id = int(attendance_closure_evaluations_match.group(1))
+                closure_id = int(attendance_closure_evaluations_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.evaluation.read", "attendance.evaluation.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().list_closure_evaluations(db, organization_id=org_id, event_id=event_id, closure_id=closure_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if participant_eligibility_match:
+                event_id = int(participant_eligibility_match.group(1))
+                participant_id = int(participant_eligibility_match.group(2))
+                with connect() as db:
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.eligibility.read", "attendance.eligibility.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().participant_eligibility(db, organization_id=org_id, event_id=event_id, participant_id=participant_id)
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_list_match:
+                event_id = int(attendance_list_match.group(1))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    filters = {
+                        "participant_id": query.get("participant_id", [""])[0],
+                        "activity_id": query.get("activity_id", [""])[0],
+                        "status": query.get("status", [""])[0],
+                        "source": query.get("source", [""])[0],
+                        "from": query.get("from", [""])[0],
+                        "to": query.get("to", [""])[0],
+                    }
+                    result = attendance_service().list_attendance(
+                        db,
+                        organization_id=org_id,
+                        event_id=event_id,
+                        filters={k: v for k, v in filters.items() if str(v).strip()},
+                        limit=int(query.get("limit", ["50"])[0] or 50),
+                        offset=int(query.get("offset", ["0"])[0] or 0),
+                    )
+                self.send_json({"ok": True, **result})
+                return
+
+            if attendance_detail_match:
+                event_id = int(attendance_detail_match.group(1))
+                attendance_id = int(attendance_detail_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        item = attendance_service().get_attendance(db, organization_id=org_id, event_id=event_id, attendance_id=attendance_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, "item": item})
+                return
+
+            if attendance_events_match:
+                event_id = int(attendance_events_match.group(1))
+                attendance_id = int(attendance_events_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read_audit", "attendance.read_audit")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().list_attendance_events(db, organization_id=org_id, event_id=event_id, attendance_id=attendance_id)
+                    except AttendanceDomainError as exc:
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                self.send_json({"ok": True, **result})
+                return
+
+            if participant_attendance_match:
+                event_id = int(participant_attendance_match.group(1))
+                participant_id = int(participant_attendance_match.group(2))
+                with connect() as db:
+                    if not attendance_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "attendance.read", "attendance.read")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    result = attendance_service().get_participant_attendance_history(db, organization_id=org_id, event_id=event_id, participant_id=participant_id)
+                self.send_json({"ok": True, **result})
                 return
 
             if path == "/api/integrations/google/status":
@@ -5942,6 +8319,218 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/network-info":
                 self.send_json(network_info(self))
+                return
+
+            if path == "/api/networking/config":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.config")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().get_event_config(db, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/brand":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.brand")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().get_event_brand(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/readiness":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.readiness")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    include_participants = query.get("include_participants", ["0"])[0] in {"1", "true", "TRUE", "si", "yes"}
+                    result = networking_service().readiness_summary(db, event_id, include_participants=include_participants)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/operations":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.operations")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().operations_summary(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/launch":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.launch")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().launch_readiness(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/operations.csv":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "view_reports", "networking.operations_export")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    summary = networking_service().operations_summary(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                    if not summary.get("ok"):
+                        self.send_json(summary, int(summary.pop("status_code", 200)))
+                        return
+                    csv_body = networking_service().operations_export_csv(db, event_id, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                    audit(db, actor, "networking.operations_exported", "event", event_id, {"format": "csv"})
+                send_download(self, f"networking-operaciones-evento-{event_id}.csv", "text/csv; charset=utf-8", csv_body.encode("utf-8"))
+                return
+
+            if path == "/api/networking/taxonomy":
+                actor = query.get("actor", ["Admin"])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.taxonomy")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().event_taxonomy_payload(db, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/session":
+                token = query.get("token", [""])[0]
+                event_id = int(query.get("event_id", ["0"])[0] or 0) or None
+                with connect() as db:
+                    result = networking_service().session(db, token, event_id)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/live-vocabulary":
+                event_id = int(query.get("event_id", ["0"])[0] or 0)
+                token = query.get("token", [""])[0]
+                actor = query.get("actor", [""])[0] or "public"
+                include_candidates = False
+                if not event_id and token:
+                    with connect() as db:
+                        owner = networking_service().resolve_owner(db, token)
+                        event_id = int(owner["event_id"]) if owner else 0
+                        include_candidates = bool(owner)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with connect() as db:
+                    if token:
+                        owner = networking_service().resolve_owner(db, token, event_id)
+                        include_candidates = include_candidates or bool(owner)
+                    elif actor != "public":
+                        include_candidates = can_actor(db, actor, CONFIG_ROLES)
+                    result = networking_service().live_vocabulary(db, event_id, include_candidates=include_candidates)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery":
+                token = query.get("token", [""])[0]
+                limit = int(query.get("limit", ["0"])[0] or 0) or None
+                with connect() as db:
+                    result = networking_service().discovery_stream(db, token, limit=limit)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/contacts":
+                token = query.get("token", [""])[0]
+                with connect() as db:
+                    result = networking_service().contacts(db, token)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/profile":
+                profile_id = query.get("profile_id", [""])[0]
+                token = query.get("token", [""])[0]
+                with connect() as db:
+                    result = networking_service().public_profile(db, profile_id, token)
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/qr.svg":
+                profile_id = query.get("profile_id", [""])[0].strip().upper()
+                with connect() as db:
+                    exists = db.execute(
+                        "SELECT 1 FROM networking_event_participations WHERE public_profile_id = ? AND participation_state = 'ACTIVE'",
+                        (profile_id,),
+                    ).fetchone()
+                    link = networking_service().public_profile_link(db, profile_id, fallback_base_url=configured_base_url(self)) if exists else {}
+                if not exists:
+                    self.send_error(HTTPStatus.NOT_FOUND, "Perfil Networking inexistente")
+                    return
+                body = qr_svg(str(link.get("url") or absolute_url(f"/n/{profile_id}", self))).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
 
             if path == "/api/waiting-room/status":
@@ -6084,10 +8673,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/qr.svg":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     svg = qr_service().svg(db, token, qr_svg)
-                    acc = db.execute("SELECT id, event_id FROM accreditations WHERE token = ?", (token,)).fetchone()
+                    acc = db.execute("SELECT id, event_id FROM accreditations WHERE lower(token) = lower(?)", (token,)).fetchone()
                     if acc:
                         audit(db, "portal", "portal.qr_viewed", "accreditation", acc["id"], {"event_id": acc["event_id"]})
                 if not svg:
@@ -6103,7 +8692,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/credential.svg":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     data = portal_payload(db, token)
                     if data:
@@ -6123,7 +8712,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path in {"/api/credential.png", "/api/credential.pdf"}:
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 with connect() as db:
                     data = portal_payload(db, token)
                     if data:
@@ -6147,7 +8736,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/certificate.pdf":
-                token = query.get("token", [""])[0].strip().upper()
+                token = query.get("token", [""])[0].strip()
                 activity_id = int(query.get("activity_id", ["0"])[0] or 0)
                 manual = query.get("manual", ["0"])[0] == "1"
                 with connect() as db:
@@ -6162,13 +8751,21 @@ class AppHandler(SimpleHTTPRequestHandler):
                             return
                     data = certificate_payload(db, token, activity_id or None, manual=manual)
                     if data:
+                        audit_entity_id = data.get("certificate_id")
+                        if manual:
+                            audit_entity_id = data.get("accreditation_id")
                         audit(
                             db,
                             "portal" if not manual else "Admin",
                             "certificate.downloaded" if not manual else "certificate.manual_printed",
                             "certificate_eligibility",
-                            data["certificate_id"],
-                            {"token": token, "activity_id": data.get("activity_id"), "manual": manual},
+                            audit_entity_id,
+                            {
+                                "token": token,
+                                "activity_id": data.get("activity_id"),
+                                "manual": manual,
+                                "certificate_id": data.get("certificate_id"),
+                            },
                         )
                 if not data:
                     self.send_error(HTTPStatus.NOT_FOUND, "Certificado no disponible")
@@ -6206,7 +8803,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         access_params,
                     ).fetchall()
-                payload = [dict(r) for r in rows]
+                payload = []
+                for row in rows:
+                    item = dict(row)
+                    item["feature_flags"] = event_feature_flags_payload(db, int(item["id"]))
+                    payload.append(item)
                 RESPONSE_CACHE.set(cache_key, payload, 15)
                 self.send_json(payload)
                 return
@@ -6550,6 +9151,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not event:
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
+                    event["feature_flags"] = event_feature_flags_payload(db, event_id)
                     activities = []
                     if int(event.get("activities_enabled") or 0) == 1:
                         activities = [
@@ -6585,12 +9187,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/users":
+                session = self.effective_user()
                 with connect() as db:
                     ensure_default_users(db)
+                    is_admin = bool(session and session.get("role") in ADMIN_ROLES)
                     rows = db.execute(
-                        "SELECT * FROM users WHERE active = 1 ORDER BY id"
+                        "SELECT * FROM users WHERE active = 1 ORDER BY id" if not is_admin else "SELECT * FROM users ORDER BY active DESC, id"
                     ).fetchall()
-                self.send_json([dict(r) for r in rows])
+                self.send_json([sanitize_user_row(r, public=not is_admin) for r in rows])
                 return
 
             if path == "/api/event-users":
@@ -6810,7 +9414,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             FROM activities a
                             JOIN spaces s ON s.id = a.space_id
                             WHERE a.event_id = ? AND a.status <> 'cancelled'
-                            GROUP BY a.id
+                            GROUP BY a.id, a.title, s.name, a.starts_at
                             ORDER BY a.starts_at
                             """,
                             (event_id,),
@@ -6956,7 +9560,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         FROM activities a
                         LEFT JOIN reservations r ON r.activity_id = a.id
                         WHERE a.event_id = ?
-                        GROUP BY a.id
+                        GROUP BY a.id, a.title, s.name, a.starts_at
                         """,
                         (event_id,),
                     ).fetchall()
@@ -7261,7 +9865,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         JOIN spaces s ON s.id = a.space_id
                         LEFT JOIN reservations r ON r.activity_id = a.id
                         WHERE a.event_id = ?
-                        GROUP BY a.id
+                        GROUP BY a.id, a.title, s.name, a.starts_at
                         ORDER BY a.starts_at
                         """,
                         (event_id,),
@@ -7342,10 +9946,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                         WHERE active = 1
                           AND (
                             lower(name) = 'acceso'
-                            OR lower(role) LIKE '%acceso%'
-                            OR lower(role) LIKE '%admin%'
+                            OR lower(role) LIKE ?
+                            OR lower(role) LIKE ?
                           )
                         """
+                        ,
+                        ("%acceso%", "%admin%"),
                     ).fetchone()["c"]
                     waitlist_count = db.execute("SELECT COUNT(*) AS c FROM reservations WHERE event_id = ? AND status = 'waitlisted'", (event_id,)).fetchone()["c"]
                     rejection_count = db.execute(
@@ -7357,13 +9963,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()["c"]
-                    index_count = db.execute(
-                        "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'"
-                    ).fetchone()["c"]
-                    integrity = db.execute("PRAGMA quick_check").fetchone()[0]
+                    if DB_CONFIG.engine == "postgres":
+                        index_count = db.execute(
+                            """
+                            SELECT COUNT(*) AS c
+                            FROM pg_indexes
+                            WHERE schemaname = CURRENT_SCHEMA()
+                              AND indexname LIKE ?
+                            """,
+                            ("idx_%",),
+                        ).fetchone()["c"]
+                        integrity = db.execute("SELECT 1 AS ok").fetchone()["ok"]
+                    else:
+                        index_count = db.execute(
+                            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'"
+                        ).fetchone()["c"]
+                        integrity = db.execute("PRAGMA quick_check").fetchone()[0]
                 checks = [
                     {"key": "event", "label": "Evento activo", "ok": bool(event), "detail": event["name"] if event else "sin evento"},
-                    {"key": "database", "label": "Base local", "ok": integrity == "ok", "detail": integrity},
+                    {"key": "database", "label": "Base de datos", "ok": str(integrity) in {"ok", "1"}, "detail": "online" if str(integrity) == "1" else str(integrity)},
                     {"key": "indexes", "label": "Indices de rendimiento", "ok": int(index_count or 0) >= 8, "detail": f"{index_count} indices"},
                     {"key": "backup", "label": "Backup reciente", "ok": backup_age_minutes is not None and backup_age_minutes <= 30, "detail": f"{backup_age_minutes} min" if backup_age_minutes is not None else "sin backup"},
                     {"key": "accreditations", "label": "Acreditaciones activas", "ok": int(counts["active"] or 0) > 0, "detail": str(int(counts["active"] or 0))},
@@ -7678,6 +10296,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         """,
                         (event_id,),
                     ).fetchone()
+                    production_email = event_production_email(db, event_id)
                 if not can_view_personal:
                     logs = mask_communication_personal_data(logs)
                     queue = mask_communication_personal_data(queue)
@@ -7696,7 +10315,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "enabled": os.environ.get("EMAIL_ENABLED", "true").lower() in {"1", "true", "yes", "si"},
                             "safe_mode": email_safe_mode_enabled(),
                             "from": os.environ.get("EMAIL_FROM", "") or os.environ.get("EMAIL_FROM_ADDRESS", ""),
-                            "reply_to": os.environ.get("EMAIL_REPLY_TO", ""),
+                            "reply_to": production_email or os.environ.get("EMAIL_REPLY_TO", ""),
+                            "event_reply_to": production_email,
                             "verified_domain": os.environ.get("EMAIL_VERIFIED_DOMAIN", ""),
                             "last_success": email_last_success["processed_at"] if email_last_success else "",
                             "last_error": email_last_error["last_error"] if email_last_error else "",
@@ -8091,6 +10711,1312 @@ class AppHandler(SimpleHTTPRequestHandler):
                         self.send_json({"error": "No tenes permiso para operar este evento"}, 403)
                         return
 
+            attendance_create_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
+            attendance_correct_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/correct", path)
+            attendance_invalidate_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/invalidate", path)
+            attendance_rule_set_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets", path)
+            attendance_rule_version_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets/(\d+)/versions", path)
+            attendance_rule_version_publish_match = re.fullmatch(r"/api/events/(\d+)/attendance-rule-sets/(\d+)/versions/(\d+)/publish", path)
+            attendance_closure_create_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures", path)
+            attendance_closure_reopen_match = re.fullmatch(r"/api/events/(\d+)/attendance-closures/(\d+)/reopen", path)
+            attendance_eligibility_override_match = re.fullmatch(r"/api/events/(\d+)/participants/(\d+)/eligibility/override", path)
+            survey_public_start_match = re.fullmatch(r"/api/public/surveys/access/([A-Za-z0-9_.~:-]+)/start", path)
+            survey_public_submit_match = re.fullmatch(r"/api/public/surveys/sessions/(\d+)/submit", path)
+            survey_type_create_match = re.fullmatch(r"/api/survey-types", path)
+            survey_create_match = re.fullmatch(r"/api/surveys", path)
+            survey_version_create_match = re.fullmatch(r"/api/surveys/(\d+)/versions", path)
+            survey_version_publish_match = re.fullmatch(r"/api/surveys/(\d+)/versions/(\d+)/publish", path)
+            survey_assign_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assign", path)
+            survey_close_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/assignments/(\d+)/close", path)
+            survey_archive_match = re.fullmatch(r"/api/events/(\d+)/surveys/(\d+)/archive", path)
+            speaker_self_service_update_match = re.fullmatch(r"/api/public/speakers/access/([A-Za-z0-9_.~:-]+)/update", path)
+            speaker_create_match = re.fullmatch(r"/api/speakers", path)
+            speaker_update_match = re.fullmatch(r"/api/speakers/(\d+)", path)
+            speaker_publish_match = re.fullmatch(r"/api/speakers/(\d+)/publish", path)
+            speaker_archive_match = re.fullmatch(r"/api/speakers/(\d+)/archive", path)
+            speaker_event_assign_match = re.fullmatch(r"/api/events/(\d+)/speakers", path)
+            speaker_activity_assign_match = re.fullmatch(r"/api/events/(\d+)/speakers/(\d+)/activities", path)
+            speaker_token_match = re.fullmatch(r"/api/speakers/(\d+)/access-token", path)
+            speaker_document_match = re.fullmatch(r"/api/speakers/(\d+)/documents", path)
+            zone_create_match = re.fullmatch(r"/api/events/(\d+)/zones", path)
+            zone_assignment_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/assignments", path)
+            zone_validate_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/validate", path)
+            zone_override_match = re.fullmatch(r"/api/events/(\d+)/zones/(\d+)/overrides", path)
+            duplicate_decision_match = re.fullmatch(r"/api/duplicate-candidates/(\d+)/(confirm|dismiss)", path)
+            operations_create_match = re.fullmatch(r"/api/events/(\d+)/operations-center/(incidents|tasks)", path)
+            operations_alert_status_match = re.fullmatch(r"/api/events/(\d+)/operations-center/alerts/(\d+)/(acknowledge|resolve)", path)
+            operations_incident_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/incidents/(\d+)", path)
+            operations_task_update_match = re.fullmatch(r"/api/events/(\d+)/operations-center/tasks/(\d+)", path)
+            comm_template_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/templates", path)
+            comm_template_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/templates/(\d+)/(update|approve|preview)", path)
+            comm_segment_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/segments", path)
+            comm_segment_preview_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/segments/(\d+)/preview", path)
+            comm_campaign_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/campaigns", path)
+            comm_campaign_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/campaigns/(\d+)/(validate|approve|execute|enqueue|pause|cancel)", path)
+            comm_automation_create_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/automations", path)
+            comm_automation_action_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/automations/(\d+)/(activate|pause)", path)
+            comm_webhook_match = re.fullmatch(r"/api/events/(\d+)/communications-v4/webhooks/([a-zA-Z0-9_-]+)", path)
+            certificate_type_create_match = re.fullmatch(r"/api/certificate-types", path)
+            certificate_template_create_match = re.fullmatch(r"/api/certificate-templates", path)
+            certificate_template_version_create_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions", path)
+            certificate_template_version_publish_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions/(\d+)/publish", path)
+            certificate_template_preview_match = re.fullmatch(r"/api/certificate-templates/(\d+)/versions/(\d+)/preview", path)
+            certificate_issue_match = re.fullmatch(r"/api/events/(\d+)/certificates/issue", path)
+            certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
+            certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
+            certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            if (
+                comm_template_create_match
+                or comm_template_action_match
+                or comm_segment_create_match
+                or comm_segment_preview_match
+                or comm_campaign_create_match
+                or comm_campaign_action_match
+                or comm_automation_create_match
+                or comm_automation_action_match
+                or comm_webhook_match
+            ):
+                match = (
+                    comm_template_create_match
+                    or comm_template_action_match
+                    or comm_segment_create_match
+                    or comm_segment_preview_match
+                    or comm_campaign_create_match
+                    or comm_campaign_action_match
+                    or comm_automation_create_match
+                    or comm_automation_action_match
+                    or comm_webhook_match
+                )
+                event_id = int(match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not communications_automation_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "COMMUNICATIONS_V4_FEATURE_DISABLED", "error": "Communications V4 deshabilitado"}, 404)
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or data.get("actor") or "communications")
+                    service = communications_automation_service()
+                    try:
+                        if comm_template_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.templates.manage", "communications.templates.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_template(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_template_action_match:
+                            template_id = int(comm_template_action_match.group(2))
+                            action = comm_template_action_match.group(3)
+                            permission = "communications.templates.approve" if action == "approve" else ("communications.templates.read" if action == "preview" else "communications.templates.manage")
+                            ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            if action == "approve":
+                                result = service.approve_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, actor=actor)
+                            elif action == "preview":
+                                result = service.preview_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, sample=data.get("sample") if isinstance(data.get("sample"), dict) else {})
+                            else:
+                                result = service.update_template(db, organization_id=organization_id, event_id=event_id, template_id=template_id, actor=actor, data=data)
+                            status_code = 200
+                        elif comm_segment_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.segments.manage", "communications.segments.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_segment(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_segment_preview_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.segments.read", "communications.segments.read")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.preview_segment(db, organization_id=organization_id, event_id=event_id, segment_id=int(comm_segment_preview_match.group(2)), channel=str(data.get("channel") or "email"))
+                            status_code = 200
+                        elif comm_campaign_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.campaigns.manage", "communications.campaigns.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_campaign(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_campaign_action_match:
+                            campaign_id = int(comm_campaign_action_match.group(2))
+                            action = comm_campaign_action_match.group(3)
+                            permission = {
+                                "validate": "communications.campaigns.manage",
+                                "approve": "communications.campaigns.approve",
+                                "execute": "communications.campaigns.execute",
+                                "enqueue": "communications.campaigns.execute",
+                                "pause": "communications.campaigns.cancel",
+                                "cancel": "communications.campaigns.cancel",
+                            }[action]
+                            ok, _session = self.require_event_permission(db, event_id, permission, permission)
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            if action == "validate":
+                                result = service.validate_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor)
+                            elif action == "approve":
+                                result = service.approve_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor)
+                            elif action == "execute":
+                                result = service.execute_campaign(db, organization_id=organization_id, event_id=event_id, campaign_id=campaign_id, actor=actor, correlation_id=str(data.get("correlation_id") or ""))
+                            elif action == "enqueue":
+                                payload = {"organization_id": organization_id, "event_id": event_id, "campaign_id": campaign_id, "actor": actor, "correlation_id": str(data.get("correlation_id") or "")}
+                                cur = db.execute(
+                                    """
+                                    INSERT INTO jobs (event_id, organization_id, kind, priority, status, payload, retry_count, max_retries, retry_at, created_by, created_at, updated_at)
+                                    VALUES (?, ?, 'communications.campaign.execute', 'medium', 'pending', ?, 0, 3, NULL, ?, ?, ?)
+                                    """,
+                                    (event_id, organization_id, json.dumps(payload, ensure_ascii=True), actor, now_iso(), now_iso()),
+                                )
+                                job_id = int(cur.lastrowid)
+                                audit(db, actor, "job.created", "job", job_id, {"kind": "communications.campaign.execute", "event_id": event_id, "organization_id": organization_id, "campaign_id": campaign_id})
+                                result = {"ok": True, "job_id": job_id}
+                            else:
+                                new_status = "PAUSED" if action == "pause" else "CANCELLED"
+                                db.execute("UPDATE communication_v4_campaigns SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND event_id = ?", (new_status, now_iso(), campaign_id, organization_id, event_id))
+                                audit(db, actor, f"communications.v4.campaign.{action}", "communication_v4_campaign", campaign_id, {"organization_id": organization_id, "event_id": event_id})
+                                result = {"ok": True, "campaign": dict(db.execute("SELECT * FROM communication_v4_campaigns WHERE id = ?", (campaign_id,)).fetchone())}
+                            status_code = 200
+                        elif comm_automation_create_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.automations.manage", "communications.automations.manage")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            result = service.create_automation(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                            status_code = 201
+                        elif comm_automation_action_match:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.automations.activate", "communications.automations.activate")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            status = "ACTIVE" if comm_automation_action_match.group(3) == "activate" else "PAUSED"
+                            result = service.set_automation_status(db, organization_id=organization_id, event_id=event_id, automation_id=int(comm_automation_action_match.group(2)), actor=actor, status=status)
+                            status_code = 200
+                        else:
+                            ok, _session = self.require_event_permission(db, event_id, "communications.audit.read", "communications.audit.read")
+                            if not ok:
+                                db.execute("ROLLBACK")
+                                return
+                            raw_body = json.dumps(data, ensure_ascii=True, sort_keys=True).encode("utf-8")
+                            result = service.record_provider_event(db, organization_id=organization_id, event_id=event_id, provider=comm_webhook_match.group(2), raw_body=raw_body, signature=str(data.get("signature") or ""), secret=str(data.get("secret") or ""), data=data)
+                            status_code = 200
+                    except CommunicationsAutomationError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(communications_automation_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, status_code)
+                return
+            if operations_create_match:
+                event_id = int(operations_create_match.group(1))
+                resource = operations_create_match.group(2)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    permission = "operations_center.incidents.manage" if resource == "incidents" else "operations_center.tasks.manage"
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((session or {}).get("name") or data.get("actor") or "operations")
+                    try:
+                        organization_id = event_organization_id(db, event_id)
+                        result = operations_center_service().create_incident(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data) if resource == "incidents" else operations_center_service().create_task(db, organization_id=organization_id, event_id=event_id, actor=actor, data=data)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if operations_alert_status_match:
+                event_id = int(operations_alert_status_match.group(1))
+                alert_id = int(operations_alert_status_match.group(2))
+                status = "ACKNOWLEDGED" if operations_alert_status_match.group(3) == "acknowledge" else "RESOLVED"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "operations_center.alerts.manage", "operations_center.alerts.manage")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    try:
+                        result = operations_center_service().set_alert_status(db, organization_id=event_organization_id(db, event_id), event_id=event_id, alert_id=alert_id, actor=str((session or {}).get("name") or "operations"), status=status)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if operations_incident_update_match or operations_task_update_match:
+                match = operations_incident_update_match or operations_task_update_match
+                event_id = int(match.group(1))
+                item_id = int(match.group(2))
+                resource = "incident" if operations_incident_update_match else "task"
+                permission = "operations_center.incidents.manage" if resource == "incident" else "operations_center.tasks.manage"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not operations_center_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "OPERATIONS_CENTER_FEATURE_DISABLED", "error": "Operations Center V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, permission, permission)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    try:
+                        kwargs = {"organization_id": event_organization_id(db, event_id), "event_id": event_id, "actor": str((session or {}).get("name") or "operations"), "data": data}
+                        result = operations_center_service().update_incident(db, incident_id=item_id, **kwargs) if resource == "incident" else operations_center_service().update_task(db, task_id=item_id, **kwargs)
+                    except OperationsCenterError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(operations_center_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+            if survey_public_start_match:
+                token = survey_public_start_match.group(1)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    try:
+                        access = survey_service().public_access(db, token=token)
+                        if not access.get("valid"):
+                            raise SurveyDomainError("SURVEY_TOKEN_INVALID", "Token invalido", 403)
+                        token_row = db.execute("SELECT organization_id, event_id, assignment_id FROM survey_access_tokens WHERE token_hash = ?", (survey_service()._token_hash(token),)).fetchone()
+                        result = survey_service().start_response(db, organization_id=int(token_row["organization_id"]), event_id=int(token_row["event_id"]), assignment_id=int(token_row["assignment_id"]), token=token, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_public_submit_match:
+                session_id = int(survey_public_submit_match.group(1))
+                token = str(data.get("token") or "")
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    token_row = db.execute("SELECT organization_id, event_id FROM survey_access_tokens WHERE token_hash = ?", (survey_service()._token_hash(token),)).fetchone()
+                    if not token_row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_TOKEN_INVALID", "error": "Token invalido"}, 403)
+                        return
+                    try:
+                        result = survey_service().submit_response(db, organization_id=int(token_row["organization_id"]), event_id=int(token_row["event_id"]), session_id=session_id, answers=data.get("answers") if isinstance(data.get("answers"), list) else [], token=token)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_self_service_update_match:
+                token = speaker_self_service_update_match.group(1)
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    try:
+                        result = speaker_service().self_service_update(db, token=token, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.manage", "speakers.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().create_profile(db, organization_id=org_id, actor=actor, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_update_match:
+                profile_id = int(speaker_update_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.manage", "speakers.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().update_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor, data=data)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_publish_match or speaker_archive_match:
+                profile_id = int((speaker_publish_match or speaker_archive_match).group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                permission = "speakers.publish"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, permission, permission, actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        if speaker_publish_match:
+                            result = speaker_service().publish_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor, notes=str(data.get("notes") or ""))
+                        else:
+                            result = speaker_service().archive_profile(db, organization_id=org_id, profile_id=profile_id, actor=actor)
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if speaker_event_assign_match:
+                event_id = int(speaker_event_assign_match.group(1))
+                profile_id = int(data.get("speaker_id") or data.get("speaker_profile_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.assign", "speakers.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().assign_to_event(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, actor=actor, roles=data.get("roles") if isinstance(data.get("roles"), list) else ["SPEAKER"], visibility=str(data.get("visibility") or "PUBLIC"), notes=str(data.get("notes") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_activity_assign_match:
+                event_id = int(speaker_activity_assign_match.group(1))
+                profile_id = int(speaker_activity_assign_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.assign", "speakers.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().assign_to_activity(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, activity_id=int(data.get("activity_id") or 0), actor=actor, role=str(data.get("role") or "SPEAKER"), sort_order=int(data.get("sort_order") or 0), visibility=str(data.get("visibility") or "PUBLIC"), notes=str(data.get("notes") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_token_match:
+                profile_id = int(speaker_token_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.access_tokens.manage", "speakers.access_tokens.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = speaker_service().create_access_token(db, organization_id=org_id, profile_id=profile_id, actor=actor, expires_at=str(data.get("expires_at") or ""))
+                    except SpeakerDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(speaker_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if speaker_document_match:
+                profile_id = int(speaker_document_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not speakers_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SPEAKER_FEATURE_DISABLED", "error": "Disertantes V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "speakers.documents.manage", "speakers.documents.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "speakers")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        content = decode_upload_base64(str(data.get("content_base64") or ""))
+                        result = speaker_service().add_document(db, organization_id=org_id, event_id=event_id, profile_id=profile_id, actor=actor, filename=str(data.get("filename") or ""), mime_type=str(data.get("mime_type") or ""), content=content, document_type=str(data.get("document_type") or "MATERIAL"), visibility=str(data.get("visibility") or "PRIVATE"))
+                    except (SpeakerDomainError, ValueError) as exc:
+                        db.execute("ROLLBACK")
+                        if isinstance(exc, SpeakerDomainError):
+                            self.send_json(speaker_error_payload(exc), exc.status_code)
+                        else:
+                            self.send_json({"ok": False, "code": "SPEAKER_DOCUMENT_INVALID", "error": str(exc)}, 400)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if duplicate_decision_match:
+                candidate_person_id = int(duplicate_decision_match.group(1))
+                action = duplicate_decision_match.group(2)
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                decision = "CONFIRMED_MATCH" if action == "confirm" else "DISMISSED"
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not history_autocomplete_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "HISTORY_FEATURE_DISABLED", "error": "Historial V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "duplicates.resolve", "duplicates.resolve", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "duplicates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = history_autocomplete_service().record_duplicate_decision(db, organization_id=org_id, event_id=event_id, actor=actor, candidate_person_id=candidate_person_id, decision=decision, reason=str(data.get("reason") or ""))
+                    except HistoryAutocompleteError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(history_autocomplete_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_create_match:
+                event_id = int(zone_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.manage", "zones.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().create_zone(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""), parent_zone_id=int(data.get("parent_zone_id") or 0) or None, capacity=int(data.get("capacity") or 0) or None, access_mode=str(data.get("access_mode") or "QR"), valid_from=str(data.get("valid_from") or ""), valid_until=str(data.get("valid_until") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_assignment_match:
+                event_id = int(zone_assignment_match.group(1))
+                zone_id = int(zone_assignment_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.assign", "zones.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().assign_access(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, valid_from=str(data.get("valid_from") or ""), valid_until=str(data.get("valid_until") or ""), source=str(data.get("source") or "manual"))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if zone_validate_match:
+                event_id = int(zone_validate_match.group(1))
+                zone_id = int(zone_validate_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not zone_permissions_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ZONE_FEATURE_DISABLED", "error": "Zonas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.validate", "zones.validate", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().validate_access(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, token=str(data.get("token") or ""), person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if zone_override_match:
+                event_id = int(zone_override_match.group(1))
+                zone_id = int(zone_override_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "zones.override", "zones.override", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "zones")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = zone_permission_service().create_override(db, organization_id=org_id, event_id=event_id, zone_id=zone_id, actor=actor, override_type=str(data.get("override_type") or ""), reason=str(data.get("reason") or ""), person_id=int(data.get("person_id") or 0) or None, accreditation_id=int(data.get("accreditation_id") or 0) or None, valid_until=str(data.get("valid_until") or ""))
+                    except ZoneDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(zone_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_type_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.types.manage", "surveys.types.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_type(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.create", "surveys.create", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_survey(db, organization_id=org_id, event_id=event_id, actor=actor, survey_type_id=int(data.get("survey_type_id") or 0), name=str(data.get("name") or ""), description=str(data.get("description") or ""), response_mode=str(data.get("response_mode") or "IDENTIFIED"), access_policy=str(data.get("access_policy") or "EVENT_PARTICIPANTS"), duplicate_policy=str(data.get("duplicate_policy") or "ONE_PER_PARTICIPANT"), opens_at=str(data.get("opens_at") or ""), closes_at=str(data.get("closes_at") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_version_create_match:
+                survey_id = int(survey_version_create_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.edit", "surveys.edit", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().create_version(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor, title=str(data.get("title") or ""), description=str(data.get("description") or ""), instructions=str(data.get("instructions") or ""), questions=data.get("questions") if isinstance(data.get("questions"), list) else [])
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_version_publish_match:
+                survey_id = int(survey_version_publish_match.group(1))
+                version_id = int(survey_version_publish_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.publish", "surveys.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().publish_version(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if survey_assign_match:
+                event_id = int(survey_assign_match.group(1))
+                survey_id = int(survey_assign_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not surveys_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_FEATURE_DISABLED", "error": "Encuestas V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.assign", "surveys.assign", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().assign_survey(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor, version_id=int(data.get("version_id") or 0) or None, activity_id=int(data.get("activity_id") or 0) or None, opens_at=str(data.get("opens_at") or ""), closes_at=str(data.get("closes_at") or ""), access_mode=str(data.get("access_mode") or "EVENT_PARTICIPANTS"))
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if survey_close_match:
+                event_id = int(survey_close_match.group(1))
+                assignment_id = int(survey_close_match.group(3))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.close", "surveys.close", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().close_assignment(db, organization_id=org_id, event_id=event_id, assignment_id=assignment_id, actor=actor)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if survey_archive_match:
+                event_id = int(survey_archive_match.group(1))
+                survey_id = int(survey_archive_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "surveys.archive", "surveys.archive", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "surveys")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = survey_service().archive_survey(db, organization_id=org_id, event_id=event_id, survey_id=survey_id, actor=actor)
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if certificate_type_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.types.manage", "certificates.types.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_certificate_type(db, organization_id=org_id, event_id=event_id, actor=actor, code=str(data.get("code") or ""), name=str(data.get("name") or ""), description=str(data.get("description") or ""), kind=str(data.get("kind") or "ATTENDANCE"), requires_eligibility=truthy(data.get("requires_eligibility", True)), requires_closure=truthy(data.get("requires_closure", True)), allow_override=truthy(data.get("allow_override", True)), allow_batch=truthy(data.get("allow_batch", True)), allow_reissue=truthy(data.get("allow_reissue", True)), requires_numbering=truthy(data.get("requires_numbering", True)))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_create_match:
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.manage", "certificates.templates.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_template(db, organization_id=org_id, event_id=event_id, actor=actor, certificate_type_id=int(data.get("certificate_type_id") or 0), name=str(data.get("name") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_version_create_match:
+                template_id = int(certificate_template_version_create_match.group(1))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.manage", "certificates.templates.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_template_version(db, organization_id=org_id, template_id=template_id, actor=actor, content_schema=data.get("content_schema") if isinstance(data.get("content_schema"), dict) else {})
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_template_version_publish_match:
+                template_id = int(certificate_template_version_publish_match.group(1))
+                version_id = int(certificate_template_version_publish_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.templates.publish", "certificates.templates.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().publish_template_version(db, organization_id=org_id, template_id=template_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if certificate_template_preview_match:
+                template_id = int(certificate_template_preview_match.group(1))
+                version_id = int(certificate_template_preview_match.group(2))
+                event_id = int(data.get("event_id") or 0)
+                with connect() as db:
+                    if not certificates_v4_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.preview", "certificates.preview")
+                    if not ok:
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().preview_template_version(db, organization_id=org_id, template_id=template_id, version_id=version_id)
+                    except CertificateDomainError as exc:
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
+                return
+
+            if certificate_issue_match:
+                event_id = int(certificate_issue_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.issue", "certificates.issue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().issue_certificate(db, organization_id=org_id, event_id=event_id, actor=actor, participant_id=int(data.get("participant_id") or 0), certificate_type_id=int(data.get("certificate_type_id") or 0), template_version_id=int(data.get("template_version_id") or 0), eligibility_decision_id=int(data.get("eligibility_decision_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if certificate_batch_match:
+                event_id = int(certificate_batch_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.batch.issue", "certificates.batch.issue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().create_batch(db, organization_id=org_id, event_id=event_id, actor=actor, certificate_type_id=int(data.get("certificate_type_id") or 0), template_version_id=int(data.get("template_version_id") or 0), participant_ids=data.get("participant_ids") if isinstance(data.get("participant_ids"), list) else [], idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if certificate_revoke_match:
+                event_id = int(certificate_revoke_match.group(1))
+                issuance_id = int(certificate_revoke_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.revoke", "certificates.revoke", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().revoke_certificate(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id, actor=actor, reason=str(data.get("reason") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if certificate_reissue_match:
+                event_id = int(certificate_reissue_match.group(1))
+                issuance_id = int(certificate_reissue_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not certificates_v4_dependencies_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "CERTIFICATE_FEATURE_DISABLED", "error": "Certificados V4 o dependencias deshabilitadas"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.reissue", "certificates.reissue", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "certificates")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = certificate_service().reissue_certificate(db, organization_id=org_id, event_id=event_id, issuance_id=issuance_id, actor=actor, reason=str(data.get("reason") or ""), idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except CertificateDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(certificate_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if attendance_rule_set_create_match:
+                event_id = int(attendance_rule_set_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.manage", "attendance.rules.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().create_rule_set(db, organization_id=org_id, event_id=event_id, actor=actor, name=str(data.get("name") or ""), scope_type=str(data.get("scope_type") or "EVENT"), activity_id=int(data.get("activity_id") or 0) or None)
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 201)
+                return
+
+            if attendance_rule_version_create_match:
+                event_id = int(attendance_rule_version_create_match.group(1))
+                rule_set_id = int(attendance_rule_version_create_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.manage", "attendance.rules.manage", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().create_rule_set_version(db, organization_id=org_id, event_id=event_id, rule_set_id=rule_set_id, actor=actor, configuration=data.get("configuration") if isinstance(data.get("configuration"), dict) else {})
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_rule_version_publish_match:
+                event_id = int(attendance_rule_version_publish_match.group(1))
+                rule_set_id = int(attendance_rule_version_publish_match.group(2))
+                version_id = int(attendance_rule_version_publish_match.group(3))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.rules.publish", "attendance.rules.publish", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().publish_rule_set_version(db, organization_id=org_id, event_id=event_id, rule_set_id=rule_set_id, version_id=version_id, actor=actor, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_closure_create_match:
+                event_id = int(attendance_closure_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.closure.execute", "attendance.closure.execute", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().close_attendance(db, organization_id=org_id, event_id=event_id, actor=actor, rule_set_version_id=int(data.get("rule_set_version_id") or 0), scope_type=str(data.get("scope_type") or "EVENT"), activity_id=int(data.get("activity_id") or 0) or None, reason=str(data.get("reason") or ""), cutoff_at=str(data.get("cutoff_at") or "").strip() or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_closure_reopen_match:
+                event_id = int(attendance_closure_reopen_match.group(1))
+                closure_id = int(attendance_closure_reopen_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.closure.reopen", "attendance.closure.reopen", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().reopen_closure(db, organization_id=org_id, event_id=event_id, closure_id=closure_id, actor=actor, reason=str(data.get("reason") or ""), idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_eligibility_override_match:
+                event_id = int(attendance_eligibility_override_match.group(1))
+                participant_id = int(attendance_eligibility_override_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_closure_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DEPENDENCY_DISABLED", "error": "Cierre de asistencia V4.2 deshabilitado"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.eligibility.override", "attendance.eligibility.override", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().override_eligibility(db, organization_id=org_id, event_id=event_id, participant_id=participant_id, actor=actor, manual_result=str(data.get("manual_result") or ""), reason=str(data.get("reason") or ""), evidence=data.get("evidence") if isinstance(data.get("evidence"), dict) else {}, closure_id=int(data.get("closure_id") or 0) or None, idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""), correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""))
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_create_match:
+                event_id = int(attendance_create_match.group(1))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.record", "attendance.record", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().record_attendance(
+                            db,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            participant_id=int(data.get("participant_id") or 0) or None,
+                            accreditation_id=int(data.get("accreditation_id") or 0) or None,
+                            activity_id=int(data.get("activity_id") or 0) or None,
+                            attendance_type=str(data.get("attendance_type") or "EVENT"),
+                            status=str(data.get("status") or "PRESENT"),
+                            source=str(data.get("source") or "MANUAL"),
+                            occurred_at=str(data.get("occurred_at") or "").strip() or None,
+                            idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or ""),
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        if exc.code in {"ATTENDANCE_CROSS_TENANT_REFERENCE", "ATTENDANCE_PARTICIPANT_EVENT_MISMATCH", "ATTENDANCE_ACTIVITY_EVENT_MISMATCH"}:
+                            db.execute("BEGIN IMMEDIATE")
+                            audit(db, actor, "attendance.permission_denied", "event", event_id, {"organization_id": org_id, "code": exc.code})
+                            db.execute("COMMIT")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 201)
+                return
+
+            if attendance_correct_match:
+                event_id = int(attendance_correct_match.group(1))
+                attendance_id = int(attendance_correct_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.correct", "attendance.correct", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().correct_attendance(
+                            db,
+                            attendance_id=attendance_id,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            status=str(data.get("status") or ""),
+                            reason=str(data.get("reason") or "").strip(),
+                            metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if attendance_invalidate_match:
+                event_id = int(attendance_invalidate_match.group(1))
+                attendance_id = int(attendance_invalidate_match.group(2))
+                actor_override = str(data.get("actor") or "").strip() or None
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not attendance_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ATTENDANCE_FEATURE_DISABLED", "error": "Asistencia V4 deshabilitada"}, 404)
+                        return
+                    ok, allowed_session = self.require_event_permission(db, event_id, "attendance.invalidate", "attendance.invalidate", actor_override)
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or actor_override or "attendance")
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = attendance_service().invalidate_attendance(
+                            db,
+                            attendance_id=attendance_id,
+                            organization_id=org_id,
+                            event_id=event_id,
+                            actor=actor,
+                            reason=str(data.get("reason") or "").strip(),
+                            correlation_id=str(data.get("correlation_id") or self.headers.get("X-Correlation-ID") or ""),
+                        )
+                    except AttendanceDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(attendance_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
             if path == "/api/waiting-room/join":
                 event_id = int(data.get("event_id") or 0)
                 visitor_id = str(data.get("visitor_id") or "").strip()
@@ -8159,18 +12085,161 @@ class AppHandler(SimpleHTTPRequestHandler):
                 pin = data.get("pin", "").strip()
                 with connect() as db:
                     user = db.execute("SELECT * FROM users WHERE name = ? AND active = 1", (name,)).fetchone()
+                    if user and verify_pin(pin, user["pin_hash"]):
+                        db.execute("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?", (now_iso(), now_iso(), int(user["id"])))
+                        audit(db, user["name"], "user.login", "user", int(user["id"]), {"role": user["role"]})
                 if not user or not verify_pin(pin, user["pin_hash"]):
                     self.send_json({"error": "Usuario o PIN incorrecto"}, 403)
                     return
                 token = secrets.token_urlsafe(32)
-                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "created_at": time.time()}
+                must_change = int(user["must_change_password"] or 0) if "must_change_password" in user.keys() else 0
+                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change, "created_at": time.time()}
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Set-Cookie", f"qr_session={token}; Path=/; HttpOnly; SameSite=Lax")
-                body = json.dumps({"ok": True, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"]}}, ensure_ascii=False).encode("utf-8")
+                body = json.dumps({"ok": True, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change}}, ensure_ascii=False).encode("utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                return
+
+            if path == "/api/auth/change-password":
+                session = self.effective_user()
+                if not session or not session.get("id"):
+                    self.send_json({"error": "No autenticado"}, 403)
+                    return
+                current_pin = str(data.get("current_pin") or "").strip()
+                new_pin = str(data.get("new_pin") or data.get("password") or "").strip()
+                confirm_pin = str(data.get("confirm_pin") or data.get("confirm_password") or "").strip()
+                if new_pin != confirm_pin:
+                    self.send_json({"error": "Las contraseñas no coinciden"}, 400)
+                    return
+                policy_error = validate_password_policy(new_pin)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
+                    return
+                with connect() as db:
+                    user = db.execute("SELECT * FROM users WHERE id = ? AND active = 1", (int(session["id"]),)).fetchone()
+                    if not user:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    must_change = int(user["must_change_password"] or 0) if "must_change_password" in user.keys() else 0
+                    if not must_change and not verify_pin(current_pin, user["pin_hash"]):
+                        self.send_json({"error": "Contraseña actual incorrecta"}, 403)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        "UPDATE users SET pin_hash = ?, must_change_password = 0, password_changed_at = ?, updated_at = ? WHERE id = ?",
+                        (hash_pin(new_pin), now, now, int(user["id"])),
+                    )
+                    audit(db, user["name"], "user.password_changed", "user", int(user["id"]), {"self_service": True})
+                token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
+                if token in AUTH_SESSIONS:
+                    AUTH_SESSIONS[token]["must_change_password"] = 0
+                self.send_json({"ok": True})
+                return
+
+            if path == "/api/admin/bootstrap-reset":
+                if APP_ENV != "staging":
+                    self.send_json({"error": "Operacion disponible solo en staging"}, 403)
+                    return
+                expected_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+                provided_token = str(data.get("reset_token") or "").strip()
+                bootstrap_user = str(data.get("user") or os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER") or "").strip()
+                password = str(data.get("password") or "").strip()
+                if not expected_token or not provided_token or not hmac.compare_digest(expected_token, provided_token):
+                    self.send_json({"error": "Token de recuperacion invalido"}, 403)
+                    return
+                policy_error = validate_password_policy(password)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
+                    return
+                token_hash = hashlib.sha256(provided_token.encode("utf-8")).hexdigest()
+                with connect() as db:
+                    used = db.execute(
+                        "SELECT 1 FROM audit_logs WHERE action = 'user.bootstrap_admin_reset_endpoint' AND payload LIKE ? LIMIT 1",
+                        (f"%{token_hash}%",),
+                    ).fetchone()
+                    if used:
+                        self.send_json({"error": "Token de recuperacion ya utilizado"}, 409)
+                        return
+                    user = db.execute("SELECT id, name FROM users WHERE name = ?", (bootstrap_user,)).fetchone()
+                    if not user:
+                        self.send_json({"error": "Usuario bootstrap inexistente"}, 404)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        UPDATE users
+                        SET role = 'Super Admin',
+                            pin_hash = ?,
+                            active = 1,
+                            must_change_password = 1,
+                            password_changed_at = ?,
+                            updated_at = ?,
+                            disabled_at = NULL
+                        WHERE id = ?
+                        """,
+                        (hash_pin(password), now, now, int(user["id"])),
+                    )
+                    audit(db, "bootstrap", "user.bootstrap_admin_reset_endpoint", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+                self.send_json({"ok": True, "user": bootstrap_user, "must_change_password": True})
+                return
+
+            if path == "/api/admin/demo-full/prepare":
+                if APP_ENV != "staging":
+                    self.send_json({"error": "Operacion disponible solo en staging"}, 403)
+                    return
+                session = self.effective_user()
+                expected_token = os.environ.get("BITORA_ADMIN_BOOTSTRAP_RESET_TOKEN", "").strip()
+                provided_token = str(data.get("reset_token") or "").strip()
+                token_ok = bool(expected_token and provided_token and hmac.compare_digest(expected_token, provided_token))
+                if not token_ok and (not session or session.get("role") not in ADMIN_ROLES):
+                    self.send_json({"error": "Solo administradores pueden preparar la demo"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    result = demo_full_service().prepare(db, actor=(session or {}).get("name") or "demo-full")
+                self.send_json(result)
+                return
+
+            event_feature_flags_match = re.fullmatch(r"/api/events/(\d+)/feature-flags", path)
+            if event_feature_flags_match:
+                event_id = int(event_feature_flags_match.group(1))
+                requested_flags = data.get("flags")
+                if not isinstance(requested_flags, list):
+                    requested_flags = DEMO_FLAGS
+                allowed_flags = set(DEMO_FLAGS)
+                flags = [str(flag).strip() for flag in requested_flags if str(flag).strip() in allowed_flags]
+                if not flags:
+                    self.send_json({"error": "No hay flags validos para habilitar"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, session = self.require_event_permission(db, event_id, "configure_event", "event.feature_flags")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    event = db.execute("SELECT id FROM events WHERE id = ?", (event_id,)).fetchone()
+                    if not event:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    actor = (session or {}).get("name", "system")
+                    now = now_iso()
+                    for flag in flags:
+                        db.execute(
+                            """
+                            INSERT INTO feature_flags (flag_key, scope_type, scope_id, enabled, updated_by, updated_at)
+                            VALUES (?, 'event', ?, 1, ?, ?)
+                            ON CONFLICT(flag_key, scope_type, scope_id)
+                            DO UPDATE SET enabled = 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at
+                            """,
+                            (flag, event_id, actor, now),
+                        )
+                    audit(db, actor, "event.feature_flags_enabled", "event", event_id, {"flags": flags})
+                    payload = event_feature_flags_payload(db, event_id)
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "event_id": event_id, "feature_flags": payload})
                 return
 
             if path == "/api/jobs/cancel":
@@ -8181,6 +12250,152 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 ok = job_queue_service().cancel(int(data.get("job_id") or 0), actor)
                 self.send_json({"ok": ok}, 200 if ok else 409)
+                return
+
+            analytics_snapshot_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/snapshots", path)
+            analytics_reports_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/reports", path)
+            analytics_report_export_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/reports/(\d+)/export", path)
+            analytics_closure_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/closure/reviews", path)
+            analytics_closure_approve_match = re.fullmatch(r"/api/events/(\d+)/analytics-v4/closure/reviews/(\d+)/approve", path)
+            analytics_compare_post_match = re.fullmatch(r"/api/analytics-v4/compare-events", path)
+            if analytics_snapshot_match:
+                event_id = int(analytics_snapshot_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.read", "analytics.snapshot.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or data.get("actor") or "analytics")
+                    try:
+                        result = analytics_closure_service().create_snapshot(db, organization_id=org_id, event_id=event_id, actor=actor, filters=data.get("filters") if isinstance(data.get("filters"), dict) else None)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_reports_match:
+                event_id = int(analytics_reports_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.export", "analytics.report.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().create_report(db, organization_id=org_id, event_id=event_id, actor=str((session or {}).get("name") or "analytics"), data=data)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_report_export_match:
+                event_id = int(analytics_report_export_match.group(1))
+                report_id = int(analytics_report_export_match.group(2))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "analytics.export", "analytics.export")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().export_report(db, organization_id=org_id, event_id=event_id, report_id=report_id, actor=str((session or {}).get("name") or "analytics"), export_format=str(data.get("format") or "json"))
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json({key: value for key, value in result.items() if key != "content"})
+                return
+
+            if analytics_closure_match:
+                event_id = int(analytics_closure_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "functional_closure.manage", "functional_closure.create")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().create_closure_review(db, organization_id=org_id, event_id=event_id, actor=str((session or {}).get("name") or "analytics"), data=data)
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_closure_approve_match:
+                event_id = int(analytics_closure_approve_match.group(1))
+                review_id = int(analytics_closure_approve_match.group(2))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if not analytics_v4_enabled(db, event_id):
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "ANALYTICS_V4_FEATURE_DISABLED", "error": "Analytics V4 deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "functional_closure.approve", "functional_closure.approve")
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    org_id = event_organization_id(db, event_id)
+                    try:
+                        result = analytics_closure_service().approve_closure_review(db, organization_id=org_id, event_id=event_id, review_id=review_id, actor=str((session or {}).get("name") or "analytics"))
+                    except AnalyticsClosureError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result)
+                return
+
+            if analytics_compare_post_match:
+                organization_id = int(data.get("organization_id") or 0)
+                event_ids = []
+                for value in data.get("event_ids", []):
+                    try:
+                        candidate = int(value or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if candidate:
+                        event_ids.append(candidate)
+                with connect() as db:
+                    ok, session = self.require_organization_permission(db, organization_id, "analytics.compare", "analytics.compare")
+                    if not ok:
+                        return
+                    try:
+                        result = analytics_closure_service().compare_events(db, organization_id=organization_id, event_ids=event_ids, actor=str((session or {}).get("name") or "analytics"), filters=data.get("filters") if isinstance(data.get("filters"), dict) else None)
+                    except AnalyticsClosureError as exc:
+                        self.send_json(analytics_closure_error_payload(exc), exc.status_code)
+                        return
+                self.send_json(result)
                 return
 
             if path == "/api/backups/event/inspect":
@@ -8502,6 +12717,90 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "portal": result})
                 return
 
+            if path == "/api/portal/surveys/start":
+                token = data.get("token", "").strip()
+                assignment_id = int(data.get("assignment_id") or 0)
+                if not token or not assignment_id:
+                    self.send_json({"error": "Faltan portal o encuesta"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    portal = portal_payload(db, token)
+                    if not portal:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Portal inexistente"}, 404)
+                        return
+                    assignment = db.execute(
+                        """
+                        SELECT sa.*, s.response_mode, s.duplicate_policy
+                        FROM survey_assignments sa
+                        JOIN surveys s ON s.id = sa.survey_id
+                        WHERE sa.id = ? AND sa.event_id = ? AND sa.status = 'OPEN'
+                        """,
+                        (assignment_id, portal["event_id"]),
+                    ).fetchone()
+                    if not assignment or str(assignment["response_mode"]) != "IDENTIFIED" or str(assignment["access_mode"]) != "EVENT_PARTICIPANTS":
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_NOT_AVAILABLE", "error": "Encuesta no disponible"}, 403)
+                        return
+                    try:
+                        result = survey_service().start_response(
+                            db,
+                            organization_id=event_organization_id(db, int(portal["event_id"])),
+                            event_id=int(portal["event_id"]),
+                            assignment_id=assignment_id,
+                            participant_id=int(portal["person_id"]),
+                            idempotency_key=str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or f"portal-survey-{assignment_id}-{portal['person_id']}"),
+                        )
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    questions = survey_service()._questions_payload(db, int(assignment["version_id"]))
+                    audit(db, "portal", "portal.survey_started", "survey_assignment", assignment_id, {"event_id": portal["event_id"], "person_id": portal["person_id"]})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "session": result["item"], "questions": questions})
+                return
+
+            if path == "/api/portal/surveys/submit":
+                token = data.get("token", "").strip()
+                session_id = int(data.get("session_id") or 0)
+                if not token or not session_id:
+                    self.send_json({"error": "Faltan portal o sesion"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    portal = portal_payload(db, token)
+                    if not portal:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "Portal inexistente"}, 404)
+                        return
+                    session_row = db.execute(
+                        "SELECT * FROM survey_response_sessions WHERE id = ? AND event_id = ? AND participant_id = ?",
+                        (session_id, portal["event_id"], portal["person_id"]),
+                    ).fetchone()
+                    if not session_row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": "SURVEY_SESSION_NOT_FOUND", "error": "Sesion inexistente"}, 404)
+                        return
+                    try:
+                        result = survey_service().submit_response(
+                            db,
+                            organization_id=event_organization_id(db, int(portal["event_id"])),
+                            event_id=int(portal["event_id"]),
+                            session_id=session_id,
+                            answers=data.get("answers") if isinstance(data.get("answers"), list) else [],
+                        )
+                    except SurveyDomainError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json(survey_error_payload(exc), exc.status_code)
+                        return
+                    audit(db, "portal", "portal.survey_submitted", "survey_session", session_id, {"event_id": portal["event_id"], "person_id": portal["person_id"]})
+                    db.execute("COMMIT")
+                    result_portal = portal_payload(db, token)
+                self.send_json({"ok": True, "session": result["item"], "portal": result_portal})
+                return
+
             if path == "/api/portal/reserve":
                 token = data.get("token", "").strip()
                 activity_id = int(data.get("activity_id") or 0)
@@ -8646,8 +12945,308 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "promoted": promoted, "portal": result})
                 return
 
+            if path == "/api/networking/import/preview":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = data.get("rows") or []
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o filas"}, 400)
+                    return
+                with connect() as db:
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.import_preview")
+                        if not ok:
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().preview_import(db, event_id, rows, str(data.get("source_system") or "BITORA"))
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/import":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                rows = data.get("rows") or []
+                if not event_id or not isinstance(rows, list):
+                    self.send_json({"error": "Faltan evento o filas"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.import")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().import_profiles(db, event_id, rows, str(data.get("source_system") or "BITORA"), actor)
+                    audit(db, actor, "networking.imported", "event", event_id, {"summary": {key: result.get(key) for key in ("created", "updated", "errors")}})
+                    db.execute("COMMIT")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/config":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.config")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_config(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.config_updated", "event", event_id, {"networking_profile_mode": result.get("networking_profile_mode"), "networking_readiness_required": result.get("networking_readiness_required"), "networking_readiness_recommended": result.get("networking_readiness_recommended")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/brand":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.brand")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_brand(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.brand_updated", "event", event_id, {"brand_mode": result.get("branding", {}).get("mode"), "public_url_configured": bool(result.get("networking_public_base_url"))})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/launch":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                action = data.get("action") or data.get("networking_launch_action")
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.launch")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_launch_state(db, event_id, str(action or ""), actor=actor, fallback_base_url=configured_base_url(self), app_env=APP_ENV)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.launch_state_updated", "event", event_id, {"state": result.get("networking_launch_state")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/taxonomy":
+                actor = data.get("actor", "Admin")
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if self.login_required():
+                        ok, session = self.require_event_permission(db, event_id, "configure_event", "networking.taxonomy")
+                        if not ok:
+                            db.execute("ROLLBACK")
+                            return
+                        actor = str((session or {}).get("name") or actor)
+                    elif not can_actor(db, actor, CONFIG_ROLES):
+                        db.execute("ROLLBACK")
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    result = networking_service().update_event_taxonomy(db, event_id, data, actor)
+                    if result.get("ok"):
+                        audit(db, actor, "networking.taxonomy_updated", "event", event_id, {"concepts": len(result.get("concepts") or [])})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/external-register":
+                event_id = int(data.get("event_id") or 0)
+                if not event_id:
+                    self.send_json({"error": "Falta evento"}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().external_register(db, event_id, data)
+                    if result.get("ok"):
+                        audit(db, "public", "networking.external_registered", "event", event_id, {"participation_id": result.get("participation_id")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 201 if result.get("ok") else 400)))
+                return
+
+            if path == "/api/networking/onboarding":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().onboard(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/complete-profile":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().complete_profile(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.profile_completed", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery-onboarding":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().discovery_onboarding(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.discovery_onboarded", "networking_participation", result["participation"]["participation_id"], {"event_id": result["participation"]["event_id"]})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/discovery-action":
+                token = data.get("token", "").strip()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().discovery_action(db, token, data)
+                    if result.get("ok"):
+                        audit(db, "participant", f"networking.discovery_{data.get('action') or 'action'}", "networking_participation", result.get("profile", {}).get("participation_id"), {"contact_id": result.get("contact_id")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/networking/scan":
+                token = data.get("token", "").strip()
+                raw_profile = str(data.get("public_profile_id") or data.get("profile_id") or data.get("qr_payload") or "").strip()
+                match = re.search(r"(?:BITORA-NET:)?(NET-[A-Z0-9]+)", raw_profile, re.I)
+                profile_id = match.group(1).upper() if match else raw_profile.upper()
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    result = networking_service().scan(db, token, profile_id)
+                    if result.get("ok"):
+                        audit(db, "participant", "networking.scan_contact", "networking_contact", result.get("contact_id"), {"created": result.get("created")})
+                        db.execute("COMMIT")
+                    else:
+                        db.execute("ROLLBACK")
+                self.send_json(result, int(result.pop("status_code", 200)))
+                return
+
+            if path == "/api/events/update":
+                event_id = int(data.get("event_id") or 0)
+                try:
+                    production_email = normalized_optional_email(data.get("production_email"))
+                except ValueError as exc:
+                    self.send_json({"error": str(exc)}, 400)
+                    return
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, session = self.require_event_permission(db, event_id, "configure_event", "event.update", str(data.get("actor") or ""))
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    db.execute(
+                        """
+                        UPDATE events
+                        SET name = ?, description = ?, venue = ?, starts_at = ?, ends_at = ?,
+                            project_type = ?, capacity = ?, activity_selection_mode = ?,
+                            generar_certificados = ?, controlar_asistencia = ?, attendance_mode = ?,
+                            porcentaje_minimo_asistencia = ?, captation_mode = ?,
+                            primary_action_label = ?, secondary_action_label = ?, whatsapp_number = ?,
+                            activity_access_open_minutes_before = ?, activities_enabled = ?,
+                            capacity_control_enabled = ?, waitlist_enabled = ?, production_email = ?,
+                            portal_visible_tabs = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            str(data.get("name") or "").strip(),
+                            str(data.get("description") or "").strip(),
+                            str(data.get("venue") or "").strip(),
+                            str(data.get("starts_at") or "").strip(),
+                            str(data.get("ends_at") or "").strip(),
+                            normalize_project_type(data.get("project_type")),
+                            int(data.get("capacity") or 0),
+                            str(data.get("activity_selection_mode") or "optional_later").strip() or "optional_later",
+                            1 if truthy(data.get("generar_certificados", True)) else 0,
+                            1 if truthy(data.get("controlar_asistencia", True)) else 0,
+                            str(data.get("attendance_mode") or "entry_only").strip() or "entry_only",
+                            int(data.get("porcentaje_minimo_asistencia") or 80),
+                            str(data.get("captation_mode") or "MIXTO").strip() or "MIXTO",
+                            str(data.get("primary_action_label") or "").strip(),
+                            str(data.get("secondary_action_label") or "").strip(),
+                            str(data.get("whatsapp_number") or "").strip(),
+                            max(0, int(data.get("activity_access_open_minutes_before") or 10)),
+                            1 if truthy(data.get("activities_enabled", True)) else 0,
+                            1 if truthy(data.get("capacity_control_enabled", True)) else 0,
+                            1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            production_email,
+                            portal_visible_tabs_json(data.get("portal_visible_tabs")),
+                            event_id,
+                        ),
+                    )
+                    audit(db, (session or {}).get("name", data.get("actor", "Admin")), "event.updated", "event", event_id, {"fields": sorted(data.keys())})
+                    db.execute("COMMIT")
+                self.send_json({"ok": True, "id": event_id})
+                return
+
             if path == "/api/events":
                 actor = data.get("actor", "Admin")
+                try:
+                    production_email = normalized_optional_email(data.get("production_email"))
+                except ValueError as exc:
+                    self.send_json({"error": str(exc)}, 400)
+                    return
                 with connect() as db:
                     if not can_actor(db, actor, CONFIG_ROLES):
                         self.send_json(deny_message(actor), 403)
@@ -8665,9 +13264,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
-                            capacity_control_enabled, waitlist_enabled, created_at
+                            capacity_control_enabled, waitlist_enabled, production_email,
+                            portal_visible_tabs, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             organization_id,
@@ -8692,6 +13292,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
+                            production_email,
+                            portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             now_iso(),
                         ),
                     )
@@ -9064,9 +13666,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
-                            capacity_control_enabled, waitlist_enabled, created_at
+                            capacity_control_enabled, waitlist_enabled, production_email, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             name,
@@ -9089,6 +13691,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("activities_enabled", True)) else 0,
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", True)) else 0,
+                            normalized_optional_email(data.get("production_email")),
                             now_iso(),
                         ),
                     )
@@ -9328,29 +13931,152 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             if path == "/api/users":
-                actor = data.get("actor", "Admin")
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
                 name = data.get("name", "").strip()
                 role = data.get("role", "").strip()
+                email = str(data.get("email") or "").strip()
+                full_name = str(data.get("full_name") or "").strip()
+                password = str(data.get("pin") or data.get("password") or "").strip()
+                must_change = 1 if truthy(data.get("must_change_password", True)) else 0
+                active = 1 if truthy(data.get("active", True)) else 0
                 if not name or not role:
                     self.send_json({"error": "Falta nombre o rol"}, 400)
+                    return
+                if role not in set(PERMISSION_MATRIX):
+                    self.send_json({"error": "Rol no permitido"}, 400)
+                    return
+                if password:
+                    policy_error = validate_password_policy(password)
+                    if policy_error:
+                        self.send_json({"error": policy_error}, 400)
+                        return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        """
+                        INSERT INTO users (name, role, pin_hash, email, full_name, must_change_password, active, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(name)
+                        DO UPDATE SET role = excluded.role,
+                                      pin_hash = CASE WHEN excluded.pin_hash <> '' THEN excluded.pin_hash ELSE users.pin_hash END,
+                                      email = excluded.email,
+                                      full_name = excluded.full_name,
+                                      must_change_password = CASE WHEN excluded.pin_hash <> '' THEN excluded.must_change_password ELSE users.must_change_password END,
+                                      active = excluded.active,
+                                      updated_at = excluded.updated_at,
+                                      disabled_at = CASE WHEN excluded.active = 0 THEN excluded.updated_at ELSE NULL END
+                        """,
+                        (name, role, hash_pin(password) if password else "", email, full_name, must_change, active, now, now),
+                    )
+                    row = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+                    audit(db, actor, "user.saved", "user", int(row["id"]) if row else None, {"name": name, "role": role, "active": active, "must_change_password": must_change})
+                self.send_json({"ok": True, "user": sanitize_user_row(row) if row else None})
+                return
+
+            if path == "/api/users/password-reset":
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
+                user_id = int(data.get("user_id") or 0)
+                generate = truthy(data.get("generate_password", False))
+                password = generate_temporary_password() if generate else str(data.get("pin") or data.get("password") or "").strip()
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                policy_error = validate_password_policy(password)
+                if policy_error:
+                    self.send_json({"error": policy_error}, 400)
                     return
                 with connect() as db:
                     if not can_actor(db, actor, ADMIN_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    now = now_iso()
                     db.execute(
-                        """
-                        INSERT INTO users (name, role, pin_hash, active, created_at)
-                        VALUES (?, ?, ?, 1, ?)
-                        ON CONFLICT(name)
-                        DO UPDATE SET role = excluded.role,
-                                      pin_hash = CASE WHEN excluded.pin_hash <> '' THEN excluded.pin_hash ELSE users.pin_hash END,
-                                      active = 1
-                        """,
-                        (name, role, hash_pin(str(data.get("pin") or "").strip()) if str(data.get("pin") or "").strip() else "", now_iso()),
+                        "UPDATE users SET pin_hash = ?, must_change_password = 1, password_changed_at = ?, updated_at = ? WHERE id = ?",
+                        (hash_pin(password), now, now, user_id),
                     )
-                    audit(db, actor, "user.saved", "user", None, {"name": name, "role": role})
+                    audit(db, actor, "user.password_reset", "user", user_id, {"name": row["name"], "must_change_password": 1})
+                response = {"ok": True}
+                if generate:
+                    response["temporary_password"] = password
+                self.send_json(response)
+                return
+
+            if path == "/api/users/status":
+                session = self.effective_user()
+                actor = session.get("name") if session else data.get("actor", "Admin")
+                user_id = int(data.get("user_id") or 0)
+                active = 1 if truthy(data.get("active", True)) else 0
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                if session and int(session.get("id") or 0) == user_id and not active:
+                    self.send_json({"error": "No podes desactivar tu propio usuario"}, 409)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    now = now_iso()
+                    db.execute(
+                        "UPDATE users SET active = ?, updated_at = ?, disabled_at = ? WHERE id = ?",
+                        (active, now, now if not active else None, user_id),
+                    )
+                    audit(db, actor, "user.activated" if active else "user.deactivated", "user", user_id, {"name": row["name"]})
                 self.send_json({"ok": True})
+                return
+
+            if path == "/api/users/delete":
+                session = self.effective_user()
+                actor = session.get("name") if self.login_required() and session else data.get("actor", (session or {}).get("name", "Admin"))
+                user_id = int(data.get("user_id") or 0)
+                if not user_id:
+                    self.send_json({"error": "Falta usuario"}, 400)
+                    return
+                if session and int(session.get("id") or 0) == user_id:
+                    self.send_json({"error": "No podes eliminar tu propio usuario"}, 409)
+                    return
+                with connect() as db:
+                    if not can_actor(db, actor, ADMIN_ROLES):
+                        self.send_json(deny_message(actor), 403)
+                        return
+                    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    if not row:
+                        self.send_json({"error": "Usuario inexistente"}, 404)
+                        return
+                    if row["role"] == "Super Admin" and int(row["active"] or 0):
+                        active_super_admins = int(db.execute(
+                            "SELECT COUNT(*) AS c FROM users WHERE role = 'Super Admin' AND active = 1 AND id <> ?",
+                            (user_id,),
+                        ).fetchone()["c"] or 0)
+                        if active_super_admins < 1:
+                            self.send_json({"error": "No se puede eliminar el unico Super Admin del sistema."}, 409)
+                            return
+                    payload = {
+                        "name": row["name"],
+                        "role": row["role"],
+                        "email": row["email"] or "",
+                        "event_roles": int(db.execute("SELECT COUNT(*) AS c FROM user_event_roles WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                        "organization_memberships": int(db.execute("SELECT COUNT(*) AS c FROM organization_users WHERE user_id = ?", (user_id,)).fetchone()["c"] or 0),
+                    }
+                    audit(db, actor, "user.deleted", "user", user_id, payload)
+                    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                for token, auth_session in list(AUTH_SESSIONS.items()):
+                    if int(auth_session.get("id") or 0) == user_id:
+                        AUTH_SESSIONS.pop(token, None)
+                self.send_json({"ok": True, "deleted_user": {"id": user_id, "name": payload["name"], "role": payload["role"]}})
                 return
 
             if path == "/api/event-users":
@@ -10400,8 +15126,8 @@ class _TextWriter:
 
 def main() -> None:
     configuration = validate_production_configuration()
-    if APP_ENV == "production" and not configuration["ok"]:
-        raise RuntimeError("Configuracion productiva invalida: " + "; ".join(configuration["errors"]))
+    if APP_ENV in ONLINE_ENVS and not configuration["ok"]:
+        raise RuntimeError("Configuracion online invalida: " + "; ".join(configuration["errors"]))
     STORAGE.ensure()
     init_db()
     seed_if_empty()
@@ -10423,9 +15149,9 @@ def main() -> None:
     if not truthy(os.environ.get("BITORA_DISABLE_EMBEDDED_WORKER", "0")):
         start_job_worker()
     start_simulator_loop()
-    if APP_ENV in {"demo", "production"} and HTTPS_REQUIRED and not BASE_URL:
+    if APP_ENV in {"demo", "staging", "production"} and HTTPS_REQUIRED and not BASE_URL:
         print("ADVERTENCIA: HTTPS_REQUIRED esta activo pero BASE_URL no fue definido")
-    host = os.environ.get("QR_HOST", "0.0.0.0" if APP_ENV in {"demo", "production"} else "localhost")
+    host = os.environ.get("QR_HOST", os.environ.get("HOST", "0.0.0.0" if APP_ENV in {"demo", "staging", "production"} else "localhost"))
     port = int(os.environ.get("PORT") or os.environ.get("QR_PORT") or "8787")
     start_auto_backup()
     httpd = OperationalHTTPServer((host, port), AppHandler)
@@ -10433,10 +15159,11 @@ def main() -> None:
     print(f"BITORA {APP_VERSION} iniciada")
     print(f"Entorno: {APP_ENV}")
     print(f"Base URL: {configured_base_url()}")
-    print(f"Base de datos: {DB_CONFIG.engine} ({DB_PATH})")
+    database_label = f"sqlite ({DB_PATH})" if DB_CONFIG.engine == "sqlite" else "postgres"
+    print(f"Base de datos: {database_label}")
     print(f"Plataforma lista en http://{host}:{port}")
-    if httpd.require_login:
-        print("Consola protegida con PIN. PIN inicial: Admin=1234, Recepcion=2222, Acceso=3333")
+    if httpd.require_login and APP_ENV not in ONLINE_ENVS:
+        print("Consola protegida. Use scripts/bootstrap_test_users.py en local/staging para crear accesos temporales.")
     if AUTO_BACKUP_MINUTES > 0:
         print(f"Backup automatico cada {AUTO_BACKUP_MINUTES} min, conserva {BACKUP_KEEP_LAST} copias")
     try:

@@ -124,10 +124,11 @@ class PostgresBackupService:
 class ProductionBackupManager:
     """Creates a restorable bundle with database backup, storage and manifest."""
 
-    def __init__(self, database_backup, backup_dir: Path, storage_root: Path) -> None:
+    def __init__(self, database_backup, backup_dir: Path, storage_root: Path, storage=None) -> None:
         self.database_backup = database_backup
         self.backup_dir = Path(backup_dir)
         self.storage_root = Path(storage_root)
+        self.storage = storage
 
     def create_bundle(self) -> Path:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +147,17 @@ class ProductionBackupManager:
         }
         with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.write(database_path, f"database/{database_path.name}")
-            if self.storage_root.exists():
+            if self.storage is not None and getattr(self.storage, "backend", "local") != "local":
+                for item in self.storage.inventory():
+                    key = item["key"]
+                    if key.startswith("backups/"):
+                        continue
+                    content = self.storage.read_key(key)
+                    if hashlib.sha256(content).hexdigest() != item.get("sha256"):
+                        raise ValueError("Checksum de storage invalido")
+                    manifest["storage"].append(item)
+                    archive.writestr(f"storage/{key}", content)
+            elif self.storage_root.exists():
                 for path in sorted(item for item in self.storage_root.rglob("*") if item.is_file()):
                     relative = path.relative_to(self.storage_root).as_posix()
                     manifest["storage"].append(
@@ -154,6 +165,8 @@ class ProductionBackupManager:
                     )
                     archive.write(path, f"storage/{relative}")
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        if self.storage is not None and getattr(self.storage, "backend", "local") != "local":
+            self.storage.save("backups", bundle.name, bundle.read_bytes())
         keep_last = getattr(self.database_backup, "keep_last", lambda: 24)()
         bundles = sorted(self.backup_dir.glob("bitora-production-*.zip"), key=lambda item: item.stat().st_mtime, reverse=True)
         for old_bundle in bundles[max(0, int(keep_last)):]:
@@ -219,6 +232,16 @@ class EventBackupService:
     """Creates event-scoped export bundles without leaking other events."""
 
     EVENT_TABLES = [
+        (
+            "organizations",
+            """
+            SELECT o.*
+            FROM organizations o
+            JOIN events e ON e.organization_id = o.id
+            WHERE e.id = ?
+            """,
+            lambda event_id: (event_id,),
+        ),
         ("events", "SELECT * FROM events WHERE id = ?", lambda event_id: (event_id,)),
         ("accreditation_types", "SELECT * FROM accreditation_types WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("spaces", "SELECT * FROM spaces WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -232,11 +255,18 @@ class EventBackupService:
             """
             SELECT DISTINCT p.*
             FROM people p
-            JOIN accreditations a ON a.person_id = p.id
-            WHERE a.event_id = ?
+            WHERE p.id IN (
+                SELECT a.person_id
+                FROM accreditations a
+                WHERE a.event_id = ?
+                UNION
+                SELECT nep.person_id
+                FROM networking_event_participations nep
+                WHERE nep.event_id = ?
+            )
             ORDER BY p.id
             """,
-            lambda event_id: (event_id,),
+            lambda event_id: (event_id, event_id),
         ),
         (
             "participant_communication_preferences",
@@ -251,17 +281,182 @@ class EventBackupService:
         ),
         ("reservations", "SELECT * FROM reservations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("access_logs", "SELECT * FROM access_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "networking_organizations",
+            """
+            SELECT DISTINCT no.*
+            FROM networking_organizations no
+            JOIN networking_event_participations nep ON nep.organization_id = no.id
+            WHERE nep.event_id = ?
+            ORDER BY no.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_event_participations",
+            "SELECT * FROM networking_event_participations WHERE event_id = ? ORDER BY id",
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_intents",
+            """
+            SELECT ni.*
+            FROM networking_intents ni
+            JOIN networking_event_participations nep ON nep.id = ni.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY ni.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "networking_contact_channels",
+            """
+            SELECT nc.*
+            FROM networking_contact_channels nc
+            JOIN networking_event_participations nep ON nep.id = nc.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY nc.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("networking_taxonomy_concepts", "SELECT * FROM networking_taxonomy_concepts ORDER BY id", lambda event_id: ()),
+        ("networking_event_taxonomy_concepts", "SELECT * FROM networking_event_taxonomy_concepts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("networking_event_vocabulary_candidates", "SELECT * FROM networking_event_vocabulary_candidates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "networking_classifications",
+            """
+            SELECT nc.*
+            FROM networking_classifications nc
+            JOIN networking_event_participations nep ON nep.id = nc.participation_id
+            WHERE nep.event_id = ?
+            ORDER BY nc.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("networking_semantic_classifications", "SELECT * FROM networking_semantic_classifications WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("networking_contacts", "SELECT * FROM networking_contacts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("networking_interaction_events", "SELECT * FROM networking_interaction_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_logs", "SELECT * FROM communication_logs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_queue", "SELECT * FROM communication_queue WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("email_delivery_events", "SELECT * FROM email_delivery_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_assistant_history", "SELECT * FROM communication_assistant_history WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_tickets", "SELECT * FROM communication_tickets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("communication_templates", "SELECT * FROM communication_templates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_templates", "SELECT * FROM communication_v4_templates WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_template_versions", "SELECT * FROM communication_v4_template_versions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_segments", "SELECT * FROM communication_v4_segments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_campaigns", "SELECT * FROM communication_v4_campaigns WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_campaign_recipients", "SELECT * FROM communication_v4_campaign_recipients WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_messages", "SELECT * FROM communication_v4_messages WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_deliveries", "SELECT * FROM communication_v4_deliveries WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_attempts", "SELECT * FROM communication_v4_attempts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_consents", "SELECT * FROM communication_v4_consents WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_suppressions", "SELECT * FROM communication_v4_suppressions WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_unsubscribes", "SELECT * FROM communication_v4_unsubscribes WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("communication_v4_automations", "SELECT * FROM communication_v4_automations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_automation_runs", "SELECT * FROM communication_v4_automation_runs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_provider_events", "SELECT * FROM communication_v4_provider_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("communication_v4_approvals", "SELECT * FROM communication_v4_approvals WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("participant_announcements", "SELECT * FROM participant_announcements WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("captation_events", "SELECT * FROM captation_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("conversation_sources", "SELECT * FROM conversation_sources WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("activity_attendance", "SELECT * FROM activity_attendance WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_records", "SELECT * FROM attendance_records WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_events", "SELECT * FROM attendance_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_corrections", "SELECT * FROM attendance_corrections WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_rule_sets", "SELECT * FROM attendance_rule_sets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_rule_set_versions", "SELECT * FROM attendance_rule_set_versions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_closures", "SELECT * FROM attendance_closures WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_evaluations", "SELECT * FROM attendance_evaluations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_evaluation_items", "SELECT * FROM attendance_evaluation_items WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_eligibility_decisions", "SELECT * FROM attendance_eligibility_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_overrides", "SELECT * FROM attendance_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("attendance_reopenings", "SELECT * FROM attendance_reopenings WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("certificate_eligibility", "SELECT * FROM certificate_eligibility WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_types", "SELECT * FROM certificate_types WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_templates", "SELECT * FROM certificate_templates WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_template_versions", "SELECT * FROM certificate_template_versions WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_number_sequences", "SELECT * FROM certificate_number_sequences WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("certificate_batches", "SELECT * FROM certificate_batches WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_issuances", "SELECT * FROM certificate_issuances WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_documents", "SELECT * FROM certificate_documents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_verification_tokens", "SELECT * FROM certificate_verification_tokens WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_revocations", "SELECT * FROM certificate_revocations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("certificate_reissuances", "SELECT * FROM certificate_reissuances WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_types", "SELECT * FROM survey_types WHERE event_id = ? OR (event_id IS NULL AND organization_id = (SELECT organization_id FROM events WHERE id = ?)) ORDER BY id", lambda event_id: (event_id, event_id)),
+        ("surveys", "SELECT * FROM surveys WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_versions", "SELECT * FROM survey_versions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_questions", "SELECT * FROM survey_questions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_question_options", "SELECT * FROM survey_question_options WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_assignments", "SELECT * FROM survey_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_access_tokens", "SELECT * FROM survey_access_tokens WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_response_sessions", "SELECT * FROM survey_response_sessions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_answers", "SELECT * FROM survey_answers WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("survey_answer_options", "SELECT * FROM survey_answer_options WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("event_zones", "SELECT * FROM event_zones WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_assignments", "SELECT * FROM zone_access_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_validations", "SELECT * FROM zone_access_validations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("zone_access_overrides", "SELECT * FROM zone_access_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("duplicate_resolution_decisions", "SELECT * FROM duplicate_resolution_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_alerts", "SELECT * FROM operations_center_alerts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_incidents", "SELECT * FROM operations_center_incidents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("operations_center_tasks", "SELECT * FROM operations_center_tasks WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_snapshots", "SELECT * FROM analytics_v4_snapshots WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_reports", "SELECT * FROM analytics_v4_reports WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_export_jobs", "SELECT * FROM analytics_v4_export_jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_saved_views", "SELECT * FROM analytics_v4_saved_views WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("analytics_v4_data_quality_issues", "SELECT * FROM analytics_v4_data_quality_issues WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_reviews", "SELECT * FROM functional_closure_reviews WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_gate_results", "SELECT * FROM functional_closure_gate_results WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_findings", "SELECT * FROM functional_closure_findings WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("functional_closure_actions", "SELECT * FROM functional_closure_actions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "speaker_profiles",
+            """
+            SELECT DISTINCT sp.*
+            FROM speaker_profiles sp
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = sp.id
+            WHERE sea.event_id = ?
+            ORDER BY sp.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "speaker_private_details",
+            """
+            SELECT DISTINCT spd.*
+            FROM speaker_private_details spd
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = spd.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY spd.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        (
+            "speaker_profile_versions",
+            """
+            SELECT DISTINCT spv.*
+            FROM speaker_profile_versions spv
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = spv.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY spv.id
+            """,
+            lambda event_id: (event_id,),
+        ),
+        ("speaker_event_assignments", "SELECT * FROM speaker_event_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("speaker_activity_assignments", "SELECT * FROM speaker_activity_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("speaker_documents", "SELECT * FROM speaker_documents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        (
+            "speaker_access_tokens",
+            """
+            SELECT DISTINCT sat.*
+            FROM speaker_access_tokens sat
+            JOIN speaker_event_assignments sea ON sea.speaker_profile_id = sat.speaker_profile_id
+            WHERE sea.event_id = ?
+            ORDER BY sat.id
+            """,
+            lambda event_id: (event_id,),
+        ),
         ("jobs", "SELECT * FROM jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("waiting_room_visitors", "SELECT * FROM waiting_room_visitors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("simulator_state", "SELECT * FROM simulator_state WHERE event_id = ?", lambda event_id: (event_id,)),
@@ -323,12 +518,13 @@ class EventBackupService:
             if self.storage:
                 for item in storage_files:
                     key = item.get("key") or ""
-                    path = (self.storage.root / key).resolve()
-                    root = self.storage.root.resolve()
-                    if root not in path.parents:
-                        raise ValueError("Archivo de storage fuera de raiz")
-                    archive.write(path, f"storage/{key}")
+                    content = self.storage.read_key(key)
+                    if hashlib.sha256(content).hexdigest() != item.get("sha256"):
+                        raise ValueError("Checksum de storage invalido")
+                    archive.writestr(f"storage/{key}", content)
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        if self.storage and getattr(self.storage, "backend", "local") != "local":
+            self.storage.save("backups", bundle.name, bundle.read_bytes())
         return bundle
 
     def verify_event_bundle(self, bundle: Path) -> dict:
@@ -399,7 +595,7 @@ class EventBackupService:
 class EventRestoreService:
     """Validates and restores event backup bundles with ID remapping."""
 
-    MAX_BACKUP_BYTES = 25 * 1024 * 1024
+    MAX_BACKUP_BYTES = 100 * 1024 * 1024
     SUPPORTED_SCHEMA_VERSIONS = {1}
     INSERT_ORDER = [
         "accreditation_types",
@@ -414,9 +610,90 @@ class EventRestoreService:
         "participant_communication_preferences",
         "accreditations",
         "reservations",
+        "communication_v4_templates",
+        "communication_v4_template_versions",
+        "communication_v4_segments",
+        "communication_v4_campaigns",
+        "communication_v4_campaign_recipients",
+        "communication_v4_messages",
+        "communication_v4_deliveries",
+        "communication_v4_attempts",
+        "communication_v4_consents",
+        "communication_v4_suppressions",
+        "communication_v4_unsubscribes",
+        "communication_v4_automations",
+        "communication_v4_automation_runs",
+        "communication_v4_provider_events",
+        "communication_v4_approvals",
         "activity_attendance",
+        "attendance_records",
+        "attendance_events",
+        "attendance_corrections",
+        "attendance_rule_sets",
+        "attendance_rule_set_versions",
+        "attendance_closures",
+        "attendance_evaluations",
+        "attendance_evaluation_items",
+        "attendance_eligibility_decisions",
+        "attendance_overrides",
+        "attendance_reopenings",
         "certificate_eligibility",
+        "certificate_types",
+        "certificate_templates",
+        "certificate_template_versions",
+        "certificate_number_sequences",
+        "certificate_batches",
+        "certificate_issuances",
+        "certificate_documents",
+        "certificate_verification_tokens",
+        "certificate_revocations",
+        "certificate_reissuances",
+        "survey_types",
+        "surveys",
+        "survey_versions",
+        "survey_questions",
+        "survey_question_options",
+        "survey_assignments",
+        "survey_access_tokens",
+        "survey_response_sessions",
+        "survey_answers",
+        "survey_answer_options",
+        "event_zones",
+        "zone_access_assignments",
+        "zone_access_validations",
+        "zone_access_overrides",
+        "duplicate_resolution_decisions",
+        "operations_center_alerts",
+        "operations_center_incidents",
+        "operations_center_tasks",
+        "analytics_v4_snapshots",
+        "analytics_v4_reports",
+        "analytics_v4_export_jobs",
+        "analytics_v4_saved_views",
+        "analytics_v4_data_quality_issues",
+        "functional_closure_reviews",
+        "functional_closure_gate_results",
+        "functional_closure_findings",
+        "functional_closure_actions",
+        "speaker_profiles",
+        "speaker_private_details",
+        "speaker_profile_versions",
+        "speaker_event_assignments",
+        "speaker_activity_assignments",
+        "speaker_documents",
+        "speaker_access_tokens",
         "access_logs",
+        "networking_taxonomy_concepts",
+        "networking_organizations",
+        "networking_event_taxonomy_concepts",
+        "networking_event_vocabulary_candidates",
+        "networking_event_participations",
+        "networking_intents",
+        "networking_contact_channels",
+        "networking_classifications",
+        "networking_semantic_classifications",
+        "networking_contacts",
+        "networking_interaction_events",
         "communication_logs",
         "communication_queue",
         "email_delivery_events",
@@ -494,9 +771,12 @@ class EventRestoreService:
                 "activities": counts.get("activities", 0),
                 "reservations": counts.get("reservations", 0),
                 "accesses": counts.get("access_logs", 0),
-                "attendance": counts.get("activity_attendance", 0),
-                "certificates": counts.get("certificate_eligibility", 0),
+                "attendance": counts.get("activity_attendance", 0) + counts.get("attendance_records", 0),
+                "attendance_closures": counts.get("attendance_closures", 0),
+                "certificates": counts.get("certificate_eligibility", 0) + counts.get("certificate_issuances", 0),
                 "communications": counts.get("communication_logs", 0) + counts.get("communication_queue", 0),
+                "analytics": counts.get("analytics_v4_snapshots", 0) + counts.get("analytics_v4_reports", 0),
+                "functional_closure": counts.get("functional_closure_reviews", 0),
                 "templates": counts.get("communication_templates", 0),
                 "users_assigned": counts.get("event_users", 0),
                 "files": len(manifest.get("storage") or []),
@@ -554,6 +834,81 @@ class EventRestoreService:
                     "capacity_bags": {},
                     "accreditations": {},
                     "reservations": {},
+                    "attendance_records": {},
+                    "attendance_rule_sets": {},
+                    "attendance_rule_set_versions": {},
+                    "attendance_closures": {},
+                    "attendance_evaluations": {},
+                    "attendance_eligibility_decisions": {},
+                    "attendance_overrides": {},
+                    "attendance_reopenings": {},
+                    "certificate_types": {},
+                    "certificate_templates": {},
+                    "certificate_template_versions": {},
+                    "certificate_number_sequences": {},
+                    "certificate_batches": {},
+                    "certificate_issuances": {},
+                    "certificate_documents": {},
+                    "certificate_verification_tokens": {},
+                    "certificate_revocations": {},
+                    "certificate_reissuances": {},
+                    "survey_types": {},
+                    "surveys": {},
+                    "survey_versions": {},
+                    "survey_questions": {},
+                    "survey_question_options": {},
+                    "survey_assignments": {},
+                    "survey_access_tokens": {},
+                    "survey_response_sessions": {},
+                    "survey_answers": {},
+                    "survey_answer_options": {},
+                    "event_zones": {},
+                    "zone_access_assignments": {},
+                    "zone_access_validations": {},
+                    "zone_access_overrides": {},
+                    "duplicate_resolution_decisions": {},
+                    "analytics_v4_snapshots": {},
+                    "analytics_v4_reports": {},
+                    "analytics_v4_export_jobs": {},
+                    "analytics_v4_saved_views": {},
+                    "analytics_v4_data_quality_issues": {},
+                    "functional_closure_reviews": {},
+                    "functional_closure_gate_results": {},
+                    "functional_closure_findings": {},
+                    "functional_closure_actions": {},
+                    "speaker_profiles": {},
+                    "speaker_private_details": {},
+                    "speaker_profile_versions": {},
+                    "speaker_event_assignments": {},
+                    "speaker_activity_assignments": {},
+                    "speaker_documents": {},
+                    "speaker_access_tokens": {},
+                    "networking_taxonomy_concepts": {},
+                    "networking_organizations": {},
+                    "networking_event_taxonomy_concepts": {},
+                    "networking_event_vocabulary_candidates": {},
+                    "networking_event_participations": {},
+                    "networking_intents": {},
+                    "networking_contact_channels": {},
+                    "networking_classifications": {},
+                    "networking_semantic_classifications": {},
+                    "networking_contacts": {},
+                    "networking_interaction_events": {},
+                    "communication_v4_templates": {},
+                    "communication_v4_template_versions": {},
+                    "communication_v4_segments": {},
+                    "communication_v4_campaigns": {},
+                    "communication_v4_campaign_recipients": {},
+                    "communication_v4_messages": {},
+                    "communication_v4_deliveries": {},
+                    "communication_v4_attempts": {},
+                    "communication_v4_consents": {},
+                    "communication_v4_suppressions": {},
+                    "communication_v4_unsubscribes": {},
+                    "communication_v4_automations": {},
+                    "communication_v4_automation_runs": {},
+                    "communication_v4_provider_events": {},
+                    "communication_v4_approvals": {},
                     "communication_queue": {},
                 }
                 token_map: dict[str, str] = {}
@@ -568,6 +923,10 @@ class EventRestoreService:
                     elif table not in {"people", "event_users"}:
                         self._restore_generic(db, table, payload, maps, token_map, actor)
 
+                self._repair_certificate_template_versions(db, payload, maps)
+                self._repair_survey_versions(db, payload, maps)
+                self._repair_speaker_versions(db, payload, maps)
+                self._repair_communication_v4_versions(db, payload, maps)
                 self._validate_restored(db, payload, new_event_id)
                 files_restored = self._restore_storage_files(raw, manifest, int(payload.get("event_id") or 0), new_event_id)
                 duration_ms = int((datetime.now() - started).total_seconds() * 1000)
@@ -694,6 +1053,7 @@ class EventRestoreService:
 
     def _create_event_row(self, db, payload: dict, actor: str, new_event_name: str) -> int:
         source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        self._ensure_event_organization(db, payload, source)
         source.pop("id", None)
         source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
         source["status"] = "draft"
@@ -702,6 +1062,7 @@ class EventRestoreService:
 
     def _restore_event_row(self, db, payload: dict, event_id: int, actor: str, new_event_name: str, overwrite: bool) -> None:
         source = dict((payload.get("tables") or {}).get("events", [{}])[0])
+        self._ensure_event_organization(db, payload, source)
         source.pop("id", None)
         source["name"] = str(new_event_name or source.get("name") or "Evento restaurado").strip()
         source["status"] = "draft"
@@ -709,6 +1070,37 @@ class EventRestoreService:
         columns = [name for name in source if name in self._columns(db, "events")]
         assignments = ", ".join(f"{name} = ?" for name in columns)
         db.execute(f"UPDATE events SET {assignments} WHERE id = ?", [source[name] for name in columns] + [event_id])
+
+    def _ensure_event_organization(self, db, payload: dict, event_row: dict) -> None:
+        organization_id = int(event_row.get("organization_id") or 0)
+        if not organization_id or "organization_id" not in self._columns(db, "events"):
+            return
+        if db.execute("SELECT id FROM organizations WHERE id = ?", (organization_id,)).fetchone():
+            return
+        org_rows = [
+            dict(row)
+            for row in (payload.get("tables") or {}).get("organizations", [])
+            if int(row.get("id") or 0) == organization_id
+        ]
+        if org_rows:
+            self._insert_row(db, "organizations", org_rows[0])
+            return
+        now = self.now()
+        fallback = {
+            "id": organization_id,
+            "public_id": f"restored-org-{organization_id}",
+            "name": f"Organizacion restaurada {organization_id}",
+            "legal_name": f"Organizacion restaurada {organization_id}",
+            "status": "active",
+            "plan": "standard",
+            "safe_mode_email": 1,
+            "safe_mode_whatsapp": 1,
+            "force_email_recipient": "restore@example.test",
+            "force_whatsapp_recipient": "5491100000000",
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._insert_row(db, "organizations", fallback)
 
     def _restore_people(self, db, payload: dict, maps: dict, conflicts: list[dict]) -> None:
         for row in (payload.get("tables") or {}).get("people", []):
@@ -757,12 +1149,179 @@ class EventRestoreService:
                 row["bag_id"] = maps["capacity_bags"].get(int(row["bag_id"]), row["bag_id"])
             if "person_id" in row and row.get("person_id") is not None:
                 row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
+            if table.startswith("networking_") and "organization_id" in row and row.get("organization_id") is not None:
+                row["organization_id"] = maps["networking_organizations"].get(int(row["organization_id"]), row["organization_id"])
+            if table.startswith("networking_") and "participation_id" in row and row.get("participation_id") is not None:
+                row["participation_id"] = maps["networking_event_participations"].get(int(row["participation_id"]), row["participation_id"])
+            if table.startswith("networking_") and "owner_participation_id" in row and row.get("owner_participation_id") is not None:
+                row["owner_participation_id"] = maps["networking_event_participations"].get(int(row["owner_participation_id"]), row["owner_participation_id"])
+            if table.startswith("networking_") and "target_participation_id" in row and row.get("target_participation_id") is not None:
+                row["target_participation_id"] = maps["networking_event_participations"].get(int(row["target_participation_id"]), row["target_participation_id"])
+            if table.startswith("networking_") and "actor_participation_id" in row and row.get("actor_participation_id") is not None:
+                row["actor_participation_id"] = maps["networking_event_participations"].get(int(row["actor_participation_id"]), row["actor_participation_id"])
+            if table == "networking_semantic_classifications" and row.get("owner_id") is not None:
+                owner_type = str(row.get("owner_type") or "").upper()
+                if owner_type == "ORGANIZATION":
+                    row["owner_id"] = maps["networking_organizations"].get(int(row["owner_id"]), row["owner_id"])
+                elif owner_type == "PERSON":
+                    row["owner_id"] = maps["people"].get(int(row["owner_id"]), row["owner_id"])
+                elif owner_type == "PARTICIPATION":
+                    row["owner_id"] = maps["networking_event_participations"].get(int(row["owner_id"]), row["owner_id"])
+            if "participant_id" in row and row.get("participant_id") is not None:
+                row["participant_id"] = maps["people"].get(int(row["participant_id"]), row["participant_id"])
+            if "candidate_person_id" in row and row.get("candidate_person_id") is not None:
+                row["candidate_person_id"] = maps["people"].get(int(row["candidate_person_id"]), row["candidate_person_id"])
             if "accreditation_id" in row and row.get("accreditation_id") is not None:
                 row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
+            if "attendance_id" in row and row.get("attendance_id") is not None:
+                row["attendance_id"] = maps["attendance_records"].get(int(row["attendance_id"]), row["attendance_id"])
+            if "rule_set_id" in row and row.get("rule_set_id") is not None:
+                row["rule_set_id"] = maps["attendance_rule_sets"].get(int(row["rule_set_id"]), row["rule_set_id"])
+            if table == "communication_v4_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["communication_v4_template_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            elif table == "certificate_templates" and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["certificate_template_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            elif table == "surveys" and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["survey_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            elif "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["attendance_rule_set_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            if "rule_set_version_id" in row and row.get("rule_set_version_id") is not None:
+                row["rule_set_version_id"] = maps["attendance_rule_set_versions"].get(int(row["rule_set_version_id"]), row["rule_set_version_id"])
+            if "closure_id" in row and row.get("closure_id") is not None:
+                row["closure_id"] = maps["attendance_closures"].get(int(row["closure_id"]), row["closure_id"])
+            if "supersedes_closure_id" in row and row.get("supersedes_closure_id") is not None:
+                row["supersedes_closure_id"] = maps["attendance_closures"].get(int(row["supersedes_closure_id"]), row["supersedes_closure_id"])
+            if "evaluation_id" in row and row.get("evaluation_id") is not None:
+                row["evaluation_id"] = maps["attendance_evaluations"].get(int(row["evaluation_id"]), row["evaluation_id"])
+            if "override_id" in row and row.get("override_id") is not None:
+                row["override_id"] = maps["attendance_overrides"].get(int(row["override_id"]), row["override_id"])
+            if "attendance_record_id" in row and row.get("attendance_record_id") is not None:
+                row["attendance_record_id"] = maps["attendance_records"].get(int(row["attendance_record_id"]), row["attendance_record_id"])
             if "reservation_id" in row and row.get("reservation_id") is not None:
                 row["reservation_id"] = maps["reservations"].get(int(row["reservation_id"]), row["reservation_id"])
             if "queue_id" in row and row.get("queue_id") is not None:
                 row["queue_id"] = maps["communication_queue"].get(int(row["queue_id"]), row["queue_id"])
+            if table.startswith("communication_v4_"):
+                if "template_id" in row and row.get("template_id") is not None:
+                    row["template_id"] = maps["communication_v4_templates"].get(int(row["template_id"]), row["template_id"])
+                if "template_version_id" in row and row.get("template_version_id") is not None:
+                    row["template_version_id"] = maps["communication_v4_template_versions"].get(int(row["template_version_id"]), row["template_version_id"])
+                if "segment_id" in row and row.get("segment_id") is not None:
+                    row["segment_id"] = maps["communication_v4_segments"].get(int(row["segment_id"]), row["segment_id"])
+                if "campaign_id" in row and row.get("campaign_id") is not None:
+                    row["campaign_id"] = maps["communication_v4_campaigns"].get(int(row["campaign_id"]), row["campaign_id"])
+                if "campaign_recipient_id" in row and row.get("campaign_recipient_id") is not None:
+                    row["campaign_recipient_id"] = maps["communication_v4_campaign_recipients"].get(int(row["campaign_recipient_id"]), row["campaign_recipient_id"])
+                if "message_id" in row and row.get("message_id") is not None:
+                    row["message_id"] = maps["communication_v4_messages"].get(int(row["message_id"]), row["message_id"])
+                if "delivery_id" in row and row.get("delivery_id") is not None:
+                    row["delivery_id"] = maps["communication_v4_deliveries"].get(int(row["delivery_id"]), row["delivery_id"])
+                if "automation_id" in row and row.get("automation_id") is not None:
+                    row["automation_id"] = maps["communication_v4_automations"].get(int(row["automation_id"]), row["automation_id"])
+            if not table.startswith("communication_v4_") and "certificate_type_id" in row and row.get("certificate_type_id") is not None:
+                row["certificate_type_id"] = maps["certificate_types"].get(int(row["certificate_type_id"]), row["certificate_type_id"])
+            if not table.startswith("communication_v4_") and "template_id" in row and row.get("template_id") is not None:
+                row["template_id"] = maps["certificate_templates"].get(int(row["template_id"]), row["template_id"])
+            if not table.startswith("communication_v4_") and "template_version_id" in row and row.get("template_version_id") is not None:
+                row["template_version_id"] = maps["certificate_template_versions"].get(int(row["template_version_id"]), row["template_version_id"])
+            if "eligibility_decision_id" in row and row.get("eligibility_decision_id") is not None:
+                row["eligibility_decision_id"] = maps["attendance_eligibility_decisions"].get(int(row["eligibility_decision_id"]), row["eligibility_decision_id"])
+            if "attendance_closure_id" in row and row.get("attendance_closure_id") is not None:
+                row["attendance_closure_id"] = maps["attendance_closures"].get(int(row["attendance_closure_id"]), row["attendance_closure_id"])
+            if "batch_id" in row and row.get("batch_id") is not None:
+                row["batch_id"] = maps["certificate_batches"].get(int(row["batch_id"]), row["batch_id"])
+            if "issuance_id" in row and row.get("issuance_id") is not None:
+                row["issuance_id"] = maps["certificate_issuances"].get(int(row["issuance_id"]), row["issuance_id"])
+            if "supersedes_issuance_id" in row and row.get("supersedes_issuance_id") is not None:
+                row["supersedes_issuance_id"] = maps["certificate_issuances"].get(int(row["supersedes_issuance_id"]), row["supersedes_issuance_id"])
+            if "previous_issuance_id" in row and row.get("previous_issuance_id") is not None:
+                row["previous_issuance_id"] = maps["certificate_issuances"].get(int(row["previous_issuance_id"]), row["previous_issuance_id"])
+            if "new_issuance_id" in row and row.get("new_issuance_id") is not None:
+                row["new_issuance_id"] = maps["certificate_issuances"].get(int(row["new_issuance_id"]), row["new_issuance_id"])
+            if "survey_type_id" in row and row.get("survey_type_id") is not None:
+                row["survey_type_id"] = maps["survey_types"].get(int(row["survey_type_id"]), row["survey_type_id"])
+            if "survey_id" in row and row.get("survey_id") is not None:
+                row["survey_id"] = maps["surveys"].get(int(row["survey_id"]), row["survey_id"])
+            if "version_id" in row and row.get("version_id") is not None:
+                row["version_id"] = maps["survey_versions"].get(int(row["version_id"]), row["version_id"])
+            if "question_id" in row and row.get("question_id") is not None:
+                row["question_id"] = maps["survey_questions"].get(int(row["question_id"]), row["question_id"])
+            if "option_id" in row and row.get("option_id") is not None:
+                row["option_id"] = maps["survey_question_options"].get(int(row["option_id"]), row["option_id"])
+            if "assignment_id" in row and row.get("assignment_id") is not None:
+                row["assignment_id"] = maps["survey_assignments"].get(int(row["assignment_id"]), row["assignment_id"])
+            if "session_id" in row and row.get("session_id") not in {None, ""}:
+                try:
+                    row["session_id"] = maps["survey_response_sessions"].get(int(row["session_id"]), row["session_id"])
+                except (TypeError, ValueError):
+                    row["session_id"] = row["session_id"]
+            if "answer_id" in row and row.get("answer_id") is not None:
+                row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
+            if "zone_id" in row and row.get("zone_id") is not None:
+                row["zone_id"] = maps["event_zones"].get(int(row["zone_id"]), row["zone_id"])
+            if "alert_id" in row and row.get("alert_id") is not None:
+                row["alert_id"] = maps["operations_center_alerts"].get(int(row["alert_id"]), row["alert_id"])
+            if "incident_id" in row and row.get("incident_id") is not None:
+                row["incident_id"] = maps["operations_center_incidents"].get(int(row["incident_id"]), row["incident_id"])
+            if "snapshot_id" in row and row.get("snapshot_id") is not None:
+                row["snapshot_id"] = maps["analytics_v4_snapshots"].get(int(row["snapshot_id"]), row["snapshot_id"])
+            if "report_id" in row and row.get("report_id") is not None:
+                row["report_id"] = maps["analytics_v4_reports"].get(int(row["report_id"]), row["report_id"])
+            if "closure_review_id" in row and row.get("closure_review_id") is not None:
+                row["closure_review_id"] = maps["functional_closure_reviews"].get(int(row["closure_review_id"]), row["closure_review_id"])
+            if "finding_id" in row and row.get("finding_id") is not None:
+                row["finding_id"] = maps["functional_closure_findings"].get(int(row["finding_id"]), row["finding_id"])
+            if "parent_zone_id" in row and row.get("parent_zone_id") is not None:
+                row["parent_zone_id"] = maps["event_zones"].get(int(row["parent_zone_id"]), row["parent_zone_id"])
+            if "speaker_profile_id" in row and row.get("speaker_profile_id") is not None:
+                row["speaker_profile_id"] = maps["speaker_profiles"].get(int(row["speaker_profile_id"]), row["speaker_profile_id"])
+            if table == "certificate_number_sequences" and row.get("scope_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["scope_key"] = str(row["scope_key"]).replace(f"EVT-{source_event_id}-", f"EVT-{target_event_id}-", 1)
+            if table in {"attendance_records", "attendance_rule_set_versions", "attendance_closures", "attendance_overrides", "attendance_reopenings"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table in {"certificate_batches", "certificate_issuances"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "certificate_verification_tokens":
+                regenerated = self.token_factory()
+                row["token_hash"] = hashlib.sha256(regenerated.encode("utf-8")).hexdigest()
+                row["token_hint"] = regenerated[:8]
+            if table == "survey_access_tokens":
+                regenerated = self.token_factory()
+                row["token_hash"] = hashlib.sha256(regenerated.encode("utf-8")).hexdigest()
+                row["token_hint"] = regenerated[:8]
+                row["status"] = "RESTORED_INACTIVE"
+                row["used_at"] = None
+            if table == "speaker_access_tokens":
+                regenerated = self.token_factory()
+                row["token_hash"] = hashlib.sha256(regenerated.encode("utf-8")).hexdigest()
+                row["token_hint"] = regenerated[:8]
+                row["status"] = "RESTORED_INACTIVE"
+                row["used_at"] = None
+                row["revoked_at"] = None
+            if table in {"speaker_profiles"} and "current_version_id" in row and row.get("current_version_id") is not None:
+                row["current_version_id"] = maps["speaker_profile_versions"].get(int(row["current_version_id"]), row["current_version_id"])
+            if table == "speaker_documents" and row.get("storage_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["storage_key"] = str(row["storage_key"]).replace(f"events/{source_event_id}/", f"events/{target_event_id}/", 1)
+            if table == "speaker_profiles" and row.get("public_id"):
+                base_public_id = str(row["public_id"])
+                public_id = base_public_id
+                suffix = 1
+                while db.execute("SELECT id FROM speaker_profiles WHERE organization_id = ? AND public_id = ?", (row.get("organization_id"), public_id)).fetchone():
+                    suffix += 1
+                    public_id = f"{base_public_id}-restored-{suffix}"
+                row["public_id"] = public_id
+            if table == "survey_response_sessions" and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "zone_access_validations" and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "certificate_documents" and row.get("storage_key"):
+                source_event_id = int(payload.get("event_id") or 0)
+                target_event_id = next(iter(maps["events"].values()))
+                row["storage_key"] = str(row["storage_key"]).replace(f"events/{source_event_id}/", f"events/{target_event_id}/", 1)
             if table == "accreditations":
                 original = str(source_row.get("token") or "")
                 row["token"] = self._unique_token(db)
@@ -772,6 +1331,11 @@ class EventRestoreService:
                 row["checked_in_by"] = ""
                 row["access_count"] = 0
                 row["status"] = "active" if row.get("status") != "cancelled" else "cancelled"
+            if table == "networking_event_participations":
+                if row.get("public_profile_id"):
+                    row["public_profile_id"] = self._unique_networking_profile_id(db)
+                if row.get("owner_token_hash"):
+                    row["owner_token_hash"] = f"restored:{hashlib.sha256((str(row['owner_token_hash']) + self.now()).encode('utf-8')).hexdigest()}"
             elif "token" in row and str(row.get("token") or "") in token_map:
                 row["token"] = token_map[str(row["token"])]
             if table == "communication_queue":
@@ -781,6 +1345,40 @@ class EventRestoreService:
                 row["last_error"] = "Restaurado inactivo: requiere revision manual"
                 if "idempotency_key" in row:
                     row["idempotency_key"] = ""
+            if table == "communication_v4_campaigns":
+                row["status"] = "RESTORED_REVIEW"
+                row["live_mode"] = 0
+                row["scheduled_at"] = None
+                row["started_at"] = None
+                row["completed_at"] = None
+                row["updated_at"] = self.now()
+            if table in {"communication_v4_campaign_recipients", "communication_v4_messages", "communication_v4_automation_runs"} and row.get("idempotency_key"):
+                row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "communication_v4_automations":
+                row["status"] = "PAUSED"
+                row["safe_mode"] = 1
+            if table == "communication_v4_provider_events" and row.get("external_event_id"):
+                row["external_event_id"] = f"{row['external_event_id']}:restored:{next(iter(maps['events'].values()))}"
+            if table == "analytics_v4_snapshots":
+                row["status"] = "STALE"
+                row["updated_at"] = self.now()
+            if table == "analytics_v4_reports":
+                row["status"] = "RESTORED_REVIEW"
+                row["approved_by"] = ""
+                row["approved_at"] = None
+                row["updated_at"] = self.now()
+            if table == "analytics_v4_export_jobs":
+                row["status"] = "RESTORED_EXPIRED"
+                row["storage_key"] = ""
+                row["expires_at"] = self.now()
+            if table == "functional_closure_reviews":
+                row["status"] = "RESTORED_REVIEW"
+                row["approved_by"] = ""
+                row["approved_at"] = None
+                row["updated_at"] = self.now()
+            if table == "functional_closure_actions":
+                row["status"] = "RESTORED_PENDING_REVIEW"
+                row["completed_at"] = None
             if table == "participant_communication_preferences" and row.get("person_id") is not None:
                 existing_preference = db.execute(
                     "SELECT id FROM participant_communication_preferences WHERE person_id = ?",
@@ -789,6 +1387,37 @@ class EventRestoreService:
                 if existing_preference:
                     if table in maps and old_id:
                         maps[table][old_id] = int(existing_preference["id"])
+                    continue
+            if table == "networking_taxonomy_concepts" and row.get("code"):
+                existing_concept = db.execute("SELECT id FROM networking_taxonomy_concepts WHERE code = ?", (row["code"],)).fetchone()
+                if existing_concept:
+                    update_values = {key: row[key] for key in row if key != "code" and key in self._columns(db, table)}
+                    if update_values:
+                        assignments = ", ".join(f"{key} = ?" for key in update_values)
+                        db.execute(f"UPDATE networking_taxonomy_concepts SET {assignments} WHERE id = ?", [*update_values.values(), int(existing_concept["id"])])
+                    if table in maps and old_id:
+                        maps[table][old_id] = int(existing_concept["id"])
+                    continue
+            if table == "networking_organizations" and row.get("canonical_key"):
+                existing_org = db.execute("SELECT id FROM networking_organizations WHERE canonical_key = ?", (row["canonical_key"],)).fetchone()
+                if existing_org:
+                    db.execute(
+                        """
+                        UPDATE networking_organizations
+                        SET name = COALESCE(NULLIF(?, ''), name),
+                            visibility = COALESCE(NULLIF(?, ''), visibility),
+                            activity = COALESCE(NULLIF(?, ''), activity),
+                            specialty = COALESCE(NULLIF(?, ''), specialty),
+                            website = COALESCE(NULLIF(?, ''), website),
+                            logo_url = COALESCE(NULLIF(?, ''), logo_url),
+                            description = COALESCE(NULLIF(?, ''), description),
+                            updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (row.get("name", ""), row.get("visibility", ""), row.get("activity", ""), row.get("specialty", ""), row.get("website", ""), row.get("logo_url", ""), row.get("description", ""), self.now(), int(existing_org["id"])),
+                    )
+                    if table in maps and old_id:
+                        maps[table][old_id] = int(existing_org["id"])
                     continue
             if table == "jobs":
                 row["status"] = "cancelled"
@@ -805,6 +1434,42 @@ class EventRestoreService:
             new_id = self._insert_row(db, table, row)
             if table in maps and old_id:
                 maps[table][old_id] = new_id
+
+    def _repair_certificate_template_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("certificate_templates", []):
+            old_template_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_template_id = maps.get("certificate_templates", {}).get(old_template_id)
+            new_version_id = maps.get("certificate_template_versions", {}).get(old_version_id)
+            if new_template_id and new_version_id:
+                db.execute("UPDATE certificate_templates SET current_version_id = ? WHERE id = ?", (new_version_id, new_template_id))
+
+    def _repair_survey_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("surveys", []):
+            old_survey_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_survey_id = maps.get("surveys", {}).get(old_survey_id)
+            new_version_id = maps.get("survey_versions", {}).get(old_version_id)
+            if new_survey_id and new_version_id:
+                db.execute("UPDATE surveys SET current_version_id = ? WHERE id = ?", (new_version_id, new_survey_id))
+
+    def _repair_speaker_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("speaker_profiles", []):
+            old_profile_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_profile_id = maps.get("speaker_profiles", {}).get(old_profile_id)
+            new_version_id = maps.get("speaker_profile_versions", {}).get(old_version_id)
+            if new_profile_id and new_version_id:
+                db.execute("UPDATE speaker_profiles SET current_version_id = ? WHERE id = ?", (new_version_id, new_profile_id))
+
+    def _repair_communication_v4_versions(self, db, payload: dict, maps: dict) -> None:
+        for source_row in (payload.get("tables") or {}).get("communication_v4_templates", []):
+            old_template_id = int(source_row.get("id") or 0)
+            old_version_id = int(source_row.get("current_version_id") or 0)
+            new_template_id = maps.get("communication_v4_templates", {}).get(old_template_id)
+            new_version_id = maps.get("communication_v4_template_versions", {}).get(old_version_id)
+            if new_template_id and new_version_id:
+                db.execute("UPDATE communication_v4_templates SET current_version_id = ? WHERE id = ?", (new_version_id, new_template_id))
 
     def _delete_event_scope(self, db, event_id: int) -> None:
         db.execute("DELETE FROM user_event_roles WHERE event_id = ?", (event_id,))
@@ -833,7 +1498,10 @@ class EventRestoreService:
             return 0
         placeholders = ", ".join(["?"] * len(columns))
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-        cur = db.execute(sql, [values[name] for name in columns])
+        try:
+            cur = db.execute(sql, [values[name] for name in columns])
+        except Exception as exc:
+            raise ValueError(f"No se pudo insertar {table}: {exc}") from exc
         return int(getattr(cur, "lastrowid", 0) or 0)
 
     def _columns(self, db, table: str) -> list[str]:
@@ -863,6 +1531,13 @@ class EventRestoreService:
     def _event_name(self, db, event_id: int) -> str:
         row = db.execute("SELECT name FROM events WHERE id = ?", (event_id,)).fetchone()
         return row["name"] if row else ""
+
+    def _unique_networking_profile_id(self, db) -> str:
+        while True:
+            token = self.token_factory().upper().replace("-", "")
+            value = f"NET-{token[:12]}"
+            if not db.execute("SELECT id FROM networking_event_participations WHERE public_profile_id = ?", (value,)).fetchone():
+                return value
 
     def _audit(self, db, actor: str, action: str, entity_type: str, entity_id: int | None, payload: dict) -> None:
         if not self._has_column(db, "audit_logs", "payload"):

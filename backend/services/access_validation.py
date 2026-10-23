@@ -54,13 +54,16 @@ class AccessValidationService:
         elif not int(acc["type_access_enabled"]):
             result, reason, color = "rejected", "Tipo de acreditacion no habilitado", "red"
         elif activity_id:
-            activity = self.repository.activity_for_access(db, activity_id, acc["event_id"])
-            if not activity:
-                result, reason, color = "rejected", "Actividad incorrecta", "red"
-            elif activity["reservation_mode"] in ("required", "invited"):
-                reservation = self.repository.confirmed_reservation(db, activity_id, acc["id"])
-                if not reservation:
-                    result, reason, color = "rejected", "Sin reserva confirmada", "red"
+            if not acc["checked_in_at"]:
+                result, reason, color = "rejected", "Participante pendiente de acreditacion.", "red"
+            if result == "granted":
+                activity = self.repository.activity_for_access(db, activity_id, acc["event_id"])
+                if not activity:
+                    result, reason, color = "rejected", "Actividad incorrecta", "red"
+                elif activity["reservation_mode"] in ("required", "invited"):
+                    reservation = self.repository.confirmed_reservation(db, activity_id, acc["id"])
+                    if not reservation:
+                        result, reason, color = "rejected", "Sin reserva confirmada", "red"
             if result == "granted":
                 duplicate = self.repository.granted_activity_access(db, activity_id, acc["id"])
                 if duplicate:

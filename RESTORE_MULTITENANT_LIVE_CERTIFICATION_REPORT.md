@@ -2,13 +2,13 @@
 
 Resultado: PASSED
 
-Run ID: BACKUP-RESTORE-LIVE-20260728-182640
+Run ID: BACKUP-RESTORE-LIVE-20260729-230545
 
 Restore ejecutado:
 
-- Base destino aislada: bitora_restore_df1cb2ed4235
-- Storage destino aislado: /bitora/backups/BACKUP-RESTORE-LIVE-20260728-182640/restore_storage
-- RTO observado: 6.673 segundos
+- Base destino aislada: bitora_restore_5cedb5c89f00
+- Storage destino aislado: /bitora/backups/BACKUP-RESTORE-LIVE-20260729-230545/restore_storage
+- RTO observado: 9.016 segundos
 - Efectos externos post-restore: 0
 - Envios duplicados: 0
 - Cruces entre eventos: 0

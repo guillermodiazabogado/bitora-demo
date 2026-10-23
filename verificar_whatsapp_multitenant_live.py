@@ -170,6 +170,7 @@ def _live_result() -> dict:
             integration_id=integration_a,
         )
 
+    manual_receipt = _truthy(os.environ.get("WHATSAPP_LIVE_RECEIPT_CONFIRMED"))
     deadline = time.time() + int(os.environ.get("WHATSAPP_LIVE_TIMEOUT_SECONDS", "60"))
     final_queue = None
     final_job = None
@@ -178,7 +179,9 @@ def _live_result() -> dict:
         with server.connect() as db:
             final_queue = db.execute("SELECT * FROM communication_queue WHERE id = ?", (queue_id,)).fetchone()
             final_job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-            if final_queue and final_queue["status"] in {"enviado", "entregado", "leido", "error"}:
+            if final_queue and final_queue["status"] in {"entregado", "leido", "error"}:
+                break
+            if final_queue and final_queue["status"] == "enviado" and manual_receipt:
                 break
     assert_true(final_queue is not None, "Debe existir item de cola")
     assert_true(final_job is not None, "Debe existir job")
@@ -188,7 +191,6 @@ def _live_result() -> dict:
     assert_true(str(final_job["status"]) == "completed", f"Job debe completar, estado={final_job['status']}")
 
     webhook_receipt = str(final_queue["status"]) in {"entregado", "leido"} or bool(final_queue["delivered_at"] or final_queue["read_at"])
-    manual_receipt = _truthy(os.environ.get("WHATSAPP_LIVE_RECEIPT_CONFIRMED"))
     receipt_confirmed = webhook_receipt or manual_receipt
     with server.connect() as db:
         audit_count = int(db.execute(
