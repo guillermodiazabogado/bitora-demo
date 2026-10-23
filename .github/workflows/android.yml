@@ -77,4 +77,4 @@ jobs:
           profile: pixel_2
           disable-animations: true
           working-directory: ./android
-          script: ./gradlew :shared:foundation:connectedDebugAndroidTest
+          script: chmod +x gradlew && ./gradlew :shared:foundation:connectedDebugAndroidTest
