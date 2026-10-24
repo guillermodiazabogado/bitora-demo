@@ -10,7 +10,7 @@ checks = {
     "profile": 'requestedProfile = "DISPLAY"' in DISPLAY,
     "version": 'softwareVersion = "android-a11-${BuildConfig.VERSION_NAME}"' in DISPLAY and 'versionName = "0.11.1-a11"' in BUILD,
     "content": 'optJSONObject("display_content")' in DISPLAY and all(value in LAB for value in ("BITORA LIVE", "Bienvenidos al Evento 18", "MAIN_HALL")),
-    "verified_dataset": "DatasetVerifier().verify" in DISPLAY and "saveActiveDataset(envelope)" in DISPLAY,
+    "verified_dataset": "DatasetVerifier(identity.credentialToken).verify" in DISPLAY and "saveActiveDataset(envelope)" in DISPLAY,
     "offline": "displayOfflineSnapshot" in DISPLAY and "loadActiveDataset()" in DISPLAY,
     "sync": '"SYNC CONTENT"' in DISPLAY and "edge.heartbeat" in DISPLAY,
     "lab_revision": 'LAB-A9-{event_id}-010' in LAB,
