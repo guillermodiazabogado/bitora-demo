@@ -28,7 +28,7 @@ checks = {
     "telemetry_contract": all(value in EDGE_CLIENT for value in ("HeartbeatTelemetry", "softwareVersion", "queuePending", "syncDurationMs")),
     "manual_sync_telemetry": all("HeartbeatTelemetry(" in source and "BuildConfig.VERSION_NAME" in source for source in (OPERATION, DISPLAY)),
     "telemetry_endpoint": "/api/admin/telemetry" in LAB_SERVER and "HEARTBEAT_STALE" in LAB_SERVER and "QUEUE_DEPTH_HIGH" in LAB_SERVER,
-    "operational_monitor": "android_lab_runtime.json" in MONITOR and 'status -ne "HEALTHY"' in MONITOR,
+    "operational_monitor": "android_lab_runtime.json" in MONITOR and 'status -eq "ALERT"' in MONITOR and "BITORA_ANDROID_MONITOR_PASSWORD" in MONITOR,
 }
 
 status = "PASS" if all(checks.values()) else "FAIL"
