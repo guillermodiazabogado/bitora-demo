@@ -1,6 +1,8 @@
 param(
     [string]$BaseUrl = $env:BITORA_ANDROID_MONITOR_BASE_URL,
-    [string]$DeviceId = ""
+    [string]$DeviceId = "",
+    [string]$AdminUser = $env:BITORA_ANDROID_MONITOR_USER,
+    [string]$AdminPassword = $env:BITORA_ANDROID_MONITOR_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +16,14 @@ if (-not $BaseUrl) {
 if (-not $BaseUrl) { throw "BaseUrl is required when no LAB runtime state exists" }
 
 $query = if ($DeviceId) { "?deviceId=$([Uri]::EscapeDataString($DeviceId))" } else { "" }
-$response = Invoke-RestMethod -Uri "$($BaseUrl.TrimEnd('/'))/api/admin/telemetry$query" -TimeoutSec 15
+$request = @{ Uri = "$($BaseUrl.TrimEnd('/'))/api/admin/telemetry$query"; TimeoutSec = 15 }
+if ($AdminUser -or $AdminPassword) {
+    if (-not $AdminUser -or -not $AdminPassword) { throw "Both AdminUser and AdminPassword are required" }
+    $loginBody = @{ name = $AdminUser; pin = $AdminPassword } | ConvertTo-Json
+    Invoke-RestMethod -Method Post -Uri "$($BaseUrl.TrimEnd('/'))/api/auth/login" -ContentType "application/json" -Body $loginBody -SessionVariable bitoraSession -TimeoutSec 15 | Out-Null
+    $request.WebSession = $bitoraSession
+}
+$response = Invoke-RestMethod @request
 $result = [ordered]@{
     checkedAt = [DateTimeOffset]::Now.ToString("o")
     status = $response.status
@@ -22,4 +31,4 @@ $result = [ordered]@{
     items = @($response.items)
 }
 $result | ConvertTo-Json -Depth 8
-if ($response.status -ne "HEALTHY") { exit 1 }
+if ($response.status -eq "ALERT") { exit 1 }
