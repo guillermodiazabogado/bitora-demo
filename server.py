@@ -616,7 +616,7 @@ def production_health_payload() -> tuple[dict, int]:
         with connect() as db:
             db.execute("SELECT 1 AS ok").fetchone()
             pending = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status IN ('pending', 'retrying', 'processing')").fetchone()["c"] or 0)
-            failed = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status = 'failed'").fetchone()["c"] or 0)
+            failed = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status = 'failed' AND resolved_at IS NULL").fetchone()["c"] or 0)
     except Exception:
         db_status = "offline"
         pending = 0
@@ -1570,6 +1570,7 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 started_at TEXT,
                 finished_at TEXT,
+                resolved_at TEXT,
                 updated_at TEXT NOT NULL
             );
 
@@ -2024,6 +2025,7 @@ def ensure_multitenant_schema(db: sqlite3.Connection) -> None:
     for name, definition in {
         "organization_id": "INTEGER REFERENCES organizations(id) ON DELETE SET NULL",
         "integration_id": "INTEGER REFERENCES organization_integrations(id) ON DELETE SET NULL",
+        "resolved_at": "TEXT",
     }.items():
         if name not in job_columns:
             db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}")
