@@ -21,6 +21,11 @@
 - Shared idempotent queue flushing for foreground and background sync
 - Instrumented persistence and WorkManager recovery tests for API 26 and API 35
 - CI emulator matrix for minimum and current supported Android versions
+- Remote CI recovery matrix passed on API 26 and API 35
+- Production RSA-4096 signing identity provisioned in the protected
+  `android-production` GitHub environment
+- Manual production release workflow validates configuration, builds both APKs,
+  verifies signatures, records SHA-256 checksums and uploads private artifacts
 - Private rollout, telemetry, pilot and rollback runbook
 
 ## Physical evidence
@@ -37,17 +42,18 @@
 
 ## Deliberately not distributable yet
 
-Release APKs are unsigned and have no production endpoint. They must not be
-installed or distributed as production artifacts.
+No production APK may be distributed until the stable production endpoint is
+configured and the protected production release workflow completes. APKs built
+against LAB or staging endpoints remain test-only artifacts.
 
 ## External inputs still required
 
 - Stable production pairing/Edge base URL
-- Production signing keystore and secure CI secret references
 - Confirmed Android application IDs and ownership
 - Production Admin pairing endpoints and rollout environment
 
 ## Remaining A10 blocks
 
-- First successful remote CI emulator-matrix run
-- Production inputs and execution of the approved pilot runbook
+- Configure `BITORA_ANDROID_PRODUCTION_BASE_URL` in the protected
+  `android-production` GitHub environment
+- Execute the protected production release workflow and approved pilot runbook

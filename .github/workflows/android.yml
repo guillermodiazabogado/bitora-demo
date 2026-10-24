@@ -6,11 +6,13 @@ on:
       - "android/**"
       - "verificar_android_a*.py"
       - ".github/workflows/android.yml"
+      - ".github/workflows/android-production-release.yml"
   push:
     paths:
       - "android/**"
       - "verificar_android_a*.py"
       - ".github/workflows/android.yml"
+      - ".github/workflows/android-production-release.yml"
   workflow_dispatch:
 
 jobs:
