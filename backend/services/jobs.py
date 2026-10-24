@@ -99,13 +99,23 @@ class JobQueueService:
 
     def complete(self, job_id: int, result: dict[str, Any]) -> None:
         with self.connect() as db:
+            completed_at = utc_now()
             db.execute(
                 """
                 UPDATE jobs
                 SET status = 'completed', result = ?, finished_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (json.dumps(result, ensure_ascii=True), utc_now(), utc_now(), job_id),
+                (json.dumps(result, ensure_ascii=True), completed_at, completed_at, job_id),
+            )
+            db.execute(
+                """
+                UPDATE jobs SET resolved_at = ?
+                WHERE status = 'failed' AND resolved_at IS NULL
+                  AND kind = (SELECT kind FROM jobs WHERE id = ?)
+                  AND id <> ?
+                """,
+                (completed_at, job_id, job_id),
             )
             self.audit(db, "worker", "job.completed", "job", job_id, {"result": result})
 
@@ -121,7 +131,7 @@ class JobQueueService:
                 """
                 UPDATE jobs
                 SET status = ?, retry_count = ?, retry_at = ?, error = ?,
-                    finished_at = ?, updated_at = ?
+                    finished_at = ?, resolved_at = NULL, updated_at = ?
                 WHERE id = ?
                 """,
                 ("retrying" if retrying else "failed", retry_count, retry_at, error[:2000], None if retrying else utc_now(), utc_now(), job["id"]),

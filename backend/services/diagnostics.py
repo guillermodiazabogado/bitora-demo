@@ -243,9 +243,11 @@ class DiagnosticsService:
     def _queue_status(self, db, day_ago: str) -> dict[str, Any]:
         job_rows = db.execute(
             """
-            SELECT kind, status, COUNT(*) AS total
+            SELECT kind,
+                   CASE WHEN status = 'failed' AND resolved_at IS NOT NULL THEN 'resolved' ELSE status END AS status,
+                   COUNT(*) AS total
             FROM jobs
-            GROUP BY kind, status
+            GROUP BY kind, CASE WHEN status = 'failed' AND resolved_at IS NOT NULL THEN 'resolved' ELSE status END
             """
         ).fetchall()
         job_types: dict[str, Counter] = {}

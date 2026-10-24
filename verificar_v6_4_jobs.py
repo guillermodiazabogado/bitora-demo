@@ -53,6 +53,19 @@ def main() -> None:
                 break
             time.sleep(0.1)
         assert status == "completed"
+        worker.stop()
+        resolved_id = queue.enqueue("test.fail", {}, priority="high", max_retries=0, actor="Admin")
+        worker = JobWorker(queue, {"test.fail": lambda payload: {"ok": True}}, "resolution-worker")
+        worker.start()
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            with server.connect() as db:
+                resolved_status = db.execute("SELECT status FROM jobs WHERE id = ?", (resolved_id,)).fetchone()["status"]
+                resolved_at = db.execute("SELECT resolved_at FROM jobs WHERE id = ?", (failed_id,)).fetchone()["resolved_at"]
+            if resolved_status == "completed" and resolved_at:
+                break
+            time.sleep(0.1)
+        assert resolved_status == "completed" and resolved_at
         print("OK: V6.4 cola persistente, worker, fallo, cancelacion y recuperacion")
     finally:
         if worker:
