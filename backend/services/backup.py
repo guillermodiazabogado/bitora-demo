@@ -1343,6 +1343,8 @@ class EventRestoreService:
                 row["scheduled_at"] = None
                 row["processed_at"] = None
                 row["last_error"] = "Restaurado inactivo: requiere revision manual"
+                if "integration_id" in row:
+                    row["integration_id"] = None
                 if "idempotency_key" in row:
                     row["idempotency_key"] = ""
             if table == "communication_v4_campaigns":
@@ -1424,6 +1426,8 @@ class EventRestoreService:
                 row["retry_at"] = None
                 row["error"] = "Restaurado inactivo: requiere revision manual"
                 row["worker_id"] = ""
+                if "integration_id" in row:
+                    row["integration_id"] = None
             if table == "waiting_room_visitors":
                 row["status"] = "expired"
                 row["access_token"] = ""
