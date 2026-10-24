@@ -42,6 +42,7 @@ from backend.database import connect_database, integrity_error_types, load_datab
 from backend.repositories import create_repository
 from backend.services.access_validation import AccessValidationService
 from backend.services.analytics_closure import AnalyticsClosureError, AnalyticsClosureService
+from backend.services.android_edge import AndroidEdgeService
 from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
@@ -421,6 +422,10 @@ def qr_service() -> QRService:
 
 def networking_service() -> NetworkingService:
     return NetworkingService(now=now_iso)
+
+
+def android_edge_service(handler=None) -> AndroidEdgeService:
+    return AndroidEdgeService(configured_base_url(handler))
 
 
 def backup_service():
@@ -1025,6 +1030,57 @@ def init_db() -> None:
                 result TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS android_pairings (
+                code_hash TEXT PRIMARY KEY,
+                pairing_code TEXT NOT NULL,
+                nonce_hash TEXT NOT NULL,
+                device_kind TEXT NOT NULL,
+                requested_profile TEXT NOT NULL,
+                software_version TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                organization_id INTEGER,
+                event_id INTEGER,
+                event_name TEXT NOT NULL DEFAULT '',
+                profile TEXT NOT NULL DEFAULT '',
+                scope TEXT NOT NULL DEFAULT '',
+                capabilities_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                expires_at_epoch INTEGER NOT NULL,
+                approved_at TEXT,
+                used_device_id TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS android_devices (
+                device_id TEXT PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                event_id INTEGER NOT NULL,
+                event_name TEXT NOT NULL DEFAULT '',
+                profile TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                capabilities_json TEXT NOT NULL DEFAULT '[]',
+                credential_hash TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                software_version TEXT NOT NULL DEFAULT '',
+                dataset_revision TEXT NOT NULL DEFAULT '',
+                telemetry_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                last_seen_at TEXT,
+                revoked_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS android_edge_operations (
+                operation_id TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                operation_type TEXT NOT NULL,
+                correlation_id TEXT NOT NULL DEFAULT '',
+                sequence_number INTEGER NOT NULL DEFAULT 0,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'ACKNOWLEDGED',
+                created_at TEXT NOT NULL,
+                UNIQUE(device_id, idempotency_key)
             );
 
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -7106,6 +7162,8 @@ def public_static_path(path: str) -> bool:
 
 
 def public_api_get(path: str) -> bool:
+    if path in {"/api/device-pairing/status", "/api/edge/dataset"}:
+        return True
     if path.startswith("/api/public/certificates/verify/"):
         return True
     if path.startswith("/api/public/surveys/access/"):
@@ -7121,6 +7179,10 @@ def public_api_post(path: str) -> bool:
     if path.startswith("/api/public/speakers/access/"):
         return True
     return path in {
+        "/api/device-pairing/request",
+        "/api/device-pairing/exchange",
+        "/api/edge/heartbeat",
+        "/api/edge/sync",
         "/api/register",
         "/api/captation/event",
         "/api/auth/login",
@@ -7375,6 +7437,45 @@ class AppHandler(SimpleHTTPRequestHandler):
     def handle_api_get(self, path: str, query: dict[str, list[str]]) -> None:
         try:
             if not self.require_api_auth(path, is_post=False):
+                return
+            if path == "/api/device-pairing/status":
+                with connect() as db:
+                    result = android_edge_service(self).pairing_status(
+                        db,
+                        str(query.get("pairingCode", [""])[0]),
+                        str(query.get("nonce", [""])[0]),
+                    )
+                self.send_json(result)
+                return
+            if path == "/api/edge/dataset":
+                device_id = str(self.headers.get("X-Bitora-Device") or query.get("deviceId", [""])[0])
+                token = str(self.headers.get("X-Bitora-Token") or "")
+                with connect() as db:
+                    service = android_edge_service(self)
+                    device = service.authenticate_device(db, device_id, token)
+                    if not device:
+                        self.send_json({"ok": False, "error": "invalid_device_credential"}, 401)
+                        return
+                    result = service.dataset(db, device)
+                self.send_json(result)
+                return
+            if path == "/api/admin/pairing/pending":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with connect() as db:
+                    result = android_edge_service(self).list_pairings(db)
+                self.send_json(result)
+                return
+            if path == "/api/admin/telemetry":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with connect() as db:
+                    result = android_edge_service(self).telemetry(db, str(query.get("deviceId", [""])[0]))
+                self.send_json(result)
                 return
             operations_match = re.fullmatch(r"/api/events/(\d+)/operations-center(?:/(readiness|metrics|alerts|incidents|tasks))?", path)
             if operations_match:
@@ -10710,6 +10811,51 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not session_can_access_event(db, session, event_id_for_access):
                         self.send_json({"error": "No tenes permiso para operar este evento"}, 403)
                         return
+
+            if path == "/api/device-pairing/request":
+                with connect() as db:
+                    result = android_edge_service(self).register_pairing(db, data)
+                self.send_json(result)
+                return
+            if path == "/api/device-pairing/exchange":
+                with connect() as db:
+                    result = android_edge_service(self).exchange(db, data)
+                self.send_json(result)
+                return
+            if path in {"/api/edge/heartbeat", "/api/edge/sync"}:
+                device_id = str(self.headers.get("X-Bitora-Device") or data.get("deviceId") or "")
+                token = str(self.headers.get("X-Bitora-Token") or "")
+                with connect() as db:
+                    service = android_edge_service(self)
+                    device = service.authenticate_device(db, device_id, token)
+                    if not device:
+                        self.send_json({"ok": False, "error": "invalid_device_credential"}, 401)
+                        return
+                    result = service.heartbeat(db, device, data) if path.endswith("heartbeat") else service.sync(db, device, data)
+                self.send_json(result)
+                return
+            if path in {"/api/admin/pairing/approve", "/api/admin/pairing/reject", "/api/admin/device/revoke"}:
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    service = android_edge_service(self)
+                    if path.endswith("approve"):
+                        result = service.approve(db, data)
+                    elif path.endswith("reject"):
+                        result = service.reject(db, data)
+                    else:
+                        result = service.revoke(db, data)
+                    audit(
+                        db,
+                        session["name"],
+                        f"android.{path.rsplit('/', 1)[-1]}",
+                        "android_device",
+                        None,
+                        {"pairing_code_suffix": str(data.get("pairingCode") or "")[-4:], "device_id": data.get("deviceId")},
+                    )
+                self.send_json(result)
+                return
 
             attendance_create_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
             attendance_correct_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/correct", path)

@@ -5,7 +5,8 @@ import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-class DatasetVerifier(private val trustedLabKey: String = "BITORA-A2-LAB-SIGNING-KEY") {
+class DatasetVerifier(credentialToken: String) {
+    private val signingKey = sha256(credentialToken)
     fun verify(envelope: EventDatasetEnvelope, expectedOrganizationId: Long, expectedEventId: Long, activeRevision: String? = null): DatasetVerificationResult {
         if (envelope.organizationId != expectedOrganizationId) return DatasetVerificationResult(false, BitoraDatasetStatus.INVALID, "wrong_org")
         if (envelope.eventId != expectedEventId) return DatasetVerificationResult(false, BitoraDatasetStatus.INVALID, "wrong_event")
@@ -24,7 +25,7 @@ class DatasetVerifier(private val trustedLabKey: String = "BITORA-A2-LAB-SIGNING
 
     private fun hmac(value: String): String {
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(trustedLabKey.toByteArray(), "HmacSHA256"))
+        mac.init(SecretKeySpec(signingKey.toByteArray(), "HmacSHA256"))
         return mac.doFinal(value.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }

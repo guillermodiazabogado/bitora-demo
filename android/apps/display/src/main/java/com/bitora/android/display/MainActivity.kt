@@ -178,7 +178,7 @@ private suspend fun syncDisplay(identity: PairedDeviceIdentity, base: BitoraDevi
     val edge = EdgeClient(identity)
     val obj = JSONObject(edge.dataset())
     val envelope = EventDatasetEnvelope(obj.getLong("organizationId"), obj.getLong("eventId"), obj.getString("revision"), obj.getString("schemaVersion"), obj.get("generatedAt").toString(), obj.getLong("expiresAtEpochSeconds"), obj.getString("payloadJson"), obj.getString("checksum"), obj.getString("signature"), obj.getString("signingKeyId"))
-    val verified = DatasetVerifier().verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
+    val verified = DatasetVerifier(identity.credentialToken).verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
     if (verified.ok) { store.saveActiveDataset(envelope); store.markSync("Now") }
     val heartbeat = edge.heartbeat(
         envelope.revision,
@@ -201,7 +201,7 @@ private suspend fun syncDisplay(identity: PairedDeviceIdentity, base: BitoraDevi
 private fun displayOfflineSnapshot(base: BitoraDeviceSnapshot, identity: PairedDeviceIdentity, store: A2LocalStore): BitoraDeviceSnapshot {
     val cached = store.loadActiveDataset()
     val state = if (cached == null) base.dataset else {
-        val verified = DatasetVerifier().verify(cached, identity.organizationId, identity.eventId, null)
+        val verified = DatasetVerifier(identity.credentialToken).verify(cached, identity.organizationId, identity.eventId, null)
         DatasetState(cached.revision, if (verified.ok) BitoraDatasetStatus.CURRENT else verified.status, if (verified.ok) "Cached" else verified.reason, cached.checksum, cached.signature.take(12))
     }
     return base.copy(edge = base.edge.copy(status = BitoraEdgeStatus.OFFLINE), dataset = state, lastSyncLabel = store.lastSync(), lastHeartbeatLabel = store.lastHeartbeat())
