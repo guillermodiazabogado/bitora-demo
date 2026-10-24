@@ -22,6 +22,7 @@ PANELS = "\n".join(
     for name in ("AccessFastPanel.kt", "ReceptionPanel.kt", "ServicePanel.kt", "LeadRetrievalPanel.kt", "LogisticsPanel.kt")
 )
 CI = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
+PRODUCTION_RELEASE = (ROOT / ".github/workflows/android-production-release.yml").read_text(encoding="utf-8")
 INSTRUMENTED = "\n".join(
     path.read_text(encoding="utf-8")
     for path in (ROOT / "android/shared/foundation/src/androidTest").rglob("*.kt")
@@ -39,10 +40,16 @@ checks = {
     "dev_ui_gated": PANELS.count("BuildConfig.DEV_TOOLS_ENABLED") >= 5 and "if (BuildConfig.DEV_TOOLS_ENABLED)" in OP_MAIN,
     "manifest_hardening": MANIFESTS.count('android:allowBackup="false"') == 2 and MANIFESTS.count('android:usesCleartextTraffic="false"') == 2,
     "release_outputs": all(
-        (ROOT / path).exists()
-        for path in (
-            "android/apps/operation/build/outputs/apk/release/operation-release-unsigned.apk",
-            "android/apps/display/build/outputs/apk/release/display-release-unsigned.apk",
+        any((ROOT / path).exists() for path in candidates)
+        for candidates in (
+            (
+                "android/apps/operation/build/outputs/apk/release/operation-release.apk",
+                "android/apps/operation/build/outputs/apk/release/operation-release-unsigned.apk",
+            ),
+            (
+                "android/apps/display/build/outputs/apk/release/display-release.apk",
+                "android/apps/display/build/outputs/apk/release/display-release-unsigned.apk",
+            ),
         )
     ),
     "external_signing": all(
@@ -51,6 +58,17 @@ checks = {
     ),
     "wrapper": all((ROOT / path).exists() for path in ("android/gradlew", "android/gradlew.bat", "android/gradle/wrapper/gradle-wrapper.jar", "android/gradle/wrapper/gradle-wrapper.properties")),
     "ci": "assembleRelease" in CI and "testDebugUnitTest" in CI and "verificar_android_a*.py" in CI,
+    "production_release": all(
+        value in PRODUCTION_RELEASE
+        for value in (
+            "environment: android-production",
+            "BITORA_ANDROID_PRODUCTION_BASE_URL",
+            "android_production_preflight.ps1",
+            "apksigner",
+            "sha256sum",
+            "upload-artifact@v4",
+        )
+    ),
     "background_sync": all(value in BACKGROUND for value in ("PeriodicWorkRequestBuilder", "OneTimeWorkRequestBuilder", "NetworkType.CONNECTED", "BackoffPolicy.EXPONENTIAL")),
     "restart_recovery": "enqueueUniquePeriodicWork" in BACKGROUND and "ExistingPeriodicWorkPolicy.UPDATE" in BACKGROUND,
     "shared_queue_flush": "flushOperations" in SYNC_ENGINE and "ACKNOWLEDGED" in SYNC_ENGINE and "DUPLICATE" in SYNC_ENGINE,
