@@ -32,7 +32,7 @@ class EdgeSyncEngine(context: Context) {
         val startedAt = System.nanoTime()
         val edge = EdgeClient(identity)
         val envelope = parseEnvelope(JSONObject(edge.dataset()))
-        val verified = DatasetVerifier().verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
+        val verified = DatasetVerifier(identity.credentialToken).verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
         if (!verified.ok) {
             return EdgeSyncResult(false, store.activeRevision(), pending = store.countPending(), reason = verified.reason)
         }

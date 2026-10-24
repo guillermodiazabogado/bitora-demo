@@ -275,7 +275,7 @@ private suspend fun syncEdgeDataset(
             signature = obj.getString("signature"),
             signingKeyId = obj.getString("signingKeyId"),
         )
-        val verified = DatasetVerifier().verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
+        val verified = DatasetVerifier(identity.credentialToken).verify(envelope, identity.organizationId, identity.eventId, store.activeRevision())
         if (verified.ok) {
             store.saveActiveDataset(envelope)
             store.markSync("Now")
@@ -327,7 +327,7 @@ private fun offlineSnapshot(
 ): BitoraDeviceSnapshot {
     val cached = store.loadActiveDataset()
     val datasetState = if (cached != null) {
-        val verified = DatasetVerifier().verify(cached, identity.organizationId, identity.eventId, null)
+        val verified = DatasetVerifier(identity.credentialToken).verify(cached, identity.organizationId, identity.eventId, null)
         DatasetState(
             revision = cached.revision,
             status = if (verified.ok) BitoraDatasetStatus.CURRENT else verified.status,
