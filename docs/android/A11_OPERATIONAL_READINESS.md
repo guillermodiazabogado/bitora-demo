@@ -45,7 +45,9 @@ temporary environment data.
 
 ## Production boundary
 
-LAB is operational. Production remains fail-closed until an owner supplies the
-stable HTTPS endpoint and the four protected release-signing values. The
-preflight reports these missing inputs without printing secrets or creating an
-unsigned distributable.
+LAB is operational. The RSA-4096 signing identity and its four protected values
+are provisioned in the `android-production` GitHub environment.
+Production remains fail-closed until the production service exists and its stable HTTPS
+pairing/Edge/Admin endpoint is configured as
+`BITORA_ANDROID_PRODUCTION_BASE_URL`. The preflight reports missing inputs
+without printing secrets or creating an unsigned distributable.
