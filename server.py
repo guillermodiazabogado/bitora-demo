@@ -7432,7 +7432,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 payload, status = readiness_payload()
                 self.send_json(payload, status)
                 return
-            if parsed.path.startswith("/downloads/"):
+            if parsed.path.startswith("/downloads/") and parsed.path.endswith(".apk"):
                 self.serve_download()
                 return
             if should_force_https(self):
@@ -7455,7 +7455,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_HEAD(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path.startswith("/downloads/"):
+        if parsed.path.startswith("/downloads/") and parsed.path.endswith(".apk"):
             self.serve_download(head_only=True)
             return
         super().do_HEAD()
