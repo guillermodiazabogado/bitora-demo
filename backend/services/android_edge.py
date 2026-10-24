@@ -254,7 +254,9 @@ class AndroidEdgeService:
             if not row["dataset_revision"]: alerts.append("DATASET_MISSING")
             if int(telemetry.get("queuePending") or 0) > 100: alerts.append("QUEUE_DEPTH_HIGH")
             items.append({"deviceId": row["device_id"], "profile": row["profile"], "status": row["status"], "lastSeen": last_seen, "heartbeatAgeSeconds": age, "datasetRevision": row["dataset_revision"], "telemetry": telemetry, "alerts": alerts})
-        return {"ok": True, "status": "HEALTHY" if items and not any(item["alerts"] for item in items) else ("EMPTY" if not items else "ALERT"), "items": items}
+        active_items = [item for item in items if item["status"] == "ACTIVE"]
+        status = "EMPTY" if not active_items else ("HEALTHY" if not any(item["alerts"] for item in active_items) else "ALERT")
+        return {"ok": True, "status": status, "items": items}
 
     def revoke(self, db, data: dict) -> dict:
         device_id = str(data.get("deviceId") or "")

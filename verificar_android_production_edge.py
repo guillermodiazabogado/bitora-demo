@@ -65,6 +65,7 @@ def main() -> None:
     assert service.telemetry(db)["status"] == "HEALTHY"
     service.revoke(db, {"deviceId": exchanged["deviceId"]})
     assert service.authenticate_device(db, exchanged["deviceId"], exchanged["credentialToken"]) is None
+    assert service.telemetry(db)["status"] == "EMPTY"
     print("PASS android production edge pairing, dataset, heartbeat, sync and revoke")
 
 
