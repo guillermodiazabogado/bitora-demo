@@ -7168,7 +7168,7 @@ def public_static_path(path: str) -> bool:
         "/app.js",
         "/jsQR.min.js",
         "/html5-qrcode.min.js",
-    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
+    } or clean.startswith("/assets/") or clean.startswith("/downloads/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
 
 
 def public_api_get(path: str) -> bool:
@@ -7246,6 +7246,61 @@ def network_info(handler: SimpleHTTPRequestHandler) -> dict:
 
 
 class AppHandler(SimpleHTTPRequestHandler):
+    def serve_download(self, head_only: bool = False) -> None:
+        requested = Path(urlparse(self.path).path).name
+        download_dir = STATIC_DIR / "downloads"
+        target = (download_dir / requested).resolve()
+        if target.parent != download_dir.resolve() or not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, "Descarga no encontrada")
+            return
+
+        size = target.stat().st_size
+        start = 0
+        end = size - 1
+        status = HTTPStatus.OK
+        range_header = self.headers.get("Range", "").strip()
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
+            if not match or (not match.group(1) and not match.group(2)):
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            if match.group(1):
+                start = int(match.group(1))
+                end = int(match.group(2)) if match.group(2) else end
+            else:
+                suffix_length = int(match.group(2))
+                start = max(0, size - suffix_length)
+            if start >= size or end < start:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            end = min(end, size - 1)
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", "application/vnd.android.package-archive")
+        self.send_header("Content-Disposition", f'attachment; filename="{requested}"')
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(content_length))
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if head_only:
+            return
+        with target.open("rb") as source:
+            source.seek(start)
+            remaining = content_length
+            while remaining:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
     server_version = "AcreditacionesMVP/0.1"
 
     def log_message(self, format: str, *args) -> None:
@@ -7377,6 +7432,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 payload, status = readiness_payload()
                 self.send_json(payload, status)
                 return
+            if parsed.path.startswith("/downloads/"):
+                self.serve_download()
+                return
             if should_force_https(self):
                 target = absolute_url(parsed.path + (f"?{parsed.query}" if parsed.query else ""), self)
                 self.send_response(308)
@@ -7394,6 +7452,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             super().do_GET()
         finally:
             RUNTIME_METRICS.finish(started, "GET", parsed.path, getattr(self, "_response_status", 200))
+
+    def do_HEAD(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/downloads/"):
+            self.serve_download(head_only=True)
+            return
+        super().do_HEAD()
 
     def do_POST(self) -> None:
         started = RUNTIME_METRICS.begin()
