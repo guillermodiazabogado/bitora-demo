@@ -10,9 +10,11 @@
     main { width: min(680px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0; }
     h1 { margin: 0 0 8px; font-size: 36px; }
     p { color: #bfccd2; margin: 0 0 28px; }
+    .notice { border-left: 4px solid #28c39c; padding: 12px 16px; background: #102c37; color: #f7fafb; }
     section { border-top: 1px solid #34505d; padding: 24px 0; }
     h2 { margin: 0 0 6px; font-size: 24px; }
-    a { display: inline-block; margin-top: 12px; padding: 14px 20px; border-radius: 6px; background: #109779; color: white; font-weight: 700; text-decoration: none; }
+    a { display: inline-block; margin: 12px 8px 0 0; padding: 14px 20px; border-radius: 6px; background: #109779; color: white; font-weight: 700; text-decoration: none; }
+    a.secondary { border: 1px solid #6e8791; background: transparent; }
     small { display: block; color: #93a7b0; }
   </style>
 </head>
@@ -20,15 +22,18 @@
   <main>
     <h1>BITORA 1.0.0</h1>
     <p>Instaladores Android oficiales y firmados. Las descargas pueden reanudarse si se corta la conexion.</p>
+    <p class="notice">En Android, abra la descarga en Chrome. Cuando termine, toque la notificacion <strong>Descarga completada</strong> para iniciar el instalador.</p>
     <section>
       <h2>BITORA Operation</h2>
       <small>Operacion, acreditacion y captura en campo</small>
-      <a href="/downloads/bitora-operation-1.0.0.apk" download>Descargar Operation APK</a>
+      <a href="intent://web-production-7f9ac.up.railway.app/downloads/bitora-operation-1.0.0.apk#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Fweb-production-7f9ac.up.railway.app%2Fdownloads%2Fbitora-operation-1.0.0.apk;end">Abrir en Chrome</a>
+      <a class="secondary" href="/downloads/bitora-operation-1.0.0.apk" download>Descarga directa</a>
     </section>
     <section>
       <h2>BITORA Display</h2>
       <small>Pantallas publicas y carteleria</small>
-      <a href="/downloads/bitora-display-1.0.0.apk" download>Descargar Display APK</a>
+      <a href="intent://web-production-7f9ac.up.railway.app/downloads/bitora-display-1.0.0.apk#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Fweb-production-7f9ac.up.railway.app%2Fdownloads%2Fbitora-display-1.0.0.apk;end">Abrir en Chrome</a>
+      <a class="secondary" href="/downloads/bitora-display-1.0.0.apk" download>Descarga directa</a>
     </section>
   </main>
 </body>
