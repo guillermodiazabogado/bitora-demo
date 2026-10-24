@@ -36,10 +36,13 @@ def build_schema(path: Path) -> None:
     with connect_to(path) as db:
         db.executescript(
             """
-            CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft', created_at TEXT NOT NULL);
+            CREATE TABLE organizations (id INTEGER PRIMARY KEY AUTOINCREMENT, public_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, legal_name TEXT, status TEXT, plan TEXT, created_at TEXT, updated_at TEXT);
+            CREATE TABLE organization_integrations (id INTEGER PRIMARY KEY AUTOINCREMENT, organization_id INTEGER NOT NULL REFERENCES organizations(id), integration_type TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT, updated_at TEXT);
+            CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, organization_id INTEGER REFERENCES organizations(id), name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft', created_at TEXT NOT NULL);
             CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
             CREATE TABLE user_event_roles (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, event_id INTEGER NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, UNIQUE(user_id, event_id));
             CREATE TABLE people (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT, email TEXT UNIQUE, phone TEXT, dni TEXT, company TEXT, created_at TEXT);
+            CREATE TABLE networking_event_participations (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, person_id INTEGER NOT NULL);
             CREATE TABLE accreditation_types (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, name TEXT, capacity INTEGER, access_enabled INTEGER, created_at TEXT);
             CREATE TABLE spaces (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, name TEXT, capacity INTEGER, created_at TEXT);
             CREATE TABLE activities (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, space_id INTEGER NOT NULL, title TEXT, starts_at TEXT, ends_at TEXT, capacity INTEGER, status TEXT, created_at TEXT);
@@ -50,9 +53,9 @@ def build_schema(path: Path) -> None:
             CREATE TABLE certificate_eligibility (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, activity_id INTEGER NOT NULL, accreditation_id INTEGER NOT NULL, porcentaje INTEGER, estado TEXT, fecha_calculo TEXT);
             CREATE TABLE access_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, activity_id INTEGER, accreditation_id INTEGER, token TEXT, result TEXT, reason TEXT, created_at TEXT);
             CREATE TABLE communication_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, person_id INTEGER NOT NULL, accreditation_id INTEGER, canal TEXT, fecha TEXT, tipo TEXT, asunto TEXT, contenido TEXT, estado TEXT);
-            CREATE TABLE communication_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, person_id INTEGER NOT NULL, accreditation_id INTEGER, channel TEXT, status TEXT, scheduled_at TEXT, processed_at TEXT, last_error TEXT, created_at TEXT);
+            CREATE TABLE communication_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, organization_id INTEGER REFERENCES organizations(id), integration_id INTEGER REFERENCES organization_integrations(id), person_id INTEGER NOT NULL, accreditation_id INTEGER, channel TEXT, status TEXT, scheduled_at TEXT, processed_at TEXT, last_error TEXT, created_at TEXT);
             CREATE TABLE email_delivery_events (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, queue_id INTEGER, provider TEXT, message_id TEXT, event_type TEXT, payload TEXT, created_at TEXT);
-            CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, kind TEXT, priority TEXT, status TEXT, payload TEXT, result TEXT, retry_count INTEGER, max_retries INTEGER, retry_at TEXT, worker_id TEXT, error TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
+            CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, organization_id INTEGER REFERENCES organizations(id), integration_id INTEGER REFERENCES organization_integrations(id), kind TEXT, priority TEXT, status TEXT, payload TEXT, result TEXT, retry_count INTEGER, max_retries INTEGER, retry_at TEXT, worker_id TEXT, error TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
             CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT, action TEXT, entity_type TEXT, entity_id INTEGER, payload TEXT, created_at TEXT);
             """
         )
@@ -60,8 +63,10 @@ def build_schema(path: Path) -> None:
 
 def seed_event(path: Path) -> None:
     with connect_to(path) as db:
+        db.execute("INSERT INTO organizations (public_id, name, legal_name, status, plan, created_at, updated_at) VALUES ('org-demo', 'Organizacion Demo', 'Organizacion Demo', 'active', 'standard', ?, ?)", (now(), now()))
+        db.execute("INSERT INTO organization_integrations (organization_id, integration_type, status, created_at, updated_at) VALUES (1, 'email_provider', 'connected', ?, ?)", (now(), now()))
         db.execute("INSERT INTO users (name, role, active, created_at) VALUES ('Admin', 'Super Admin', 1, ?)", (now(),))
-        db.execute("INSERT INTO events (name, status, created_at) VALUES ('Evento A', 'published', ?)", (now(),))
+        db.execute("INSERT INTO events (organization_id, name, status, created_at) VALUES (1, 'Evento A', 'published', ?)", (now(),))
         db.execute("INSERT INTO user_event_roles (user_id, event_id, role, active, created_at) VALUES (1, 1, 'Super Admin', 1, ?)", (now(),))
         db.execute("INSERT INTO people (first_name, last_name, email, phone, dni, company, created_at) VALUES ('Ana', 'Demo', 'ana@demo.com', '111', '1', 'ACME', ?)", (now(),))
         db.execute("INSERT INTO accreditation_types (event_id, name, capacity, access_enabled, created_at) VALUES (1, 'General', 100, 1, ?)", (now(),))
@@ -74,9 +79,9 @@ def seed_event(path: Path) -> None:
         db.execute("INSERT INTO certificate_eligibility (event_id, activity_id, accreditation_id, porcentaje, estado, fecha_calculo) VALUES (1, 1, 1, 100, 'Elegible', ?)", (now(),))
         db.execute("INSERT INTO access_logs (event_id, activity_id, accreditation_id, token, result, reason, created_at) VALUES (1, 1, 1, 'EVT-ORIGINAL', 'ok', '', ?)", (now(),))
         db.execute("INSERT INTO communication_logs (event_id, person_id, accreditation_id, canal, fecha, tipo, asunto, contenido, estado) VALUES (1, 1, 1, 'email', ?, 'qr', 'QR', 'contenido', 'enviado')", (now(),))
-        db.execute("INSERT INTO communication_queue (event_id, person_id, accreditation_id, channel, status, scheduled_at, processed_at, last_error, created_at) VALUES (1, 1, 1, 'whatsapp', 'pendiente', ?, NULL, '', ?)", (now(), now()))
+        db.execute("INSERT INTO communication_queue (event_id, organization_id, integration_id, person_id, accreditation_id, channel, status, scheduled_at, processed_at, last_error, created_at) VALUES (1, 1, 1, 1, 1, 'whatsapp', 'pendiente', ?, NULL, '', ?)", (now(), now()))
         db.execute("INSERT INTO email_delivery_events (event_id, queue_id, provider, message_id, event_type, payload, created_at) VALUES (1, 1, 'demo', 'msg-1', 'sent', '{}', ?)", (now(),))
-        db.execute("INSERT INTO jobs (event_id, kind, priority, status, payload, result, retry_count, max_retries, retry_at, worker_id, error, created_by, created_at, updated_at) VALUES (1, 'email.send', 'high', 'pending', '{}', '{}', 0, 3, ?, '', '', 'Admin', ?, ?)", (now(), now(), now()))
+        db.execute("INSERT INTO jobs (event_id, organization_id, integration_id, kind, priority, status, payload, result, retry_count, max_retries, retry_at, worker_id, error, created_by, created_at, updated_at) VALUES (1, 1, 1, 'email.send', 'high', 'pending', '{}', '{}', 0, 3, ?, '', '', 'Admin', ?, ?)", (now(), now(), now()))
 
 
 def main() -> None:
@@ -139,8 +144,10 @@ def main() -> None:
             assert restored_log["token"] == restored_acc["token"]
             queue = db.execute("SELECT * FROM communication_queue WHERE event_id = ?", (new_event_id,)).fetchone()
             assert queue["status"] == "restored_inactive"
+            assert queue["integration_id"] is None
             job = db.execute("SELECT * FROM jobs WHERE event_id = ?", (new_event_id,)).fetchone()
             assert job["status"] == "cancelled"
+            assert job["integration_id"] is None
             assert db.execute("SELECT COUNT(*) AS c FROM people WHERE email = 'ana@demo.com'").fetchone()["c"] == 1
             assert db.execute("SELECT COUNT(*) AS c FROM accreditations WHERE event_id = 1").fetchone()["c"] == 1
             assert db.execute("SELECT COUNT(*) AS c FROM accreditations WHERE event_id = ?", (new_event_id,)).fetchone()["c"] == 1

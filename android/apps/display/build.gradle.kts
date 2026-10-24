@@ -12,8 +12,8 @@ android {
         applicationId = "com.bitora.display"
         minSdk = 26
         targetSdk = 35
-        versionCode = 103
-        versionName = "0.11.1-a11"
+        versionCode = 104
+        versionName = "1.0.0"
     }
 
     buildFeatures {

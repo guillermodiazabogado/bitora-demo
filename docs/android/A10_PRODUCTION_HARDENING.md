@@ -3,7 +3,7 @@
 ## Completed in block 1
 
 - Separate debug and release application identities
-- Version `0.11.1-a11` with production package names
+- Version `1.0.0` with production package names
 - DEV tools disabled in release through immutable BuildConfig fields
 - LAB test actions and diagnostics gated out of release
 - Stable HTTPS endpoint policy for production
@@ -40,20 +40,18 @@
   at 13:14:48 America/Buenos_Aires without manual synchronization. This certifies
   WorkManager restart recovery on the physical Display device.
 
-## Deliberately not distributable yet
+## Production release boundary
 
-No production APK may be distributed until the stable production endpoint is
-configured and the protected production release workflow completes. APKs built
-against LAB or staging endpoints remain test-only artifacts.
+The stable production endpoint is configured in the protected
+`android-production` GitHub environment. The protected production workflow has
+completed successfully and produced signed Operation and Display APKs.
 
-## External inputs still required
+Distribution remains private and controlled. Promotion beyond the internal
+pilot still requires the physical-device gates in `A10_ROLLOUT_RUNBOOK.md`.
 
-- Stable production pairing/Edge base URL
-- Confirmed Android application IDs and ownership
-- Production Admin pairing endpoints and rollout environment
+## Fulfilled production inputs
 
-## Remaining A10 blocks
-
-- Configure `BITORA_ANDROID_PRODUCTION_BASE_URL` in the protected
-  `android-production` GitHub environment
-- Execute the protected production release workflow and approved pilot runbook
+- Stable production pairing/Edge/Admin base URL
+- Confirmed production application IDs
+- RSA-4096 production signing identity in protected CI secrets
+- Successful protected production release workflow
