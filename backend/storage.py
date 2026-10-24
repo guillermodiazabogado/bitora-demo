@@ -323,7 +323,10 @@ class StorageService:
         return f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
 
     def _remote_key(self, key: str) -> str:
-        return f"{self.prefix}/{self._safe_key(key)}" if self.prefix else self._safe_key(key)
+        clean_key = self._safe_key(key) if str(key or "").strip("/\\ ") else ""
+        if self.prefix:
+            return f"{self.prefix}/{clean_key}" if clean_key else f"{self.prefix}/"
+        return clean_key
 
     def _local_key(self, remote_key: str) -> str:
         remote_key = str(remote_key or "").strip("/")
