@@ -371,6 +371,9 @@ function syncEventSelectors() {
     }
     select.value = String(state.eventId || "");
   });
+  if ($("#androidDevicesLink")) {
+    $("#androidDevicesLink").href = `/android-devices.html?event_id=${state.eventId || ""}`;
+  }
 }
 
 async function selectActiveEvent(eventId) {
@@ -391,6 +394,9 @@ async function loadAuth() {
     $("#logoutBtn").classList.remove("hidden");
   } else {
     $("#logoutBtn").classList.add("hidden");
+  }
+  if ($("#androidDevicesLink")) {
+    $("#androidDevicesLink").classList.toggle("hidden", state.authUser?.role !== "Super Admin");
   }
 }
 
