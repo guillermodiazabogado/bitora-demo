@@ -175,12 +175,24 @@ class AndroidEdgeService:
         event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
         people = db.execute(
             """
-            SELECT a.token, a.status, a.checked_in_at, p.first_name, p.last_name
+            SELECT a.id AS accreditation_id, a.token, a.status, a.checked_in_at,
+                   p.first_name, p.last_name
             FROM accreditations a JOIN people p ON p.id = a.person_id
             WHERE a.event_id = ? ORDER BY a.id
             """,
             (event_id,),
         ).fetchall()
+        now = _now_iso()
+        for row in people:
+            db.execute(
+                """
+                INSERT INTO android_edge_credentials (event_id, accreditation_id, token_hash, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (event_id, accreditation_id) DO UPDATE SET
+                    token_hash = excluded.token_hash, updated_at = excluded.updated_at
+                """,
+                (event_id, int(row["accreditation_id"]), _sha(str(row["token"])), now),
+            )
         participants = [
             {"token": row["token"], "event_id": event_id, "status": str(row["status"]).upper(),
              "display_name": f"{row['first_name']} {row['last_name']}".strip(), "checked_in": bool(row["checked_in_at"])}
@@ -191,14 +203,73 @@ class AndroidEdgeService:
              "entitlements": ["ACCESS_FAST"], "doors": ["main"], "zones": ["general"]}
             for item in participants
         ]
+        service_rows = db.execute(
+            """
+            SELECT a.token, p.first_name, p.last_name, e.entitlement_type, e.service_point,
+                   e.status, e.quantity, e.consumed_quantity
+            FROM android_service_entitlements e
+            JOIN accreditations a ON a.id = e.accreditation_id AND a.event_id = e.event_id
+            JOIN people p ON p.id = a.person_id
+            WHERE e.event_id = ? ORDER BY e.id
+            """,
+            (event_id,),
+        ).fetchall()
+        lead_rows = db.execute(
+            """
+            SELECT a.token, a.status, p.first_name, p.last_name, l.consent_status
+            FROM android_lead_participants l
+            JOIN accreditations a ON a.id = l.accreditation_id AND a.event_id = l.event_id
+            JOIN people p ON p.id = a.person_id
+            WHERE l.event_id = ? ORDER BY l.id
+            """,
+            (event_id,),
+        ).fetchall()
+        vehicle_rows = db.execute(
+            """
+            SELECT permit_token, display_label, checkpoint, status
+            FROM android_vehicle_permits WHERE event_id = ? ORDER BY id
+            """,
+            (event_id,),
+        ).fetchall()
+        service_entitlements = [
+            {
+                "token": row["token"], "event_id": event_id,
+                "display_name": f"{row['first_name']} {row['last_name']}".strip(),
+                "entitlement_type": row["entitlement_type"], "service_point": row["service_point"],
+                "status": str(row["status"]).upper(),
+                "available": max(0, int(row["quantity"]) - int(row["consumed_quantity"])),
+            }
+            for row in service_rows
+        ]
+        lead_participants = [
+            {
+                "token": row["token"], "event_id": event_id, "status": str(row["status"]).upper(),
+                "display_name": f"{row['first_name']} {row['last_name']}".strip(),
+                "lead_consent": str(row["consent_status"]).upper() == "GRANTED",
+            }
+            for row in lead_rows
+        ]
+        vehicle_permits = [
+            {
+                "token": row["permit_token"], "event_id": event_id,
+                "display_label": row["display_label"], "checkpoint": row["checkpoint"],
+                "status": str(row["status"]).upper(),
+            }
+            for row in vehicle_rows
+        ]
         display = db.execute("SELECT * FROM public_display_config WHERE event_id = ?", (event_id,)).fetchone()
         revision = self._dataset_revision(db, event_id)
+        profile = str(device["profile"]).upper()
         payload = {
             "event": {"organization_id": organization_id, "event_id": event_id, "name": event["name"]},
             "doors": [{"id": "main", "name": "Main", "direction": "ENTRY"}],
             "device": {"profile": device["profile"], "door": "main", "zone": "general", "direction": "ENTRY"},
-            "zones": [{"id": "general", "name": "General"}], "credentials": credentials,
-            "participants": participants, "service_entitlements": [], "lead_participants": [], "vehicle_permits": [],
+            "zones": [{"id": "general", "name": "General"}],
+            "credentials": credentials if profile == "ACCESS_FAST" else [],
+            "participants": participants if profile in {"RECEPTION", "SELF_SERVICE"} else [],
+            "service_entitlements": service_entitlements if profile == "SERVICE" else [],
+            "lead_participants": lead_participants if profile == "LEAD_RETRIEVAL" else [],
+            "vehicle_permits": vehicle_permits if profile == "LOGISTICS" else [],
             "capabilities": json.loads(device["capabilities_json"] or "[]"),
             "configuration": {"offline_policy": "EDGE_LOCAL_SAFE_ONLY", "cooldown_seconds": 2},
             "display_content": {"title": "BITORA LIVE", "message": (display["message"] if display else event["name"]), "screen": (display["room_filter"] if display else "MAIN_HALL") or "MAIN_HALL", "duration_seconds": int(display["refresh_seconds"] if display else 10)},
@@ -228,14 +299,326 @@ class AndroidEdgeService:
             if existing:
                 results.append({"operationId": operation_id, "status": "DUPLICATE", "conflict": "DUPLICATE"})
                 continue
+            operation_type = str(operation.get("operationType") or "UNKNOWN").upper()
+            payload = operation.get("payload") if isinstance(operation.get("payload"), dict) else {}
             db.execute(
                 """INSERT INTO android_edge_operations
                    (operation_id, device_id, idempotency_key, operation_type, correlation_id, sequence_number, payload_json, status, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, 'ACKNOWLEDGED', ?)""",
-                (operation_id, device["device_id"], idempotency_key, str(operation.get("operationType") or "UNKNOWN"), str(operation.get("correlationId") or ""), int(operation.get("sequence") or 0), json.dumps(operation.get("payload") or {}), _now_iso()),
+                (operation_id, device["device_id"], idempotency_key, operation_type, str(operation.get("correlationId") or ""), int(operation.get("sequence") or 0), json.dumps(payload), _now_iso()),
             )
-            results.append({"operationId": operation_id, "status": "ACKNOWLEDGED", "conflict": "NO_CONFLICT"})
+            try:
+                conflict = self._apply_operation(db, device, operation_id, operation_type, payload)
+                results.append({"operationId": operation_id, "status": "ACKNOWLEDGED", "conflict": conflict})
+            except ValueError as exc:
+                reason = str(exc)[:120] or "INVALID_OPERATION"
+                db.execute("UPDATE android_edge_operations SET status = 'REJECTED' WHERE operation_id = ?", (operation_id,))
+                results.append({"operationId": operation_id, "status": "REJECTED", "conflict": reason})
         return {"ok": True, "results": results, "checkpoint": f"PRD-CHK-{int(time.time())}"}
+
+    def resources(self, db, event_id: int) -> dict:
+        event = db.execute("SELECT id, name, organization_id FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not event:
+            return {"ok": False, "error": "event_not_found"}
+        participants = db.execute(
+            """
+            SELECT a.id AS accreditation_id, a.status, p.first_name, p.last_name, p.email,
+                   COALESCE(se.status, '') AS service_status,
+                   COALESCE(se.quantity, 0) AS service_quantity,
+                   COALESCE(se.consumed_quantity, 0) AS service_consumed,
+                   COALESCE(lp.consent_status, '') AS lead_consent
+            FROM accreditations a JOIN people p ON p.id = a.person_id
+            LEFT JOIN android_service_entitlements se ON se.event_id = a.event_id
+                AND se.accreditation_id = a.id AND se.entitlement_type = 'COFFEE'
+                AND se.service_point = 'coffee-main'
+            LEFT JOIN android_lead_participants lp ON lp.event_id = a.event_id
+                AND lp.accreditation_id = a.id
+            WHERE a.event_id = ? ORDER BY p.last_name, p.first_name, a.id
+            """,
+            (event_id,),
+        ).fetchall()
+        vehicles = db.execute(
+            """SELECT id, display_label, checkpoint, status, permit_token, created_at
+               FROM android_vehicle_permits WHERE event_id = ? ORDER BY display_label, id""",
+            (event_id,),
+        ).fetchall()
+        counts = {
+            "serviceConsumptions": int(db.execute("SELECT COUNT(*) AS c FROM android_service_consumptions WHERE event_id = ?", (event_id,)).fetchone()["c"] or 0),
+            "leadCaptures": int(db.execute("SELECT COUNT(*) AS c FROM android_lead_captures WHERE event_id = ?", (event_id,)).fetchone()["c"] or 0),
+            "vehicleAccesses": int(db.execute("SELECT COUNT(*) AS c FROM android_vehicle_access WHERE event_id = ? AND decision = 'ALLOW'", (event_id,)).fetchone()["c"] or 0),
+        }
+        return {
+            "ok": True,
+            "event": {"id": int(event["id"]), "name": event["name"]},
+            "participants": [dict(row) for row in participants],
+            "vehicles": [dict(row) for row in vehicles],
+            "counts": counts,
+        }
+
+    def configure_resource(self, db, data: dict) -> dict:
+        event_id = int(data.get("eventId") or 0)
+        event = db.execute("SELECT id, organization_id FROM events WHERE id = ?", (event_id,)).fetchone()
+        if not event:
+            return {"ok": False, "error": "event_not_found"}
+        organization_id = int(event["organization_id"] or 1)
+        kind = str(data.get("kind") or "").strip().upper()
+        now = _now_iso()
+        if kind in {"SERVICE", "LEAD"}:
+            accreditation_id = int(data.get("accreditationId") or 0)
+            accreditation = db.execute(
+                "SELECT id FROM accreditations WHERE id = ? AND event_id = ?",
+                (accreditation_id, event_id),
+            ).fetchone()
+            if not accreditation:
+                return {"ok": False, "error": "accreditation_not_found"}
+            enabled = bool(data.get("enabled"))
+            if kind == "SERVICE":
+                status = "ACTIVE" if enabled else "REVOKED"
+                quantity = max(1, min(100, int(data.get("quantity") or 1)))
+                db.execute(
+                    """
+                    INSERT INTO android_service_entitlements
+                        (organization_id, event_id, accreditation_id, entitlement_type, service_point,
+                         status, quantity, consumed_quantity, created_at, updated_at)
+                    VALUES (?, ?, ?, 'COFFEE', 'coffee-main', ?, ?, 0, ?, ?)
+                    ON CONFLICT (event_id, accreditation_id, entitlement_type, service_point) DO UPDATE SET
+                        status = excluded.status, quantity = excluded.quantity, updated_at = excluded.updated_at
+                    """,
+                    (organization_id, event_id, accreditation_id, status, quantity, now, now),
+                )
+            else:
+                consent = "GRANTED" if enabled else "REVOKED"
+                db.execute(
+                    """
+                    INSERT INTO android_lead_participants
+                        (organization_id, event_id, accreditation_id, consent_status, source, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'admin', ?, ?)
+                    ON CONFLICT (event_id, accreditation_id) DO UPDATE SET
+                        consent_status = excluded.consent_status, source = excluded.source,
+                        updated_at = excluded.updated_at
+                    """,
+                    (organization_id, event_id, accreditation_id, consent, now, now),
+                )
+        elif kind == "VEHICLE":
+            label = str(data.get("displayLabel") or "").strip()[:120]
+            if not label:
+                return {"ok": False, "error": "display_label_required"}
+            permit_id = int(data.get("permitId") or 0)
+            status = "ACTIVE" if bool(data.get("enabled", True)) else "REVOKED"
+            checkpoint = str(data.get("checkpoint") or "logistics-main").strip()[:80]
+            if permit_id:
+                db.execute(
+                    """UPDATE android_vehicle_permits SET display_label = ?, checkpoint = ?, status = ?, updated_at = ?
+                       WHERE id = ? AND event_id = ?""",
+                    (label, checkpoint, status, now, permit_id, event_id),
+                )
+            else:
+                token = f"BITORA:VEHICLE:{secrets.token_urlsafe(12).upper()}"
+                db.execute(
+                    """
+                    INSERT INTO android_vehicle_permits
+                        (organization_id, event_id, permit_token, token_hash, display_label, checkpoint, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (organization_id, event_id, token, _sha(token), label, checkpoint, status, now, now),
+                )
+        else:
+            return {"ok": False, "error": "invalid_resource_kind"}
+        return self.resources(db, event_id)
+
+    def _apply_operation(self, db, device, operation_id: str, operation_type: str, payload: dict) -> str:
+        event_id = int(device["event_id"])
+        organization_id = int(device["organization_id"])
+        allowed_profiles = {
+            "ACCESS_ATTEMPT": {"ACCESS_FAST"},
+            "PARTICIPANT_CHECK_IN": {"RECEPTION", "SELF_SERVICE"},
+            "ENTITLEMENT_CONSUMPTION": {"SERVICE"},
+            "LEAD_CAPTURE": {"LEAD_RETRIEVAL"},
+            "VEHICLE_ACCESS": {"LOGISTICS"},
+        }
+        if str(device["profile"]).upper() not in allowed_profiles.get(operation_type, set()):
+            raise ValueError("DEVICE_NOT_AUTHORIZED")
+        payload_event_id = int(payload.get("event_id") or 0)
+        if payload_event_id != event_id:
+            raise ValueError("WRONG_EVENT")
+        if str(payload.get("device_id") or "") != str(device["device_id"]):
+            raise ValueError("WRONG_DEVICE")
+        decision = str(payload.get("decision") or "DENY").upper()
+        reason = str(payload.get("reason_code") or "")[:120]
+        occurred_at = str(payload.get("device_timestamp") or _now_iso())[:80]
+        if operation_type == "ACCESS_ATTEMPT":
+            accreditation = self._accreditation_for_ref(db, event_id, str(payload.get("token_hash") or ""))
+            token = accreditation["token"] if accreditation else ""
+            conflict = "NO_CONFLICT"
+            if decision == "ALLOW" and not accreditation:
+                conflict = "UNKNOWN_CREDENTIAL"
+            elif decision == "ALLOW" and str(accreditation["status"]).lower() not in {"active", "confirmed", "checked_in"}:
+                conflict = "INACTIVE_ACCREDITATION"
+            granted = decision == "ALLOW" and conflict == "NO_CONFLICT"
+            db.execute(
+                """
+                INSERT INTO access_logs
+                    (accreditation_id, event_id, token, operator, checkpoint, result, reason,
+                     created_at, access_point, access_context)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'event_entry')
+                """,
+                (
+                    int(accreditation["id"]) if accreditation else None, event_id, token,
+                    f"android:{device['device_id']}", str(payload.get("door") or "main")[:80],
+                    "granted" if granted else "denied", conflict if conflict != "NO_CONFLICT" else reason, occurred_at,
+                    str(payload.get("zone") or "general")[:80],
+                ),
+            )
+            if granted and accreditation:
+                if str(payload.get("direction") or "ENTRY").upper() == "ENTRY":
+                    db.execute(
+                        """UPDATE accreditations SET checked_in_at = COALESCE(checked_in_at, ?),
+                           checked_in_by = ?, access_count = access_count + 1 WHERE id = ?""",
+                        (occurred_at, f"android:{device['device_id']}", int(accreditation["id"])),
+                    )
+                else:
+                    db.execute("UPDATE accreditations SET access_count = access_count + 1 WHERE id = ?", (int(accreditation["id"]),))
+            return conflict if decision == "ALLOW" else (reason or "DEVICE_DENIED")
+
+        if operation_type == "PARTICIPANT_CHECK_IN":
+            accreditation = self._accreditation_for_ref(db, event_id, str(payload.get("credential_ref") or ""))
+            if decision != "ALLOW":
+                return reason or "DEVICE_DENIED"
+            if not accreditation:
+                return "UNKNOWN_CREDENTIAL"
+            if str(accreditation["status"]).lower() not in {"active", "confirmed", "checked_in"}:
+                return "INACTIVE_ACCREDITATION"
+            already = bool(accreditation["checked_in_at"])
+            db.execute(
+                """UPDATE accreditations SET checked_in_at = COALESCE(checked_in_at, ?),
+                   checked_in_by = COALESCE(NULLIF(checked_in_by, ''), ?),
+                   access_count = CASE WHEN checked_in_at IS NULL THEN access_count + 1 ELSE access_count END
+                   WHERE id = ?""",
+                (occurred_at, f"android:{device['device_id']}", int(accreditation["id"])),
+            )
+            db.execute(
+                """INSERT INTO access_logs
+                   (accreditation_id, event_id, token, operator, checkpoint, result, reason,
+                    created_at, access_point, access_context)
+                   VALUES (?, ?, ?, ?, 'check-in', 'granted', ?, ?, 'reception', 'event_entry')""",
+                (int(accreditation["id"]), event_id, accreditation["token"], f"android:{device['device_id']}", reason or "CHECKED_IN", occurred_at),
+            )
+            return "ALREADY_CHECKED_IN" if already else "NO_CONFLICT"
+
+        if operation_type == "ENTITLEMENT_CONSUMPTION":
+            if decision != "ALLOW":
+                return reason or "DEVICE_DENIED"
+            accreditation = self._accreditation_for_ref(db, event_id, str(payload.get("credential_ref") or ""))
+            if not accreditation:
+                return "UNKNOWN_CREDENTIAL"
+            if str(accreditation["status"]).lower() not in {"active", "confirmed", "checked_in"}:
+                return "INACTIVE_ACCREDITATION"
+            entitlement_type = str(payload.get("entitlement_type") or "COFFEE").upper()[:80]
+            service_point = str(payload.get("service_point") or "coffee-main")[:80]
+            quantity = max(1, min(100, int(payload.get("quantity") or 1)))
+            entitlement = db.execute(
+                """SELECT * FROM android_service_entitlements
+                   WHERE event_id = ? AND accreditation_id = ? AND entitlement_type = ? AND service_point = ?""",
+                (event_id, int(accreditation["id"]), entitlement_type, service_point),
+            ).fetchone()
+            if not entitlement or str(entitlement["status"]).upper() != "ACTIVE":
+                return "NO_ENTITLEMENT"
+            updated = db.execute(
+                """UPDATE android_service_entitlements
+                   SET consumed_quantity = consumed_quantity + ?, updated_at = ?
+                   WHERE id = ? AND status = 'ACTIVE' AND consumed_quantity + ? <= quantity""",
+                (quantity, _now_iso(), int(entitlement["id"]), quantity),
+            )
+            if updated.rowcount != 1:
+                return "ALREADY_CONSUMED"
+            db.execute(
+                """INSERT INTO android_service_consumptions
+                   (organization_id, event_id, entitlement_id, accreditation_id, device_id,
+                    operation_id, quantity, service_point, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (organization_id, event_id, int(entitlement["id"]), int(accreditation["id"]), device["device_id"], operation_id, quantity, service_point, occurred_at),
+            )
+            return "NO_CONFLICT"
+
+        if operation_type == "LEAD_CAPTURE":
+            if decision != "ALLOW":
+                return reason or "DEVICE_DENIED"
+            accreditation = self._accreditation_for_ref(db, event_id, str(payload.get("participant_ref") or ""))
+            if not accreditation:
+                return "UNKNOWN_CREDENTIAL"
+            if str(accreditation["status"]).lower() not in {"active", "confirmed", "checked_in"}:
+                return "INACTIVE_ACCREDITATION"
+            consent = db.execute(
+                "SELECT consent_status FROM android_lead_participants WHERE event_id = ? AND accreditation_id = ?",
+                (event_id, int(accreditation["id"])),
+            ).fetchone()
+            if not consent or str(consent["consent_status"]).upper() != "GRANTED":
+                return "CONSENT_REQUIRED"
+            duplicate = db.execute(
+                "SELECT id FROM android_lead_captures WHERE event_id = ? AND device_id = ? AND accreditation_id = ?",
+                (event_id, device["device_id"], int(accreditation["id"])),
+            ).fetchone()
+            if duplicate:
+                return "ALREADY_CAPTURED"
+            db.execute(
+                """INSERT INTO android_lead_captures
+                   (organization_id, event_id, accreditation_id, device_id, operation_id,
+                    consent_verified, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)""",
+                (organization_id, event_id, int(accreditation["id"]), device["device_id"], operation_id, occurred_at),
+            )
+            return "NO_CONFLICT"
+
+        if operation_type == "VEHICLE_ACCESS":
+            permit_ref = str(payload.get("vehicle_ref") or "")
+            permit = db.execute(
+                "SELECT * FROM android_vehicle_permits WHERE event_id = ? AND token_hash = ?",
+                (event_id, permit_ref),
+            ).fetchone()
+            conflict = "NO_CONFLICT"
+            if decision == "ALLOW":
+                if not permit:
+                    conflict = "UNKNOWN_VEHICLE"
+                elif str(permit["status"]).upper() != "ACTIVE":
+                    conflict = "PERMIT_REVOKED"
+                elif db.execute(
+                    "SELECT id FROM android_vehicle_access WHERE event_id = ? AND permit_id = ? AND decision = 'ALLOW'",
+                    (event_id, int(permit["id"])),
+                ).fetchone():
+                    conflict = "ALREADY_ENTERED"
+            projected_decision = "DENY" if decision == "ALLOW" and conflict != "NO_CONFLICT" else decision
+            db.execute(
+                """INSERT INTO android_vehicle_access
+                   (organization_id, event_id, permit_id, device_id, operation_id, checkpoint,
+                    decision, reason_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (organization_id, event_id, int(permit["id"]) if permit else None, device["device_id"], operation_id, str(payload.get("checkpoint") or "logistics-main")[:80], projected_decision, conflict if conflict != "NO_CONFLICT" else reason, occurred_at),
+            )
+            return conflict
+
+        raise ValueError("UNSUPPORTED_OPERATION")
+
+    def _accreditation_for_ref(self, db, event_id: int, token_hash: str):
+        if not token_hash:
+            return None
+        row = db.execute(
+            """SELECT a.* FROM android_edge_credentials c
+               JOIN accreditations a ON a.id = c.accreditation_id
+               WHERE c.event_id = ? AND c.token_hash = ?""",
+            (event_id, token_hash),
+        ).fetchone()
+        if row:
+            return row
+        candidates = db.execute("SELECT * FROM accreditations WHERE event_id = ?", (event_id,)).fetchall()
+        for candidate in candidates:
+            if hmac.compare_digest(_sha(str(candidate["token"])), token_hash):
+                db.execute(
+                    """INSERT INTO android_edge_credentials (event_id, accreditation_id, token_hash, updated_at)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT (event_id, accreditation_id) DO UPDATE SET
+                           token_hash = excluded.token_hash, updated_at = excluded.updated_at""",
+                    (event_id, int(candidate["id"]), token_hash, _now_iso()),
+                )
+                return candidate
+        return None
 
     def telemetry(self, db, device_id: str = "") -> dict:
         if device_id:

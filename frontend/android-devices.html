@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispositivos Android | BITORA</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { background:#f5f7f8; color:#10212b; margin:0; }
+    .android-shell { max-width:1180px; margin:0 auto; padding:24px; }
+    .android-head { align-items:end; display:flex; gap:16px; justify-content:space-between; margin-bottom:22px; }
+    .android-head h1 { margin:0 0 4px; }
+    .android-head p { color:#63727a; margin:0; }
+    .android-toolbar { align-items:end; display:flex; gap:10px; }
+    .android-toolbar label { display:grid; gap:5px; min-width:260px; }
+    .android-grid { display:grid; gap:18px; grid-template-columns:1fr 1fr; }
+    .android-section { background:#fff; border:1px solid #d9e0e3; border-radius:8px; padding:18px; }
+    .android-section.wide { grid-column:1 / -1; }
+    .android-section h2 { font-size:20px; margin:0 0 14px; }
+    .android-list { display:grid; gap:10px; }
+    .android-row { align-items:center; border-top:1px solid #e5eaec; display:grid; gap:10px; grid-template-columns:minmax(0,1fr) auto; padding-top:10px; }
+    .android-row:first-child { border-top:0; padding-top:0; }
+    .android-row strong,.android-row small { display:block; overflow-wrap:anywhere; }
+    .android-row small { color:#68777f; margin-top:3px; }
+    .android-actions { align-items:center; display:flex; flex-wrap:wrap; gap:8px; }
+    .android-actions select { width:auto; }
+    .android-kpis { display:grid; gap:10px; grid-template-columns:repeat(3,1fr); margin-bottom:14px; }
+    .android-kpis div { border-left:3px solid #159879; padding:6px 10px; }
+    .android-kpis strong,.android-kpis span { display:block; }
+    .android-kpis strong { font-size:22px; }
+    .android-table { border-collapse:collapse; width:100%; }
+    .android-table th,.android-table td { border-bottom:1px solid #e5eaec; padding:10px 8px; text-align:left; vertical-align:middle; }
+    .android-table th { color:#68777f; font-size:12px; text-transform:uppercase; }
+    .android-table input[type=number] { max-width:70px; }
+    .android-table button { white-space:nowrap; }
+    .android-vehicle-form { display:grid; gap:10px; grid-template-columns:minmax(0,1fr) minmax(180px,.5fr) auto; margin-bottom:16px; }
+    .android-status { min-height:22px; margin:10px 0; }
+    .android-status.error { color:#b42318; }
+    .android-status.ok { color:#08785d; }
+    @media (max-width:780px) {
+      .android-shell { padding:16px; }
+      .android-head,.android-toolbar { align-items:stretch; flex-direction:column; }
+      .android-toolbar label { min-width:0; }
+      .android-grid { grid-template-columns:1fr; }
+      .android-section.wide { grid-column:auto; overflow-x:auto; }
+      .android-kpis { grid-template-columns:1fr; }
+      .android-vehicle-form { grid-template-columns:1fr; }
+      .android-row { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="android-shell">
+    <header class="android-head">
+      <div>
+        <strong class="bitora-wordmark">BITORA</strong>
+        <h1>Dispositivos Android</h1>
+        <p>Emparejamiento, estado y recursos operativos del evento.</p>
+      </div>
+      <div class="android-toolbar">
+        <label><span>Evento</span><select id="eventSelect"></select></label>
+        <button id="refreshBtn" type="button">Actualizar</button>
+        <a class="button ghost" href="/">Volver</a>
+      </div>
+    </header>
+    <div id="notice" class="android-status" role="status"></div>
+    <div class="android-grid">
+      <section class="android-section">
+        <h2>Solicitudes de emparejamiento</h2>
+        <div id="pairings" class="android-list"></div>
+      </section>
+      <section class="android-section">
+        <h2>Dispositivos y telemetría</h2>
+        <div id="devices" class="android-list"></div>
+      </section>
+      <section class="android-section wide">
+        <h2>Participantes habilitados</h2>
+        <div id="kpis" class="android-kpis"></div>
+        <table class="android-table">
+          <thead><tr><th>Participante</th><th>Estado</th><th>Servicio café</th><th>Consentimiento lead</th></tr></thead>
+          <tbody id="participants"></tbody>
+        </table>
+      </section>
+      <section class="android-section wide">
+        <h2>Permisos vehiculares</h2>
+        <form id="vehicleForm" class="android-vehicle-form">
+          <input name="displayLabel" placeholder="Vehículo, patente o referencia" required>
+          <input name="checkpoint" value="logistics-main" placeholder="Punto de control" required>
+          <button>Crear permiso</button>
+        </form>
+        <div id="vehicles" class="android-list"></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
+    let eventId = Number(new URLSearchParams(location.search).get("event_id") || 0);
+    const profiles = ["ACCESS_FAST","RECEPTION","SELF_SERVICE","SERVICE","LEAD_RETRIEVAL","LOGISTICS","DISPLAY"];
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {headers:{"Content-Type":"application/json", ...(options.headers || {})}, ...options});
+      if (response.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`; throw new Error("Sesión requerida"); }
+      const body = await response.json();
+      if (!response.ok || body.ok === false) throw new Error(body.error || `HTTP ${response.status}`);
+      return body;
+    }
+    function notice(message, error = false) {
+      $("#notice").textContent = message || "";
+      $("#notice").className = `android-status ${error ? "error" : "ok"}`;
+    }
+    async function loadEvents() {
+      const events = await api("/api/events");
+      $("#eventSelect").innerHTML = events.map((event) => `<option value="${event.id}">${esc(event.name)}</option>`).join("");
+      if (!eventId || !events.some((event) => Number(event.id) === eventId)) eventId = Number(events[0]?.id || 0);
+      $("#eventSelect").value = String(eventId || "");
+    }
+    async function load() {
+      if (!eventId) return;
+      notice("Actualizando...");
+      try {
+        const [pairings, telemetry, resources] = await Promise.all([
+          api("/api/admin/pairing/pending"), api("/api/admin/telemetry"),
+          api(`/api/admin/android/resources?eventId=${eventId}`),
+        ]);
+        renderPairings(pairings.items || []);
+        renderDevices(telemetry.items || []);
+        renderResources(resources);
+        notice("Información actualizada.");
+      } catch (error) { notice(error.message, true); }
+    }
+    function renderPairings(items) {
+      const visible = items.filter((item) => item.status === "PENDING" || Number(item.eventId) === eventId).slice(0, 30);
+      $("#pairings").innerHTML = visible.length ? visible.map((item) => `
+        <div class="android-row"><div><strong>${esc(item.pairingCode)}</strong><small>${esc(item.deviceKind)} · ${esc(item.status)} · ${esc(item.softwareVersion || "sin versión")}</small></div>
+        <div class="android-actions">${item.status === "PENDING" ? `<select data-profile>${profiles.map((p) => `<option ${p === item.requestedProfile ? "selected" : ""}>${p}</option>`).join("")}</select><button data-approve="${esc(item.pairingCode)}">Aprobar</button><button class="ghost" data-reject="${esc(item.pairingCode)}">Rechazar</button>` : `<span>${esc(item.profile || item.requestedProfile)}</span>`}</div></div>`).join("") : "<p>No hay solicitudes para este evento.</p>";
+    }
+    function renderDevices(items) {
+      const visible = items.filter((item) => item.status === "ACTIVE" || item.status === "REVOKED");
+      $("#devices").innerHTML = visible.length ? visible.map((item) => `
+        <div class="android-row"><div><strong>${esc(item.deviceId)}</strong><small>${esc(item.profile)} · ${esc(item.status)} · ${item.lastSeen ? `último contacto ${esc(item.lastSeen)}` : "sin contacto"}${item.alerts?.length ? ` · ${esc(item.alerts.join(", "))}` : ""}</small></div>
+        <div class="android-actions">${item.status === "ACTIVE" ? `<button class="ghost" data-revoke="${esc(item.deviceId)}">Revocar</button>` : ""}</div></div>`).join("") : "<p>No hay dispositivos registrados.</p>";
+    }
+    function renderResources(data) {
+      const counts = data.counts || {};
+      $("#kpis").innerHTML = `<div><strong>${counts.serviceConsumptions || 0}</strong><span>Consumos</span></div><div><strong>${counts.leadCaptures || 0}</strong><span>Leads</span></div><div><strong>${counts.vehicleAccesses || 0}</strong><span>Vehículos</span></div>`;
+      $("#participants").innerHTML = (data.participants || []).map((item) => `
+        <tr><td><strong>${esc(`${item.last_name || ""}, ${item.first_name || ""}`)}</strong><small>${esc(item.email)}</small></td><td>${esc(item.status)}</td>
+        <td><div class="android-actions"><input type="number" min="1" max="100" value="${item.service_quantity || 1}" data-quantity="${item.accreditation_id}"><button class="${item.service_status === "ACTIVE" ? "ghost" : ""}" data-service="${item.accreditation_id}" data-enabled="${item.service_status !== "ACTIVE"}">${item.service_status === "ACTIVE" ? `Revocar (${item.service_consumed}/${item.service_quantity})` : "Habilitar"}</button></div></td>
+        <td><button class="${item.lead_consent === "GRANTED" ? "ghost" : ""}" data-lead="${item.accreditation_id}" data-enabled="${item.lead_consent !== "GRANTED"}">${item.lead_consent === "GRANTED" ? "Revocar" : "Otorgar"}</button></td></tr>`).join("");
+      $("#vehicles").innerHTML = (data.vehicles || []).length ? data.vehicles.map((item) => `<div class="android-row"><div><strong>${esc(item.display_label)}</strong><small>${esc(item.checkpoint)} · ${esc(item.status)} · QR: ${esc(item.permit_token)}</small></div><button class="ghost" data-vehicle="${item.id}" data-label="${esc(item.display_label)}" data-checkpoint="${esc(item.checkpoint)}" data-enabled="${item.status !== "ACTIVE"}">${item.status === "ACTIVE" ? "Revocar" : "Reactivar"}</button></div>`).join("") : "<p>No hay permisos vehiculares.</p>";
+    }
+    async function post(path, body) { await api(path, {method:"POST", body:JSON.stringify(body)}); await load(); }
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("button"); if (!button) return;
+      try {
+        if (button.dataset.approve) await post("/api/admin/pairing/approve", {pairingCode:button.dataset.approve,eventId,profile:button.parentElement.querySelector("[data-profile]").value});
+        if (button.dataset.reject) await post("/api/admin/pairing/reject", {pairingCode:button.dataset.reject});
+        if (button.dataset.revoke) await post("/api/admin/device/revoke", {deviceId:button.dataset.revoke});
+        if (button.dataset.service) await post("/api/admin/android/resources", {kind:"SERVICE",eventId,accreditationId:Number(button.dataset.service),enabled:button.dataset.enabled === "true",quantity:Number(document.querySelector(`[data-quantity='${button.dataset.service}']`).value || 1)});
+        if (button.dataset.lead) await post("/api/admin/android/resources", {kind:"LEAD",eventId,accreditationId:Number(button.dataset.lead),enabled:button.dataset.enabled === "true"});
+        if (button.dataset.vehicle) await post("/api/admin/android/resources", {kind:"VEHICLE",eventId,permitId:Number(button.dataset.vehicle),displayLabel:button.dataset.label,checkpoint:button.dataset.checkpoint,enabled:button.dataset.enabled === "true"});
+      } catch (error) { notice(error.message, true); }
+    });
+    $("#vehicleForm").addEventListener("submit", async (event) => { event.preventDefault(); const data = new FormData(event.currentTarget); try { await post("/api/admin/android/resources", {kind:"VEHICLE",eventId,displayLabel:data.get("displayLabel"),checkpoint:data.get("checkpoint"),enabled:true}); event.currentTarget.reset(); } catch (error) { notice(error.message, true); } });
+    $("#eventSelect").addEventListener("change", () => { eventId = Number($("#eventSelect").value || 0); history.replaceState({}, "", `?event_id=${eventId}`); load(); });
+    $("#refreshBtn").addEventListener("click", load);
+    loadEvents().then(load).catch((error) => notice(error.message, true));
+  </script>
+</body>
+</html>

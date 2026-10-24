@@ -14,6 +14,7 @@ import threading
 import time
 import random
 import re
+from contextlib import nullcontext
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -1639,6 +1640,7 @@ def init_db() -> None:
         ensure_reservation_bag_column(db)
         ensure_v3_tables(db)
         ensure_multitenant_schema(db)
+        ensure_android_operational_schema(db)
         networking_service().ensure_schema(db)
         ensure_indexes(db)
         ensure_default_users(db)
@@ -2164,6 +2166,12 @@ def ensure_v4_10_schema(db: sqlite3.Connection) -> None:
     sql = migration.read_text(encoding="utf-8")
     sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
     sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_android_operational_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "037_android_operational_domains.sql"
+    sql = migration.read_text(encoding="utf-8").replace("BIGSERIAL", "INTEGER")
     db.executescript(sql)
 
 
@@ -7477,6 +7485,16 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = android_edge_service(self).telemetry(db, str(query.get("deviceId", [""])[0]))
                 self.send_json(result)
                 return
+            if path == "/api/admin/android/resources":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                event_id = int(query.get("eventId", ["0"])[0] or 0)
+                with connect() as db:
+                    result = android_edge_service(self).resources(db, event_id)
+                self.send_json(result, 200 if result.get("ok") else 404)
+                return
             operations_match = re.fullmatch(r"/api/events/(\d+)/operations-center(?:/(readiness|metrics|alerts|incidents|tasks))?", path)
             if operations_match:
                 event_id = int(operations_match.group(1))
@@ -10825,7 +10843,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             if path in {"/api/edge/heartbeat", "/api/edge/sync"}:
                 device_id = str(self.headers.get("X-Bitora-Device") or data.get("deviceId") or "")
                 token = str(self.headers.get("X-Bitora-Token") or "")
-                with connect() as db:
+                lock = DB_LOCK if path.endswith("sync") else nullcontext()
+                with lock, connect() as db:
                     service = android_edge_service(self)
                     device = service.authenticate_device(db, device_id, token)
                     if not device:
@@ -10833,6 +10852,22 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                     result = service.heartbeat(db, device, data) if path.endswith("heartbeat") else service.sync(db, device, data)
                 self.send_json(result)
+                return
+            if path == "/api/admin/android/resources":
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    result = android_edge_service(self).configure_resource(db, data)
+                    audit(
+                        db,
+                        session["name"],
+                        "android.resource.configure",
+                        "android_resource",
+                        int(data.get("accreditationId") or data.get("permitId") or 0) or None,
+                        {"event_id": data.get("eventId"), "kind": data.get("kind"), "enabled": data.get("enabled")},
+                    )
+                self.send_json(result, 200 if result.get("ok") else 400)
                 return
             if path in {"/api/admin/pairing/approve", "/api/admin/pairing/reject", "/api/admin/device/revoke"}:
                 if not session or session.get("role") not in ADMIN_ROLES:
