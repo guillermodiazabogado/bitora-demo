@@ -7438,6 +7438,7 @@ def public_static_path(path: str) -> bool:
     clean = urlparse(path).path
     return clean in {
         "/login.html",
+        "/privacy.html",
         "/display.html",
         "/scan.html",
         "/web.html",
