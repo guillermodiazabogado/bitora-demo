@@ -620,13 +620,17 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
                     errors.append(f"Falta {primary} o {fallback}")
     if app_env == "production":
         if email_enabled and email_provider != "demo":
-            if not env.get("EMAIL_API_KEY", "").strip():
+            if email_provider == "gmail":
+                for key in ("GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"):
+                    if not env.get(key, "").strip():
+                        errors.append(f"{key} es obligatorio para Gmail")
+            elif not env.get("EMAIL_API_KEY", "").strip():
                 errors.append("EMAIL_API_KEY es obligatorio para email real")
             if not email_from:
                 errors.append("EMAIL_FROM o EMAIL_FROM_ADDRESS es obligatorio para email real")
-            if not env.get("EMAIL_VERIFIED_DOMAIN", "").strip():
+            if email_provider != "gmail" and not env.get("EMAIL_VERIFIED_DOMAIN", "").strip():
                 errors.append("EMAIL_VERIFIED_DOMAIN debe estar configurado")
-            if not env.get("EMAIL_WEBHOOK_SECRET", "").strip():
+            if email_provider != "gmail" and not env.get("EMAIL_WEBHOOK_SECRET", "").strip():
                 errors.append("EMAIL_WEBHOOK_SECRET es obligatorio para webhooks productivos")
             if email_safe_mode:
                 errors.append("EMAIL_SAFE_MODE debe estar desactivado para produccion real")
