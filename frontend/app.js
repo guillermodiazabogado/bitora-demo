@@ -27,6 +27,7 @@ const state = {
   diagnostics: null,
   simulator: null,
   visualization: null,
+  commandCenter: null,
   visualizationLayouts: [],
   demoReal: null,
   eventRestore: null,
@@ -41,6 +42,7 @@ const MODULE_LABELS = {
   owner: "Mis eventos",
   organizations: "Organizaciones",
   dashboard: "Panel",
+  commandCenter: "Command Center",
   home: "Inicio",
   register: "Inscribir",
   reception: "Recepcion",
@@ -127,6 +129,17 @@ const ACTION_LABELS = {
 };
 
 const PRODUCER_HOME_MODULES = [
+  {
+    key: "commandCenter",
+    title: "Command Center",
+    description: "Tablero Enterprise con mapa, alertas, dispositivos y estado operacional.",
+    icon: "CC",
+    tone: "mint",
+    view: "commandCenter",
+    action: "operations_center.read",
+    featureFlag: "command_center_v5",
+    metric: () => commandCenterAvailable() ? "Enterprise" : "No disponible",
+  },
   {
     key: "dashboard",
     title: "Panel de Control",
@@ -303,6 +316,14 @@ async function api(path, options = {}) {
   return data;
 }
 
+function withTimeout(promise, ms, label = "operacion") {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} no respondio a tiempo`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
@@ -321,7 +342,11 @@ function setView(name) {
   }
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  document.body.classList.toggle("command-center-mode", name === "commandCenter");
   updateProducerHomeReturn(name);
+  if (name === "commandCenter" && commandCenterAvailable() && !state.commandCenter) {
+    loadCommandCenter();
+  }
 }
 
 function organizeReportAndDiagnosticViews() {
@@ -409,6 +434,7 @@ function permissionsFor(role = effectiveRole()) {
 }
 
 function canSeeModule(module) {
+  if (module === "commandCenter") return commandCenterAvailable();
   return permissionsFor().modules.includes(module);
 }
 
@@ -1095,6 +1121,15 @@ function eventFeatureFlag(name, fallback = false) {
   return Boolean(event.feature_flags[name]);
 }
 
+function commandCenterAvailable() {
+  return Boolean(
+    state.eventId
+    && eventFeatureFlag("command_center_v5", false)
+    && eventFeatureFlag("enterprise_ui_v5_7_1", false)
+    && canDo("operations_center.read")
+  );
+}
+
 function renderFeatureVisibility() {
   updateProducerChrome();
   const modules = currentProjectModules();
@@ -1105,6 +1140,7 @@ function renderFeatureVisibility() {
     const view = button.dataset.view;
     button.classList.toggle("hidden", view === "home" ? !producerHomeAllowed() : !canSeeModule(view));
   });
+  document.querySelector('[data-view="commandCenter"]')?.classList.toggle("hidden", !commandCenterAvailable());
   document.querySelector('[data-view="register"]')?.classList.toggle("hidden", !modules.registration || !canSeeModule("register"));
   document.querySelector('[data-view="reception"]')?.classList.toggle("hidden", !modules.reception || !canSeeModule("reception"));
   document.querySelector('[data-view="agenda"]')?.classList.toggle("hidden", !activitiesOn || !modules.agenda || !canSeeModule("agenda"));
@@ -1121,6 +1157,7 @@ function renderFeatureVisibility() {
   if (
     (activeView === "home" && !producerHomeAllowed())
     || (activeView !== "home" && !canSeeModule(activeView))
+    || (activeView === "commandCenter" && !commandCenterAvailable())
     || (activeView === "register" && !modules.registration)
     || (activeView === "reception" && !modules.reception)
     || (activeView === "agenda" && !modules.agenda)
@@ -1143,6 +1180,282 @@ function updateControlRoomLink() {
     $("#controlRoomLink").href = state.eventId ? `/reports-display?event_id=${state.eventId}&refresh=${refresh}&theme=${theme}&compact=${compact}&rotate=${rotate}&max_rooms=${maxRooms}&max_alerts=${maxAlerts}&blocks=${encodeURIComponent(blocks)}` : "#";
   }
   setHref("#nocLink", state.eventId ? `/noc.html?event_id=${state.eventId}&refresh=${refresh}` : "#");
+}
+
+function enterpriseIcon(name) {
+  const paths = {
+    command: "<rect x='3' y='4' width='18' height='14' rx='2'></rect><path d='M7 20h10'></path><path d='M9 9h6'></path><path d='M9 13h3'></path>",
+    people: "<path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'></path><circle cx='9' cy='7' r='4'></circle><path d='M22 21v-2a4 4 0 0 0-3-3.87'></path><path d='M16 3.13a4 4 0 0 1 0 7.75'></path>",
+    badge: "<rect x='5' y='3' width='14' height='18' rx='2'></rect><path d='M9 8h6'></path><path d='M9 12h6'></path><path d='M9 16h3'></path>",
+    door: "<path d='M7 21h10'></path><path d='M8 21V5a2 2 0 0 1 2-2h7v18'></path><path d='M12 12h.01'></path>",
+    calendar: "<path d='M8 2v4'></path><path d='M16 2v4'></path><rect x='3' y='4' width='18' height='18' rx='2'></rect><path d='M3 10h18'></path>",
+    chart: "<path d='M3 3v18h18'></path><rect x='7' y='12' width='3' height='5'></rect><rect x='12' y='8' width='3' height='9'></rect><rect x='17' y='5' width='3' height='12'></rect>",
+    message: "<path d='M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'></path>",
+    settings: "<path d='M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z'></path><path d='M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 16 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.4.6.8 1 1 .3.2.7.3 1.1.3H22a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.7z'></path>",
+    alert: "<path d='M10.3 3.5 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.5a2 2 0 0 0-3.4 0z'></path><path d='M12 9v4'></path><path d='M12 17h.01'></path>",
+    device: "<rect x='6' y='3' width='12' height='18' rx='2'></rect><path d='M11 17h2'></path>",
+    map: "<path d='m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z'></path><path d='M9 3v15'></path><path d='M15 6v15'></path>",
+    activity: "<path d='M3 12h4l3-8 4 16 3-8h4'></path>",
+    health: "<path d='M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z'></path>",
+  };
+  return `<svg class="enterprise-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] || paths.command}</svg>`;
+}
+
+function enterpriseStatusClass(value) {
+  const status = String(value || "").toUpperCase();
+  if (["OK", "ONLINE", "ACTIVE", "HEALTHY", "RESOLVED"].includes(status)) return "ok";
+  if (["WARNING", "STALE", "DEGRADED", "ACKNOWLEDGED"].includes(status)) return "warning";
+  if (["CRITICAL", "OFFLINE", "UNAVAILABLE", "REVOKED", "FAILED", "OPEN"].includes(status)) return "critical";
+  return "neutral";
+}
+
+function enterpriseSection(name) {
+  return state.commandCenter?.snapshot?.sections?.[name] || { status: "UNAVAILABLE", data: {} };
+}
+
+async function loadCommandCenter() {
+  if (!state.eventId || !commandCenterAvailable()) {
+    state.commandCenter = null;
+    renderCommandCenter();
+    return;
+  }
+  try {
+    state.commandCenter = await api(`/api/events/${state.eventId}/command-center-v5`);
+  } catch (err) {
+    state.commandCenter = { ok: false, error: err.message };
+  }
+  renderCommandCenter();
+}
+
+function formatEnterpriseTime(value) {
+  if (!value) return "UNAVAILABLE";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function renderCommandCenter() {
+  const notice = $("#enterpriseStatusNotice");
+  const event = currentEvent();
+  const payload = state.commandCenter;
+  if (!$("#commandCenter")) return;
+  $("#enterpriseEventName").textContent = event?.name || "Command Center";
+  $("#enterpriseSidebarEvent").textContent = event?.name || "Evento activo";
+  $("#enterpriseSidebarVenue").textContent = event?.venue || "BITORA";
+  $("#enterpriseEventMeta").textContent = [event?.venue, event?.starts_at ? formatHomeDate(event.starts_at) : "", event?.ends_at ? formatHomeDate(event.ends_at) : ""].filter(Boolean).join(" · ") || "Evento actual";
+  $("#enterpriseUserName").textContent = state.authUser?.name || state.currentUser || "BITORA";
+  $("#enterpriseUserInitials").textContent = String(state.authUser?.name || state.currentUser || "BI").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  if (!commandCenterAvailable()) {
+    if (notice) {
+      notice.classList.remove("hidden");
+      notice.textContent = "Command Center Enterprise no esta habilitado para este evento o usuario.";
+    }
+    $("#enterprisePhaseBadge").textContent = "UNAVAILABLE";
+    $("#enterpriseHealthBadge").textContent = "SYSTEM UNAVAILABLE";
+    $("#enterpriseUpdated").textContent = "Sin datos";
+    ["enterpriseKpis", "enterpriseAlertStrip", "enterpriseVenueMap", "enterpriseLayers", "enterpriseSelectedZone", "enterpriseActivityStream", "enterpriseAlerts", "enterpriseOccupancy", "enterpriseDevices", "enterpriseSystemHealth", "enterpriseModuleSummaries"].forEach((id) => {
+      const node = $(`#${id}`);
+      if (node) node.innerHTML = `<p class="enterprise-empty">UNAVAILABLE</p>`;
+    });
+    return;
+  }
+  if (!payload?.ok) {
+    if (notice) {
+      notice.classList.remove("hidden");
+      notice.textContent = payload?.error || "No se pudo cargar Command Center.";
+    }
+    return;
+  }
+  notice?.classList.add("hidden");
+  const venue = payload.venue_model || {};
+  const system = enterpriseSection("system_health");
+  const failed = payload.snapshot?.observability?.failed_sections || [];
+  const phase = venue.mode || "UNAVAILABLE";
+  $("#enterprisePhaseBadge").textContent = phase;
+  $("#enterpriseHealthBadge").textContent = failed.length ? "DEGRADED" : "HEALTHY";
+  $("#enterpriseHealthBadge").className = `enterprise-badge ${failed.length ? "warning" : "ok"}`;
+  $("#enterpriseUpdated").textContent = `Actualizado ${formatEnterpriseTime(payload.generated_at || payload.snapshot?.generated_at)}`;
+  renderEnterpriseKpis();
+  renderEnterpriseAlerts();
+  renderEnterpriseVenueMap();
+  renderEnterpriseActivity();
+  renderEnterpriseOccupancy();
+  renderEnterpriseDevices();
+  renderEnterpriseSystemHealth(system);
+  renderEnterpriseModuleSummaries();
+}
+
+function renderEnterpriseKpis() {
+  const overview = enterpriseSection("overview").data || {};
+  const cards = overview.cards || [];
+  const icons = ["people", "door", "alert", "device", "activity", "alert", "map", "chart"];
+  $("#enterpriseKpis").innerHTML = cards.slice(0, 6).map((card, index) => `
+    <article class="enterprise-metric-card">
+      <span class="enterprise-metric-icon">${enterpriseIcon(icons[index] || "chart")}</span>
+      <span>${escapeHtml(card.label || "Metrica")}</span>
+      <strong>${escapeHtml(card.value ?? "UNAVAILABLE")}</strong>
+      <small>${escapeHtml(card.secondary || "Snapshot agregado")}</small>
+    </article>
+  `).join("") || `<p class="enterprise-empty">Metricas UNAVAILABLE</p>`;
+}
+
+function renderEnterpriseAlerts() {
+  const alerts = enterpriseSection("alerts").data?.open || [];
+  const strip = $("#enterpriseAlertStrip");
+  strip.innerHTML = alerts.length ? alerts.slice(0, 3).map((alert) => `
+    <article class="enterprise-inline-alert ${enterpriseStatusClass(alert.severity)}">
+      ${enterpriseIcon("alert")}
+      <strong>${escapeHtml(alert.severity || "INFO")}</strong>
+      <span>${escapeHtml(alert.title || "Alerta operacional")}</span>
+      <small>${escapeHtml(alert.status || "OPEN")}</small>
+    </article>
+  `).join("") : `
+    <article class="enterprise-inline-alert ok">
+      ${enterpriseIcon("health")}
+      <strong>OK</strong>
+      <span>Sin alertas operativas abiertas</span>
+      <small>Snapshot actual</small>
+    </article>
+  `;
+  $("#enterpriseAlerts").innerHTML = alerts.length ? alerts.map((alert) => `
+    <article class="enterprise-alert-card ${enterpriseStatusClass(alert.severity)}">
+      <strong>${escapeHtml(alert.title || alert.alert_type || "Alerta")}</strong>
+      <span>${escapeHtml(alert.detail || "Sin detalle adicional")}</span>
+      <small>${escapeHtml(alert.severity || "INFO")} - ${escapeHtml(alert.status || "OPEN")}</small>
+    </article>
+  `).join("") : `<p class="enterprise-empty">Sin alertas abiertas.</p>`;
+}
+
+function renderEnterpriseVenueMap() {
+  const venue = state.commandCenter?.venue_model || {};
+  const elements = venue.elements || [];
+  $("#enterpriseMapTitle").textContent = venue.venue?.name || "Venue Map";
+  const map = $("#enterpriseVenueMap");
+  if (!elements.length) {
+    map.innerHTML = `<div class="enterprise-map-empty">${enterpriseIcon("map")}<strong>UNAVAILABLE</strong><span>No hay mapa activo configurado para este evento.</span></div>`;
+  } else {
+    map.innerHTML = elements.map((item, index) => {
+      const geo = item.geometry || {};
+      const rawLeft = Number(geo.x || 24 + (index % 3) * 22);
+      const rawTop = Number(geo.y || 18 + Math.floor(index / 3) * 24);
+      const rawWidth = Number(geo.w || 20);
+      const rawHeight = Number(geo.h || 14);
+      const left = Math.max(2, Math.min(82, rawLeft > 100 ? (rawLeft / 800) * 100 : rawLeft));
+      const top = Math.max(2, Math.min(78, rawTop > 100 ? (rawTop / 500) * 100 : rawTop));
+      const width = Math.max(12, Math.min(32, rawWidth > 100 ? (rawWidth / 800) * 100 : rawWidth));
+      const height = Math.max(10, Math.min(24, rawHeight > 100 ? (rawHeight / 500) * 100 : rawHeight));
+      const status = item.camera?.status === "UNAVAILABLE" ? "neutral" : enterpriseStatusClass(item.status);
+      return `
+        <button type="button" class="enterprise-map-node ${status}" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%;" data-map-element="${escapeHtml(item.key || item.id)}">
+          <strong>${escapeHtml(item.label || item.key || "Zona")}</strong>
+          <span>${escapeHtml(item.type || item.layer || "Elemento")}</span>
+        </button>
+      `;
+    }).join("");
+  }
+  $("#enterpriseLayers").innerHTML = (venue.layers || []).map((layer) => `<span>${escapeHtml(layer)}</span>`).join("") || `<span>LAYERS UNAVAILABLE</span>`;
+  $("#enterpriseSelectedZone").innerHTML = `<strong>Fuente de ocupacion</strong><span>PROJECTED, ACCESS y CAMERA se muestran por separado. Camera: UNAVAILABLE si no hay integracion.</span>`;
+  map.querySelectorAll("[data-map-element]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = elements.find((entry) => String(entry.key || entry.id) === button.dataset.mapElement);
+      $("#enterpriseSelectedZone").innerHTML = `
+        <strong>${escapeHtml(item?.label || "Elemento seleccionado")}</strong>
+        <span>PROJECTED: ${escapeHtml(JSON.stringify(item?.projected ?? "UNAVAILABLE"))}</span>
+        <span>ACCESS: ${escapeHtml(JSON.stringify(item?.access ?? "UNAVAILABLE"))}</span>
+        <span>CAMERA: ${escapeHtml(item?.camera?.status || "UNAVAILABLE")}</span>
+      `;
+    });
+  });
+}
+
+function renderEnterpriseActivity() {
+  const access = enterpriseSection("access").data || {};
+  const edge = enterpriseSection("edge").data || {};
+  const devices = enterpriseSection("devices").data?.items || [];
+  const items = [];
+  (access.recent || []).slice(0, 5).forEach((row) => {
+    items.push(`${row.source || "Acceso"} registro ${row.direction || "movimiento"} con decision ${row.decision || "UNAVAILABLE"}.`);
+  });
+  if (Number(edge.queue_depth || 0) > 0) items.push(`${edge.queue_depth} operaciones esperan sincronizacion edge.`);
+  devices.filter((device) => ["STALE", "OFFLINE", "REVOKED"].includes(String(device.status || "").toUpperCase())).slice(0, 3).forEach((device) => {
+    items.push(`${device.display_name || "Terminal"} esta ${device.status || "sin estado"} en ${device.sync_state || "sync desconocido"}.`);
+  });
+  $("#enterpriseActivityStream").innerHTML = items.length ? items.map((item) => `<article>${enterpriseIcon("activity")}<span>${escapeHtml(item)}</span></article>`).join("") : `<p class="enterprise-empty">Sin actividad reciente documentada.</p>`;
+}
+
+function renderEnterpriseOccupancy() {
+  const occupancy = enterpriseSection("occupancy").data || {};
+  const access = occupancy.access_counter || {};
+  const camera = occupancy.camera_counter || { status: "UNAVAILABLE" };
+  const projected = (state.commandCenter?.venue_model?.elements || []).some((item) => item.projected) ? "AVAILABLE" : "UNAVAILABLE";
+  $("#enterpriseOccupancy").innerHTML = [
+    { label: "PROJECTED", value: projected, detail: "Reservas / demanda pre-evento" },
+    { label: "ACCESS", value: access.inside ?? "UNAVAILABLE", detail: `${access.occupancy_pct ?? "UNAVAILABLE"}% capacidad` },
+    { label: "CAMERA", value: camera.status || "UNAVAILABLE", detail: camera.reason || "Fuente externa no configurada" },
+  ].map((source) => `
+    <article class="enterprise-source-card ${enterpriseStatusClass(source.value)}">
+      <strong>${escapeHtml(source.label)}</strong>
+      <span>${escapeHtml(source.value)}</span>
+      <small>${escapeHtml(source.detail)}</small>
+    </article>
+  `).join("");
+}
+
+function renderEnterpriseDevices() {
+  const devices = enterpriseSection("devices").data?.items || [];
+  $("#enterpriseDevices").innerHTML = devices.length ? devices.slice(0, 8).map((device) => `
+    <article class="enterprise-device-card ${enterpriseStatusClass(device.status)}">
+      <div>${enterpriseIcon("device")}<strong>${escapeHtml(device.display_name || "Device")}</strong></div>
+      <span>${escapeHtml(device.device_type || "DEVICE")} - ${escapeHtml(device.status || "UNKNOWN")}</span>
+      <small>Sync ${escapeHtml(device.sync_state || "UNKNOWN")} - Dataset ${escapeHtml(device.dataset_revision || "UNAVAILABLE")}</small>
+      <small>Last seen ${escapeHtml(formatEnterpriseTime(device.last_seen_at))}</small>
+    </article>
+  `).join("") : `<p class="enterprise-empty">No hay dispositivos registrados.</p>`;
+}
+
+function renderEnterpriseSystemHealth(section) {
+  const data = section.data || {};
+  const edge = enterpriseSection("edge").data || {};
+  const edgeStatus = edge.event_operation?.status || edge.event_edge?.status || "UNAVAILABLE";
+  const datasetStatus = edge.readiness?.dataset?.status || "UNAVAILABLE";
+  const cloudStatus = edge.event_edge?.cloud || "UNAVAILABLE";
+  const rows = [
+    ["API", section.status || "UNAVAILABLE"],
+    ["Database", data.db || "UNAVAILABLE"],
+    ["Storage", data.storage || "UNAVAILABLE"],
+    ["Event Edge", edgeStatus],
+    ["Cloud", cloudStatus],
+    ["Dataset", datasetStatus],
+    ["Pending sync", edge.queue_depth ?? "UNAVAILABLE"],
+    ["Jobs pending", data.jobs?.pending ?? "UNAVAILABLE"],
+    ["Jobs failed", data.jobs?.failed ?? "UNAVAILABLE"],
+    ["Safe Mode", data.safe_mode || "UNAVAILABLE"],
+    ["Live Mode", data.live_mode || "UNAVAILABLE"],
+  ];
+  $("#enterpriseSystemHealth").innerHTML = rows.map(([label, value]) => `
+    <article class="${enterpriseStatusClass(value)}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></article>
+  `).join("");
+}
+
+function renderEnterpriseModuleSummaries() {
+  const sections = state.commandCenter?.snapshot?.sections || {};
+  const edgeData = sections.edge?.data || {};
+  const modules = [
+    ["Edge", sections.edge],
+    ["Readiness", { status: edgeData.readiness?.status || "UNAVAILABLE", updated_at: sections.edge?.updated_at }],
+    ["Event Operation", { status: edgeData.event_operation?.status || "UNAVAILABLE", updated_at: sections.edge?.updated_at }],
+    ["Leads", sections.leads],
+    ["Vehicles", sections.vehicles],
+    ["Entitlements", sections.entitlements],
+    ["Conflicts", sections.conflicts],
+  ];
+  $("#enterpriseModuleSummaries").innerHTML = modules.map(([label, section]) => `
+    <article class="enterprise-module-card ${enterpriseStatusClass(section?.status)}">
+      <strong>${escapeHtml(label)}</strong>
+      <span>${escapeHtml(section?.status || "UNAVAILABLE")}</span>
+      <small>${escapeHtml(section?.updated_at ? formatEnterpriseTime(section.updated_at) : "Sin freshness")}</small>
+    </article>
+  `).join("");
 }
 
 function updateMetrics() {
@@ -1248,6 +1561,7 @@ async function reloadCurrentEventData() {
     ["system_status", loadSystemStatus],
     ["network_info", loadNetworkInfo],
     ["summary", loadSummary],
+    ["command_center", loadCommandCenter],
     ["marketing", loadMarketing],
     ["readiness", loadReadiness],
     ["audit", loadAudit],
@@ -1256,7 +1570,7 @@ async function reloadCurrentEventData() {
     ["logs", loadLogs],
     ["event_users", loadEventUsers],
   ];
-  const results = await Promise.allSettled(loaders.map(([, loader]) => loader()));
+  const results = await Promise.allSettled(loaders.map(([label, loader]) => withTimeout(loader(), 7000, label)));
   results.forEach((result, index) => {
     if (result.status === "rejected") {
       console.warn(`No se pudo cargar ${loaders[index][0]}`, result.reason);
@@ -1326,7 +1640,7 @@ function renderEventConfigForm() {
   const form = $("#eventForm");
   if (!form) return;
   const event = currentEvent();
-  const producerEdit = effectiveRole() === "Productor" && Boolean(event);
+  const producerEdit = ["Super Admin", "Administrador", "Productor"].includes(effectiveRole()) && Boolean(event);
   form.dataset.mode = producerEdit ? "edit" : "create";
   $("#eventFormSubmitBtn").textContent = producerEdit ? "Guardar cambios" : "Crear evento";
   $("#eventFormHelp").textContent = producerEdit
@@ -1352,6 +1666,8 @@ function renderEventConfigForm() {
   setFieldValue(form, "captation_mode", event.captation_mode || "MIXTO");
   setFieldValue(form, "production_email", event.production_email || "");
   setFieldValue(form, "whatsapp_number", event.whatsapp_number || "");
+  setFieldValue(form, "registration_confirmation_subject", event.registration_confirmation_subject || "Inscripcion confirmada");
+  setFieldValue(form, "registration_confirmation_message", event.registration_confirmation_message || "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}");
   setFieldValue(form, "primary_action_label", event.primary_action_label || "");
   setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
   setFieldValue(form, "description", event.description || "");

@@ -397,6 +397,60 @@ class EventBackupService:
         ("zone_access_assignments", "SELECT * FROM zone_access_assignments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("zone_access_validations", "SELECT * FROM zone_access_validations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("zone_access_overrides", "SELECT * FROM zone_access_overrides WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entities", "SELECT * FROM enterprise_entities WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_identities", "SELECT * FROM enterprise_identities WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_credentials", "SELECT * FROM enterprise_credentials WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_doors", "SELECT * FROM enterprise_doors WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_devices", "SELECT * FROM enterprise_devices WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entitlements", "SELECT * FROM enterprise_entitlements WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_rules", "SELECT * FROM enterprise_rules WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_domain_events", "SELECT * FROM enterprise_domain_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_access_events", "SELECT * FROM enterprise_access_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_access_state_snapshots", "SELECT * FROM enterprise_access_state_snapshots WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_credential_revocations", "SELECT * FROM enterprise_credential_revocations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_access_comparisons", "SELECT * FROM enterprise_access_comparisons WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_event_edges", "SELECT * FROM enterprise_event_edges WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_device_profiles", "SELECT * FROM enterprise_device_profiles WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_device_pairing_codes", "SELECT * FROM enterprise_device_pairing_codes WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_capability_execution_classes", "SELECT * FROM enterprise_capability_execution_classes WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_edge_checkpoints", "SELECT * FROM enterprise_edge_checkpoints WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_event_datasets", "SELECT * FROM enterprise_event_datasets WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_edge_queue", "SELECT * FROM enterprise_edge_queue WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_edge_reconciliations", "SELECT * FROM enterprise_edge_reconciliations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_device_heartbeats", "SELECT * FROM enterprise_device_heartbeats WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_companies", "SELECT DISTINCT c.* FROM enterprise_companies c JOIN enterprise_company_event_participation p ON p.company_id = c.id WHERE p.event_id = ? ORDER BY c.id", lambda event_id: (event_id,)),
+        ("enterprise_company_event_participation", "SELECT * FROM enterprise_company_event_participation WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_delegations", "SELECT * FROM enterprise_delegations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_delegation_members", "SELECT * FROM enterprise_delegation_members WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_company_users", "SELECT * FROM enterprise_company_users WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_company_quotas", "SELECT * FROM enterprise_company_quotas WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_invitations", "SELECT * FROM enterprise_invitations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_approval_requests", "SELECT * FROM enterprise_approval_requests WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_import_jobs", "SELECT * FROM enterprise_import_jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entitlement_types", "SELECT * FROM enterprise_entitlement_types WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_service_points", "SELECT * FROM enterprise_service_points WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entitlement_consumptions", "SELECT * FROM enterprise_entitlement_consumptions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entitlement_adjustments", "SELECT * FROM enterprise_entitlement_adjustments WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_entitlement_grant_batches", "SELECT * FROM enterprise_entitlement_grant_batches WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_stands", "SELECT * FROM enterprise_stands WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_lead_licenses", "SELECT * FROM enterprise_lead_licenses WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_lead_consents", "SELECT * FROM enterprise_lead_consents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_leads", "SELECT * FROM enterprise_leads WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_lead_interactions", "SELECT * FROM enterprise_lead_interactions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_lead_exports", "SELECT * FROM enterprise_lead_exports WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_vehicles", "SELECT DISTINCT v.* FROM enterprise_vehicles v JOIN enterprise_vehicle_event_participation p ON p.vehicle_id = v.id WHERE p.event_id = ? ORDER BY v.id", lambda event_id: (event_id,)),
+        ("enterprise_vehicle_event_participation", "SELECT * FROM enterprise_vehicle_event_participation WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_logistics_destinations", "SELECT * FROM enterprise_logistics_destinations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_vehicle_access_slots", "SELECT * FROM enterprise_vehicle_access_slots WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_vehicle_access_events", "SELECT * FROM enterprise_vehicle_access_events WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_vehicle_state_snapshots", "SELECT * FROM enterprise_vehicle_state_snapshots WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_vehicle_import_jobs", "SELECT * FROM enterprise_vehicle_import_jobs WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_alert_rules", "SELECT * FROM enterprise_alert_rules WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_operational_alerts", "SELECT * FROM enterprise_operational_alerts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_event_map_configurations", "SELECT * FROM enterprise_event_map_configurations WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
+        ("enterprise_venues", "SELECT DISTINCT v.* FROM enterprise_venues v JOIN enterprise_event_map_configurations c ON c.venue_id = v.id WHERE c.event_id = ? ORDER BY v.id", lambda event_id: (event_id,)),
+        ("enterprise_venue_maps", "SELECT DISTINCT m.* FROM enterprise_venue_maps m JOIN enterprise_event_map_configurations c ON c.venue_map_id = m.id WHERE c.event_id = ? ORDER BY m.id", lambda event_id: (event_id,)),
+        ("enterprise_venue_map_elements", "SELECT DISTINCT e.* FROM enterprise_venue_map_elements e JOIN enterprise_event_map_configurations c ON c.venue_map_id = e.venue_map_id WHERE c.event_id = ? ORDER BY e.id", lambda event_id: (event_id,)),
         ("duplicate_resolution_decisions", "SELECT * FROM duplicate_resolution_decisions WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("operations_center_alerts", "SELECT * FROM operations_center_alerts WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
         ("operations_center_incidents", "SELECT * FROM operations_center_incidents WHERE event_id = ? ORDER BY id", lambda event_id: (event_id,)),
@@ -662,6 +716,60 @@ class EventRestoreService:
         "zone_access_assignments",
         "zone_access_validations",
         "zone_access_overrides",
+        "enterprise_entities",
+        "enterprise_identities",
+        "enterprise_credentials",
+        "enterprise_doors",
+        "enterprise_devices",
+        "enterprise_entitlements",
+        "enterprise_rules",
+        "enterprise_domain_events",
+        "enterprise_access_events",
+        "enterprise_access_state_snapshots",
+        "enterprise_credential_revocations",
+        "enterprise_access_comparisons",
+        "enterprise_event_edges",
+        "enterprise_device_profiles",
+        "enterprise_device_pairing_codes",
+        "enterprise_capability_execution_classes",
+        "enterprise_edge_checkpoints",
+        "enterprise_event_datasets",
+        "enterprise_edge_queue",
+        "enterprise_edge_reconciliations",
+        "enterprise_device_heartbeats",
+        "enterprise_companies",
+        "enterprise_company_event_participation",
+        "enterprise_delegations",
+        "enterprise_delegation_members",
+        "enterprise_company_users",
+        "enterprise_company_quotas",
+        "enterprise_invitations",
+        "enterprise_approval_requests",
+        "enterprise_import_jobs",
+        "enterprise_entitlement_types",
+        "enterprise_service_points",
+        "enterprise_entitlement_consumptions",
+        "enterprise_entitlement_adjustments",
+        "enterprise_entitlement_grant_batches",
+        "enterprise_stands",
+        "enterprise_lead_licenses",
+        "enterprise_lead_consents",
+        "enterprise_leads",
+        "enterprise_lead_interactions",
+        "enterprise_lead_exports",
+        "enterprise_vehicles",
+        "enterprise_vehicle_event_participation",
+        "enterprise_logistics_destinations",
+        "enterprise_vehicle_access_slots",
+        "enterprise_vehicle_access_events",
+        "enterprise_vehicle_state_snapshots",
+        "enterprise_vehicle_import_jobs",
+        "enterprise_alert_rules",
+        "enterprise_operational_alerts",
+        "enterprise_event_map_configurations",
+        "enterprise_venues",
+        "enterprise_venue_maps",
+        "enterprise_venue_map_elements",
         "duplicate_resolution_decisions",
         "operations_center_alerts",
         "operations_center_incidents",
@@ -866,6 +974,60 @@ class EventRestoreService:
                     "zone_access_assignments": {},
                     "zone_access_validations": {},
                     "zone_access_overrides": {},
+                    "enterprise_entities": {},
+                    "enterprise_identities": {},
+                    "enterprise_credentials": {},
+                    "enterprise_doors": {},
+                    "enterprise_devices": {},
+                    "enterprise_entitlements": {},
+                    "enterprise_rules": {},
+                    "enterprise_domain_events": {},
+                    "enterprise_access_events": {},
+                    "enterprise_access_state_snapshots": {},
+                    "enterprise_credential_revocations": {},
+                    "enterprise_access_comparisons": {},
+                    "enterprise_event_edges": {},
+                    "enterprise_device_profiles": {},
+                    "enterprise_device_pairing_codes": {},
+                    "enterprise_capability_execution_classes": {},
+                    "enterprise_edge_checkpoints": {},
+                    "enterprise_event_datasets": {},
+                    "enterprise_edge_queue": {},
+                    "enterprise_edge_reconciliations": {},
+                    "enterprise_device_heartbeats": {},
+                    "enterprise_companies": {},
+                    "enterprise_company_event_participation": {},
+                    "enterprise_delegations": {},
+                    "enterprise_delegation_members": {},
+                    "enterprise_company_users": {},
+                    "enterprise_company_quotas": {},
+                    "enterprise_invitations": {},
+                    "enterprise_approval_requests": {},
+                    "enterprise_import_jobs": {},
+                    "enterprise_entitlement_types": {},
+                    "enterprise_service_points": {},
+                    "enterprise_entitlement_consumptions": {},
+                    "enterprise_entitlement_adjustments": {},
+                    "enterprise_entitlement_grant_batches": {},
+                    "enterprise_stands": {},
+                    "enterprise_lead_licenses": {},
+                    "enterprise_lead_consents": {},
+                    "enterprise_leads": {},
+                    "enterprise_lead_interactions": {},
+                    "enterprise_lead_exports": {},
+                    "enterprise_vehicles": {},
+                    "enterprise_vehicle_event_participation": {},
+                    "enterprise_logistics_destinations": {},
+                    "enterprise_vehicle_access_slots": {},
+                    "enterprise_vehicle_access_events": {},
+                    "enterprise_vehicle_state_snapshots": {},
+                    "enterprise_vehicle_import_jobs": {},
+                    "enterprise_alert_rules": {},
+                    "enterprise_operational_alerts": {},
+                    "enterprise_event_map_configurations": {},
+                    "enterprise_venues": {},
+                    "enterprise_venue_maps": {},
+                    "enterprise_venue_map_elements": {},
                     "duplicate_resolution_decisions": {},
                     "analytics_v4_snapshots": {},
                     "analytics_v4_reports": {},
@@ -1259,6 +1421,130 @@ class EventRestoreService:
                 row["answer_id"] = maps["survey_answers"].get(int(row["answer_id"]), row["answer_id"])
             if "zone_id" in row and row.get("zone_id") is not None:
                 row["zone_id"] = maps["event_zones"].get(int(row["zone_id"]), row["zone_id"])
+            if table.startswith("enterprise_"):
+                if table == "enterprise_entities" and row.get("legacy_id") is not None:
+                    legacy_table = str(row.get("legacy_table") or "")
+                    legacy_id = int(row.get("legacy_id") or 0)
+                    if legacy_table == "people":
+                        row["legacy_id"] = maps["people"].get(legacy_id, row["legacy_id"])
+                    elif legacy_table == "accreditations":
+                        row["legacy_id"] = maps["accreditations"].get(legacy_id, row["legacy_id"])
+                    elif legacy_table == "event_zones":
+                        row["legacy_id"] = maps["event_zones"].get(legacy_id, row["legacy_id"])
+                if "entity_id" in row and row.get("entity_id") is not None:
+                    row["entity_id"] = maps["enterprise_entities"].get(int(row["entity_id"]), row["entity_id"])
+                if "device_id" in row and row.get("device_id") is not None:
+                    row["device_id"] = maps["enterprise_devices"].get(int(row["device_id"]), row["device_id"])
+                if "edge_id" in row and row.get("edge_id") is not None:
+                    row["edge_id"] = maps["enterprise_event_edges"].get(int(row["edge_id"]), row["edge_id"])
+                if "profile_id" in row and row.get("profile_id") is not None:
+                    row["profile_id"] = maps["enterprise_device_profiles"].get(int(row["profile_id"]), row["profile_id"])
+                if "entitlement_id" in row and row.get("entitlement_id") is not None:
+                    row["entitlement_id"] = maps["enterprise_entitlements"].get(int(row["entitlement_id"]), row["entitlement_id"])
+                if "credential_id" in row and row.get("credential_id") is not None:
+                    row["credential_id"] = maps["enterprise_credentials"].get(int(row["credential_id"]), row["credential_id"])
+                if "door_id" in row and row.get("door_id") is not None:
+                    row["door_id"] = maps["enterprise_doors"].get(int(row["door_id"]), row["door_id"])
+                if "access_event_id" in row and row.get("access_event_id") is not None:
+                    row["access_event_id"] = maps["enterprise_access_events"].get(int(row["access_event_id"]), row["access_event_id"])
+                if "last_access_event_id" in row and row.get("last_access_event_id") is not None:
+                    row["last_access_event_id"] = maps["enterprise_access_events"].get(int(row["last_access_event_id"]), row["last_access_event_id"])
+                if "current_zone_id" in row and row.get("current_zone_id") is not None:
+                    row["current_zone_id"] = maps["event_zones"].get(int(row["current_zone_id"]), row["current_zone_id"])
+                if "previous_zone_id" in row and row.get("previous_zone_id") is not None:
+                    row["previous_zone_id"] = maps["event_zones"].get(int(row["previous_zone_id"]), row["previous_zone_id"])
+                if "proposed_zone_id" in row and row.get("proposed_zone_id") is not None:
+                    row["proposed_zone_id"] = maps["event_zones"].get(int(row["proposed_zone_id"]), row["proposed_zone_id"])
+                if "last_door_id" in row and row.get("last_door_id") is not None:
+                    row["last_door_id"] = maps["enterprise_doors"].get(int(row["last_door_id"]), row["last_door_id"])
+                if "last_device_id" in row and row.get("last_device_id") is not None:
+                    row["last_device_id"] = maps["enterprise_devices"].get(int(row["last_device_id"]), row["last_device_id"])
+                if table in {"enterprise_entitlements", "enterprise_domain_events", "enterprise_access_events", "enterprise_access_comparisons"} and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table in {"enterprise_edge_queue", "enterprise_edge_reconciliations"} and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table in {"enterprise_event_datasets", "enterprise_edge_queue", "enterprise_edge_reconciliations", "enterprise_device_heartbeats"} and row.get("device_id"):
+                    row["device_id"] = maps["enterprise_devices"].get(int(row["device_id"]), row["device_id"])
+                if table == "enterprise_edge_reconciliations" and row.get("queue_id"):
+                    row["queue_id"] = maps["enterprise_edge_queue"].get(int(row["queue_id"]), row["queue_id"])
+                if table == "enterprise_event_datasets" and row.get("revision"):
+                    row["revision"] = f"{row['revision']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_device_pairing_codes":
+                    row["status"] = "RESTORED_EXPIRED"
+                    row["pairing_code_hash"] = f"restored:{hashlib.sha256((str(row.get('pairing_code_hash') or '') + self.now()).encode('utf-8')).hexdigest()}"
+                    row["pairing_code_hint"] = ""
+                if table == "enterprise_companies" and row.get("name"):
+                    row["name"] = f"{row['name']} (restore {next(iter(maps['events'].values()))})"
+                if "company_id" in row and row.get("company_id") is not None:
+                    row["company_id"] = maps["enterprise_companies"].get(int(row["company_id"]), row["company_id"])
+                if "participation_id" in row and row.get("participation_id") is not None:
+                    row["participation_id"] = maps["enterprise_company_event_participation"].get(int(row["participation_id"]), row["participation_id"])
+                if "delegation_id" in row and row.get("delegation_id") is not None:
+                    row["delegation_id"] = maps["enterprise_delegations"].get(int(row["delegation_id"]), row["delegation_id"])
+                if "person_id" in row and row.get("person_id") is not None:
+                    row["person_id"] = maps["people"].get(int(row["person_id"]), row["person_id"])
+                if "accreditation_id" in row and row.get("accreditation_id") is not None:
+                    row["accreditation_id"] = maps["accreditations"].get(int(row["accreditation_id"]), row["accreditation_id"])
+                if "user_id" in row and row.get("user_id") is not None:
+                    row["user_id"] = None
+                if "service_point_id" in row and row.get("service_point_id") is not None:
+                    row["service_point_id"] = maps["enterprise_service_points"].get(int(row["service_point_id"]), row["service_point_id"])
+                if "stand_id" in row and row.get("stand_id") is not None:
+                    row["stand_id"] = maps["enterprise_stands"].get(int(row["stand_id"]), row["stand_id"])
+                if "participant_entity_id" in row and row.get("participant_entity_id") is not None:
+                    row["participant_entity_id"] = maps["enterprise_entities"].get(int(row["participant_entity_id"]), row["participant_entity_id"])
+                if "consent_id" in row and row.get("consent_id") is not None:
+                    row["consent_id"] = maps["enterprise_lead_consents"].get(int(row["consent_id"]), row["consent_id"])
+                if "lead_id" in row and row.get("lead_id") is not None:
+                    row["lead_id"] = maps["enterprise_leads"].get(int(row["lead_id"]), row["lead_id"])
+                if "vehicle_id" in row and row.get("vehicle_id") is not None:
+                    row["vehicle_id"] = maps["enterprise_vehicles"].get(int(row["vehicle_id"]), row["vehicle_id"])
+                if "venue_id" in row and row.get("venue_id") is not None:
+                    row["venue_id"] = maps["enterprise_venues"].get(int(row["venue_id"]), row["venue_id"])
+                if "venue_map_id" in row and row.get("venue_map_id") is not None:
+                    row["venue_map_id"] = maps["enterprise_venue_maps"].get(int(row["venue_map_id"]), row["venue_map_id"])
+                if "driver_entity_id" in row and row.get("driver_entity_id") is not None:
+                    row["driver_entity_id"] = maps["enterprise_entities"].get(int(row["driver_entity_id"]), row["driver_entity_id"])
+                if "gate_id" in row and row.get("gate_id") is not None:
+                    row["gate_id"] = maps["enterprise_doors"].get(int(row["gate_id"]), row["gate_id"])
+                if "destination_id" in row and row.get("destination_id") is not None:
+                    row["destination_id"] = maps["enterprise_logistics_destinations"].get(int(row["destination_id"]), row["destination_id"])
+                if "slot_id" in row and row.get("slot_id") is not None:
+                    row["slot_id"] = maps["enterprise_vehicle_access_slots"].get(int(row["slot_id"]), row["slot_id"])
+                if "last_event_id" in row and row.get("last_event_id") is not None:
+                    row["last_event_id"] = maps["enterprise_vehicle_access_events"].get(int(row["last_event_id"]), row["last_event_id"])
+                if "captured_by_user_id" in row and row.get("captured_by_user_id") is not None:
+                    row["captured_by_user_id"] = None
+                if "actor_user_id" in row and row.get("actor_user_id") is not None:
+                    row["actor_user_id"] = None
+                if "assigned_user_id" in row and row.get("assigned_user_id") is not None:
+                    row["assigned_user_id"] = None
+                if table in {"enterprise_invitations", "enterprise_import_jobs"} and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table in {"enterprise_entitlement_consumptions", "enterprise_entitlement_grant_batches"} and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table in {"enterprise_lead_interactions", "enterprise_lead_exports"} and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_vehicle_access_events" and row.get("idempotency_key"):
+                    row["idempotency_key"] = f"{row['idempotency_key']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_vehicles" and row.get("normalized_plate"):
+                    row["normalized_plate"] = f"{row['normalized_plate']}{next(iter(maps['events'].values()))}"
+                if table == "enterprise_venues" and row.get("code"):
+                    row["code"] = f"{row['code']}_RESTORE_{next(iter(maps['events'].values()))}"
+                if table == "enterprise_venue_maps" and row.get("version"):
+                    row["version"] = f"{row['version']}-restore-{next(iter(maps['events'].values()))}"
+                if table == "enterprise_venue_map_elements" and row.get("element_key"):
+                    row["element_key"] = f"{row['element_key']}_RESTORE_{next(iter(maps['events'].values()))}"
+                if table == "enterprise_invitations" and row.get("invitation_token_hash"):
+                    row["invitation_token_hash"] = f"{row['invitation_token_hash']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_import_jobs" and row.get("import_id"):
+                    row["import_id"] = f"{row['import_id']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_entitlement_grant_batches" and row.get("grant_id"):
+                    row["grant_id"] = f"{row['grant_id']}:restored:{next(iter(maps['events'].values()))}"
+                if table == "enterprise_credentials":
+                    row["status"] = "INACTIVE"
+                    row["legacy_token_hash"] = ""
+                    row["token_hint"] = ""
             if "alert_id" in row and row.get("alert_id") is not None:
                 row["alert_id"] = maps["operations_center_alerts"].get(int(row["alert_id"]), row["alert_id"])
             if "incident_id" in row and row.get("incident_id") is not None:

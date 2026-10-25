@@ -1,0 +1,149 @@
+{
+  "name": "BITORA V5.0 Golden Access Dataset",
+  "purpose": "Reference decisions from the V4 access engine before implementing V5.1 Access State Engine Shadow.",
+  "engine": "V4 AccessValidationService",
+  "created_for": "V5.0.1 baseline and gate closure",
+  "source_contracts": [
+    "/api/validate",
+    "/api/qr.svg?token=",
+    "accreditations.token",
+    "event_id",
+    "person_id",
+    "accreditation_id"
+  ],
+  "cases": [
+    {
+      "id": "access.valid.general",
+      "description": "Active accreditation, access-enabled type, first general event entry.",
+      "input": {
+        "token_state": "existing_active",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "side_effect": "general check-in is marked"
+      }
+    },
+    {
+      "id": "access.missing_token",
+      "description": "Token does not exist in the database.",
+      "input": {
+        "token_state": "missing",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "QR inexistente",
+        "status_code": 404
+      }
+    },
+    {
+      "id": "access.cancelled_accreditation",
+      "description": "Accreditation exists but has cancelled status.",
+      "input": {
+        "token_state": "existing_cancelled",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Acreditacion cancelada"
+      }
+    },
+    {
+      "id": "access.type_disabled",
+      "description": "Accreditation type exists but access is disabled for the type.",
+      "input": {
+        "token_state": "existing_active_type_without_access",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Tipo de acreditacion no habilitado"
+      }
+    },
+    {
+      "id": "access.reentry_blocked",
+      "description": "General event entry attempted again when max reentries is zero.",
+      "input": {
+        "token_state": "existing_active_already_checked_in",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "QR ya utilizado"
+      }
+    },
+    {
+      "id": "access.activity_wrong_event",
+      "description": "Activity id belongs to another event than the accreditation.",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "other_event_activity"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Actividad incorrecta"
+      }
+    },
+    {
+      "id": "access.activity_required_without_reservation",
+      "description": "Checked-in participant attempts a required activity without confirmed reservation.",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "required_activity_without_reservation"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Sin reserva confirmada"
+      }
+    },
+    {
+      "id": "access.activity_valid_reserved",
+      "description": "Checked-in participant attempts a required activity with confirmed reservation inside access window.",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "required_activity_with_confirmed_reservation"
+      },
+      "expected_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "side_effect": "activity access counter is incremented"
+      }
+    },
+    {
+      "id": "access.activity_duplicate_entry",
+      "description": "Second access attempt to the same activity after a previous granted activity entry.",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "activity_with_prior_granted_entry"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason_prefix": "Ya ingreso a esta actividad"
+      }
+    },
+    {
+      "id": "access.activity_before_window",
+      "description": "Activity reservation is valid but access window has not opened yet.",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "future_activity_before_access_window"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason_prefix": "Acceso aun no habilitado"
+      }
+    }
+  ]
+}

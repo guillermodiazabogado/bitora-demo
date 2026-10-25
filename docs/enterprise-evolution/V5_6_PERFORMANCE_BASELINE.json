@@ -1,0 +1,65 @@
+[
+  {
+    "operation": "plate lookup",
+    "median_ms": 0.029,
+    "p95_ms": 0.058,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "slot lookup",
+    "median_ms": 0.022,
+    "p95_ms": 0.031,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "vehicle validation",
+    "median_ms": 0.022,
+    "p95_ms": 0.022,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "ENTRY",
+    "median_ms": 0.216,
+    "p95_ms": 0.243,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "EXIT",
+    "median_ms": 0.159,
+    "p95_ms": 0.173,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "100 vehicle validations",
+    "median_ms": 3.131,
+    "p95_ms": 3.131,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "1000 vehicle validations",
+    "median_ms": 30.995,
+    "p95_ms": 30.995,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "concurrent ENTRY same vehicle",
+    "median_ms": 0.185,
+    "p95_ms": 0.187,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "dashboard query",
+    "median_ms": 0.033,
+    "p95_ms": 0.046,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  }
+]

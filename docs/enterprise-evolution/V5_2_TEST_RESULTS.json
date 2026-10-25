@@ -1,0 +1,52 @@
+[
+  {
+    "Test": "verificar_v4.py",
+    "Status": "PASS",
+    "LastLine": "OK: V4 arquitectura, seguridad operativa y contrato final"
+  },
+  {
+    "Test": "verificar_participant_experience_v4_0_3.py",
+    "Status": "PASS",
+    "LastLine": "}"
+  },
+  {
+    "Test": "verificar_multievent_isolation_20_events.py",
+    "Status": "PASS",
+    "LastLine": "OK: aislamiento multievento 20 eventos / 1000 participantes"
+  },
+  {
+    "Test": "verificar_backup_restore.py",
+    "Status": "PASS",
+    "LastLine": "OK: backup productivo con base, storage, checksums y restauracion"
+  },
+  {
+    "Test": "verificar_seguridad_basica.py",
+    "Status": "PASS",
+    "LastLine": "OK: seguridad basica y permisos"
+  },
+  {
+    "Test": "verificar_v4_6_zone_permissions_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.6 zone permissions foundation: OK"
+  },
+  {
+    "Test": "verificar_v5_0_enterprise_core_shadow.py",
+    "Status": "PASS",
+    "LastLine": "V5.0 enterprise core shadow model: OK"
+  },
+  {
+    "Test": "verificar_v5_1_access_state_engine_shadow.py",
+    "Status": "PASS",
+    "LastLine": "V5.1 access state engine shadow: OK"
+  },
+  {
+    "Test": "verificar_v5_2_device_edge_sync_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V5.2 device identity and edge sync foundation: OK"
+  },
+  {
+    "Test": "scripts\\secret_scan.py",
+    "Status": "PASS",
+    "LastLine": "Secret scan passed."
+  }
+]

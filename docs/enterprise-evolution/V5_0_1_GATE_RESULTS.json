@@ -1,0 +1,87 @@
+[
+  {
+    "Test": "verificar_v4.py",
+    "Status": "PASS",
+    "LastLine": "OK: V4 arquitectura, seguridad operativa y contrato final"
+  },
+  {
+    "Test": "verificar_v4_1_attendance_domain.py",
+    "Status": "PASS",
+    "LastLine": "V4.1 attendance domain foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_2_attendance_closure_eligibility.py",
+    "Status": "PASS",
+    "LastLine": "V4.2 attendance closure and eligibility foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_3_certificates_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.3 certificates foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_4_surveys_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.4 surveys foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_5_speakers_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.5 speakers foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_6_zone_permissions_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.6 zone permissions foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_7_history_autocomplete_foundation.py",
+    "Status": "PASS",
+    "LastLine": "V4.7 history and autocomplete foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_8_operations_center.py",
+    "Status": "PASS",
+    "LastLine": "V4.8 operations center foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_9_communications_automation.py",
+    "Status": "PASS",
+    "LastLine": "V4.9 communications automation foundation: OK"
+  },
+  {
+    "Test": "verificar_v4_10_analytics_functional_closure.py",
+    "Status": "PASS",
+    "LastLine": "V4.10 analytics functional closure: OK"
+  },
+  {
+    "Test": "verificar_backup_restore.py",
+    "Status": "PASS",
+    "LastLine": "OK: backup productivo con base, storage, checksums y restauracion"
+  },
+  {
+    "Test": "verificar_multievent_isolation_20_events.py",
+    "Status": "PASS",
+    "LastLine": "OK: aislamiento multievento 20 eventos / 1000 participantes"
+  },
+  {
+    "Test": "verificar_seguridad_basica.py",
+    "Status": "PASS",
+    "LastLine": "OK: seguridad basica y permisos"
+  },
+  {
+    "Test": "verificar_participant_experience_v4_0_3.py",
+    "Status": "PASS",
+    "LastLine": "}"
+  },
+  {
+    "Test": "verificar_v5_0_enterprise_core_shadow.py",
+    "Status": "PASS",
+    "LastLine": "V5.0 enterprise core shadow model: OK"
+  },
+  {
+    "Test": "scripts\\secret_scan.py",
+    "Status": "PASS",
+    "LastLine": "Secret scan passed."
+  }
+]

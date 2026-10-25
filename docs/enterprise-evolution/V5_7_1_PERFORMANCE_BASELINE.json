@@ -1,0 +1,51 @@
+[
+  {
+    "operation": "dashboard initial render",
+    "median_ms": 0.014,
+    "p95_ms": 0.022,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "dashboard warm refresh",
+    "median_ms": 1.272,
+    "p95_ms": 1.395,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "map render",
+    "median_ms": 0.084,
+    "p95_ms": 0.104,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "map overlay update",
+    "median_ms": 0.089,
+    "p95_ms": 0.101,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "PRE-EVENT snapshot",
+    "median_ms": 1.236,
+    "p95_ms": 1.344,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "LIVE snapshot",
+    "median_ms": 1.19,
+    "p95_ms": 1.233,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "10 concurrent dashboards",
+    "median_ms": 12.034,
+    "p95_ms": 12.034,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  }
+]

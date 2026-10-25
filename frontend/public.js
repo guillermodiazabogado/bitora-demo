@@ -68,9 +68,10 @@ function applyAppConfig(config) {
 function formData(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   data.activity_ids = [];
-  data.acepta_email = false;
-  data.acepta_whatsapp = Boolean(form.elements.acepta_whatsapp?.checked);
-  data.canal_preferido = data.acepta_whatsapp ? "whatsapp" : "email";
+  const communicationConsent = Boolean(form.elements.acepta_comunicaciones?.checked);
+  data.acepta_email = communicationConsent;
+  data.acepta_whatsapp = communicationConsent;
+  data.canal_preferido = "whatsapp";
   data.source = source;
   data.source_detail = sourceDetail;
   data.device_type = deviceType();
@@ -186,18 +187,18 @@ async function register(event) {
     }
     const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
     formStarted = false;
+    const email = result.communications?.email;
     const whatsapp = result.communications?.whatsapp;
-    const whatsappMessage = whatsapp?.status === "sent"
-      ? "La confirmacion por WhatsApp fue enviada."
-      : whatsapp?.status === "pending"
-        ? "La confirmacion por WhatsApp esta en proceso."
-        : whatsapp?.status === "error"
-          ? "Tu inscripcion esta confirmada. El WhatsApp no pudo enviarse y podes usar el portal."
-          : "Tu portal personal ya esta disponible.";
+    const channelLabel = (name, channel) => {
+      if (channel?.status === "sent") return `${name}: enviado.`;
+      if (channel?.status === "pending") return `${name}: envio en proceso.`;
+      if (channel?.status === "error") return `${name}: no pudo enviarse; la acreditacion sigue activa.`;
+      return `${name}: no enviado.`;
+    };
     resultBox.innerHTML = `
       <div class="panel success">
         <h2>Inscripcion confirmada</h2>
-        <p>${whatsappMessage}</p>
+        <p>${channelLabel("Email", email)} ${channelLabel("WhatsApp", whatsapp)}</p>
         <a class="button" href="${result.portal_url}">Abrir mi portal y ver QR</a>
       </div>
     `;
