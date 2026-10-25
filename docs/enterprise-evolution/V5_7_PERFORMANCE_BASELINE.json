@@ -1,0 +1,23 @@
+[
+  {
+    "operation": "snapshot warm",
+    "median_ms": 1.409,
+    "p95_ms": 1.512,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "alerts evaluation",
+    "median_ms": 0.253,
+    "p95_ms": 0.348,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "dashboard render",
+    "median_ms": 0.01,
+    "p95_ms": 0.014,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  }
+]

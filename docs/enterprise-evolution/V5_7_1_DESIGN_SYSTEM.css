@@ -1,0 +1,77 @@
+:root {
+  --color-brand: #d2b89a;
+  --color-brand-dark: #c3a381;
+  --color-brand-light: #e4d3bf;
+  --surface-page: #f4f1ec;
+  --surface-card: #fffdf9;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #ece7df;
+  --text-primary: #122234;
+  --text-secondary: #536272;
+  --text-muted: #7d8792;
+  --border-default: #d7d1c8;
+  --border-subtle: #e8e2d9;
+  --status-success: #16845f;
+  --status-warning: #b7791f;
+  --status-critical: #c0392b;
+  --status-neutral: #6b7280;
+  --radius-control: 9px;
+  --radius-card: 14px;
+  --radius-panel: 16px;
+  --shadow-card: 0 10px 24px rgba(18, 34, 52, 0.08);
+  --shadow-floating: 0 18px 48px rgba(18, 34, 52, 0.16);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --icon-sm: 16px;
+  --icon-md: 20px;
+  --icon-lg: 28px;
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 28px;
+  --font-display: 36px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--text-primary); background: var(--surface-page); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+.sidebar { background: #111d27; color: #f8efe4; padding: var(--space-6); }
+.brand { font-size: var(--font-xl); font-weight: 800; margin-bottom: var(--space-7); letter-spacing: .04em; }
+.sidebar nav { display: grid; gap: var(--space-2); }
+.sidebar b { margin-top: var(--space-4); color: #b7c0c8; font-size: var(--font-xs); }
+.sidebar a { padding: 10px 12px; border-radius: var(--radius-control); color: #edf2f4; }
+.sidebar a.active { background: rgba(210, 184, 154, .18); color: #fff; box-shadow: inset 3px 0 0 var(--color-brand); }
+main { padding: var(--space-6); min-width: 0; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
+.topbar h1 { margin: 0; font-size: var(--font-display); }
+.topbar small { color: var(--text-secondary); }
+.phase, .health { border: 1px solid var(--border-default); background: var(--surface-card); border-radius: var(--radius-card); padding: 10px 14px; box-shadow: var(--shadow-card); }
+.phase span { display: block; color: var(--text-secondary); font-size: var(--font-xs); }
+.alerts, .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.metric, .alert, .device, .map-panel, .side-panel { background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+.metric { padding: var(--space-4); min-height: 112px; }
+.metric span, .metric small { color: var(--text-secondary); }
+.metric strong { display: block; font-size: 32px; line-height: 1.1; margin: var(--space-2) 0; }
+.alert { padding: var(--space-3); display: grid; gap: 3px; border-left-width: 5px; }
+.alert.critical { border-left-color: var(--status-critical); }
+.alert.warning { border-left-color: var(--status-warning); }
+.alert.neutral { border-left-color: var(--status-success); }
+.workspace { display: grid; grid-template-columns: minmax(0, 1.8fr) 360px; gap: var(--space-4); }
+.map-panel, .side-panel { padding: var(--space-4); }
+.panel-head { display: flex; align-items: center; justify-content: space-between; }
+.toolbar button { border: 1px solid var(--border-default); background: var(--surface-elevated); border-radius: var(--radius-control); padding: 8px 10px; }
+.venue-map { height: 520px; position: relative; overflow: hidden; border-radius: var(--radius-panel); background: linear-gradient(135deg, #e8e3da, #fbfaf7); border: 1px solid var(--border-default); }
+.map-item { position: absolute; border: 1px solid rgba(18,34,52,.18); border-radius: 12px; background: rgba(255,255,255,.86); text-align: left; padding: 10px; box-shadow: var(--shadow-card); }
+.map-item:hover, .map-item:focus { outline: 3px solid rgba(210,184,154,.45); }
+.map-item b, .map-item span { display: block; }
+.map-item span, .legend, .device small { color: var(--text-secondary); font-size: var(--font-xs); }
+.legend { display: flex; gap: var(--space-3); padding-top: var(--space-3); }
+.device { padding: var(--space-3); margin-bottom: var(--space-2); display: grid; gap: 4px; }
+@media (max-width: 980px) { .app-shell { grid-template-columns: 84px minmax(0,1fr); } .sidebar a, .sidebar b { font-size: 0; } .workspace, .alerts, .metrics { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .app-shell { display: block; } .sidebar { display: none; } main { padding: var(--space-4); } .topbar, .workspace, .alerts, .metrics { display: grid; grid-template-columns: 1fr; } .venue-map { height: 320px; } }

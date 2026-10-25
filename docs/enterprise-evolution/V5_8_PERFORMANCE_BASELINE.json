@@ -1,0 +1,44 @@
+[
+  {
+    "operation": "Edge access validation",
+    "median_ms": 0.002,
+    "p95_ms": 0.003,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "Edge ENTRY",
+    "median_ms": 0.234,
+    "p95_ms": 0.27,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "Queue append",
+    "median_ms": 0.261,
+    "p95_ms": 0.281,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "Batch 1",
+    "median_ms": 2.677,
+    "p95_ms": 3.021,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "Batch 100",
+    "median_ms": 39.906,
+    "p95_ms": 39.906,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "Device heartbeat",
+    "median_ms": 0.071,
+    "p95_ms": 0.089,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  }
+]

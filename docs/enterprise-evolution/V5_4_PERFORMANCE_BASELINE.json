@@ -1,0 +1,51 @@
+[
+  {
+    "operation": "entitlement lookup",
+    "median_ms": 0.056,
+    "p95_ms": 0.064,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "consumption",
+    "median_ms": 0.217,
+    "p95_ms": 0.263,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "duplicate consumption",
+    "median_ms": 0.019,
+    "p95_ms": 0.029,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "list participant entitlements",
+    "median_ms": 0.056,
+    "p95_ms": 0.071,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "100 sequential consumptions",
+    "median_ms": 49.69,
+    "p95_ms": 49.69,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "1000 sequential consumptions",
+    "median_ms": 507.251,
+    "p95_ms": 507.251,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  },
+  {
+    "operation": "concurrent last-unit test",
+    "median_ms": 0.313,
+    "p95_ms": 0.317,
+    "errors": 0,
+    "environment": "local SQLite temp DB"
+  }
+]

@@ -1,0 +1,502 @@
+{
+  "cases": [
+    {
+      "case_id": "access.valid.general",
+      "input": {
+        "token_state": "existing_active",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "side_effect": "general check-in is marked"
+      },
+      "actual_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "color": "green",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "ALLOW",
+        "reason_code": "VALID",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "INSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-ce05d6c185b14e52bbbf5bca6a157685",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [
+          {
+            "allowed": true,
+            "entitlement_id": 1,
+            "type": "ACCESS",
+            "scope_type": "EVENT",
+            "scope_id": ""
+          }
+        ],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:00+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "VALID"
+    },
+    {
+      "case_id": "access.missing_token",
+      "input": {
+        "token_state": "missing",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "QR inexistente",
+        "status_code": 404
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "QR inexistente",
+        "color": "red",
+        "status_code": 404
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "UNKNOWN_CREDENTIAL",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": null,
+        "credential_id": null,
+        "accreditation_id": null,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-b24b22f2dcfa4d9985b0012ed5b6ce9d",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:00+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "UNKNOWN_CREDENTIAL"
+    },
+    {
+      "case_id": "access.cancelled_accreditation",
+      "input": {
+        "token_state": "existing_cancelled",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Acreditacion cancelada"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Acreditacion cancelada",
+        "color": "red",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "INACTIVE_CREDENTIAL",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-aba8fa3f39444bc78b7f34696498da9b",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:01+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "INACTIVE_CREDENTIAL"
+    },
+    {
+      "case_id": "access.type_disabled",
+      "input": {
+        "token_state": "existing_active_type_without_access",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Tipo de acreditacion no habilitado"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Tipo de acreditacion no habilitado",
+        "color": "red",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "RULE_DENIED",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-18088eb2a9d642f8a7a3d9e40c6b9a73",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:01+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "RULE_DENIED"
+    },
+    {
+      "case_id": "access.reentry_blocked",
+      "input": {
+        "token_state": "existing_active_already_checked_in",
+        "checkpoint": "General",
+        "activity_id": null
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "QR ya utilizado"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "QR ya utilizado",
+        "color": "red",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "ALLOW",
+        "reason_code": "VALID",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "INSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-3610fccae77b412aafcdd8996b037909",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [
+          {
+            "allowed": true,
+            "entitlement_id": 1,
+            "type": "ACCESS",
+            "scope_type": "EVENT",
+            "scope_id": ""
+          }
+        ],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:02+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": false,
+      "v5_reason_code": "VALID"
+    },
+    {
+      "case_id": "access.activity_wrong_event",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "other_event_activity"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Actividad incorrecta"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Actividad incorrecta",
+        "color": "red",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "WRONG_EVENT",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-e3d1b82e9fea49fe9226683610a343ea",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:02+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "WRONG_EVENT"
+    },
+    {
+      "case_id": "access.activity_required_without_reservation",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "required_activity_without_reservation"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason": "Sin reserva confirmada"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Sin reserva confirmada",
+        "color": "red",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "NO_ENTITLEMENT",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-0c0db7a164634aee86f098db5bcd569a",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:03+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "NO_ENTITLEMENT"
+    },
+    {
+      "case_id": "access.activity_valid_reserved",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "required_activity_with_confirmed_reservation"
+      },
+      "expected_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "side_effect": "activity access counter is incremented"
+      },
+      "actual_v4": {
+        "result": "granted",
+        "reason": "Acceso concedido",
+        "color": "green",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "ANTI_PASSBACK",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-ecfc3bdf84ae46a58d0c94117d0e785f",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:03+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": false,
+      "v5_reason_code": "ANTI_PASSBACK"
+    },
+    {
+      "case_id": "access.activity_duplicate_entry",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "activity_with_prior_granted_entry"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason_prefix": "Ya ingreso a esta actividad"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Ya ingreso a esta actividad a las 00:12.",
+        "color": "yellow",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "ANTI_PASSBACK",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-3de31d26f83448cdadd330394a0ea609",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:04+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "ANTI_PASSBACK"
+    },
+    {
+      "case_id": "access.activity_before_window",
+      "input": {
+        "token_state": "existing_active_checked_in",
+        "checkpoint": "Actividad",
+        "activity_id": "future_activity_before_access_window"
+      },
+      "expected_v4": {
+        "result": "rejected",
+        "reason_prefix": "Acceso aun no habilitado"
+      },
+      "actual_v4": {
+        "result": "rejected",
+        "reason": "Acceso aun no habilitado. Se habilita a las 00:02.",
+        "color": "yellow",
+        "status_code": 200
+      },
+      "v5_shadow": {
+        "decision": "DENY",
+        "reason_code": "OUTSIDE_TIME_WINDOW",
+        "previous_state": "OUTSIDE",
+        "proposed_state": "OUTSIDE",
+        "current_zone_id": null,
+        "proposed_zone_id": null,
+        "entity_id": 2,
+        "credential_id": 1,
+        "accreditation_id": 1,
+        "door_id": null,
+        "zone_id": null,
+        "device_id": null,
+        "direction": "ENTRY",
+        "correlation_id": "v5-7daf6ff1027b464b9c5cfc15b9fd35b8",
+        "idempotency_key": "",
+        "rule_results": [],
+        "entitlement_results": [],
+        "revocation_status": "NOT_REVOKED",
+        "cooldown_status": "NOT_APPLICABLE",
+        "anti_passback_status": "NOT_APPLICABLE",
+        "capacity_status": "NOT_APPLICABLE",
+        "occurred_at": "2026-10-25T03:12:04+00:00",
+        "access_event_id": null,
+        "error": ""
+      },
+      "match": true,
+      "v5_reason_code": "OUTSIDE_TIME_WINDOW"
+    }
+  ],
+  "total": 10,
+  "v4_matches": 10,
+  "v5_matches": 8,
+  "divergences": [
+    {
+      "case": "access.reentry_blocked",
+      "v4": "rejected",
+      "v5": "ALLOW",
+      "classification": "EXPECTED_DIVERGENCE",
+      "reason": "VALID"
+    },
+    {
+      "case": "access.activity_valid_reserved",
+      "v4": "granted",
+      "v5": "DENY",
+      "classification": "EXPECTED_DIVERGENCE",
+      "reason": "ANTI_PASSBACK"
+    }
+  ]
+}

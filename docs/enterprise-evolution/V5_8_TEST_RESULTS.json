@@ -1,0 +1,109 @@
+{
+  "edge_id": 1,
+  "dataset_revision": "v58-event-2-7fa64d4db3173669",
+  "readiness": {
+    "status": "READY",
+    "score": 100,
+    "checks": {
+      "cloud": "ONLINE",
+      "edge": "READY",
+      "dataset": "CURRENT",
+      "devices": "1 active / 1 total",
+      "clock": "OK",
+      "storage": "OK",
+      "queue": "READY",
+      "backup": "READY"
+    },
+    "blockers": [],
+    "warnings": [],
+    "dataset": {
+      "status": "CURRENT",
+      "revision": "v58-event-2-7fa64d4db3173669",
+      "age_minutes": 0.0
+    }
+  },
+  "cloud_down": {
+    "status": "NORMAL",
+    "readiness": {
+      "status": "READY_WITH_WARNINGS",
+      "score": 95,
+      "checks": {
+        "cloud": "OFFLINE",
+        "edge": "READY",
+        "dataset": "CURRENT",
+        "devices": "1 active / 1 total",
+        "clock": "OK",
+        "storage": "OK",
+        "queue": "READY",
+        "backup": "READY"
+      },
+      "blockers": [],
+      "warnings": [
+        "CLOUD_OFFLINE_EDGE_LOCAL_READY"
+      ],
+      "dataset": {
+        "status": "CURRENT",
+        "revision": "v58-event-2-7fa64d4db3173669",
+        "age_minutes": 0.0
+      }
+    },
+    "cloud": "OFFLINE",
+    "lan": "AVAILABLE"
+  },
+  "sync_result": {
+    "ok": true,
+    "synced": 1,
+    "result": {
+      "ok": true,
+      "results": [
+        {
+          "operation_id": "edge-entry-1",
+          "status": "ACKNOWLEDGED",
+          "conflict_type": "NO_CONFLICT"
+        }
+      ]
+    }
+  },
+  "double_spend": {
+    "ok": true,
+    "operation_a": false,
+    "operation_b": true,
+    "conflict_type": "RULE_CONFLICT",
+    "resolution": "REVIEW_REQUIRED"
+  },
+  "device_simulation": {
+    "30": {
+      "ok": true,
+      "devices": 30,
+      "operations": 30,
+      "failures": 0
+    },
+    "50": {
+      "ok": true,
+      "devices": 50,
+      "operations": 50,
+      "failures": 0
+    },
+    "100": {
+      "ok": true,
+      "devices": 100,
+      "operations": 0,
+      "failures": 0
+    }
+  },
+  "outage_5000": {
+    "ok": true,
+    "operations": 5000,
+    "failures": 0,
+    "duplicate_attempts": 5,
+    "queue_depth": 5051,
+    "elapsed_ms": 1893.078,
+    "lost_acknowledged_operations": 0
+  },
+  "backup_restore_event_id": 4,
+  "golden": {
+    "v4_matches": 10,
+    "v5_matches": 10,
+    "divergences": []
+  }
+}

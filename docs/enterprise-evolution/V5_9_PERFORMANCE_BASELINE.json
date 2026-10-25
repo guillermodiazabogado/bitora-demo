@@ -1,0 +1,4192 @@
+[
+  {
+    "operation": "Signed dataset verify",
+    "median_ms": 0.014,
+    "p95_ms": 0.015,
+    "errors": 0,
+    "throughput_ops_sec": 68278.03,
+    "environment": "local SQLite certification harness",
+    "last": {
+      "ok": true,
+      "checksum": "1a6a32179bfc0206be2fe6519b44b83b88ba8b988881205f3503df36ffc7aedb",
+      "checksum_ok": true,
+      "signature": {
+        "ok": true,
+        "status": "VALID",
+        "key_id": "v59-local"
+      },
+      "status": "VALID"
+    }
+  },
+  {
+    "operation": "Edge local operation",
+    "median_ms": 0.228,
+    "p95_ms": 0.265,
+    "errors": 0,
+    "throughput_ops_sec": 2712.24,
+    "environment": "local SQLite certification harness",
+    "last": {
+      "ok": true,
+      "ack": "DURABLE_LOCAL_COMMIT",
+      "item": {
+        "id": 10304,
+        "organization_id": 1,
+        "event_id": 2,
+        "device_id": 1,
+        "operation_id": "perf-836526.6601533",
+        "idempotency_key": "perf-836526.660155",
+        "correlation_id": "edge-0ff0db5b716746ffae6dacbb3ca93f57",
+        "device_sequence": 9999,
+        "operation_type": "ENTRY",
+        "payload_json": "{\"operation_id\": \"perf-836526.6601533\", \"token\": \"EVT-UHICM4AFVBF8\"}",
+        "local_decision_json": "{\"credential_id\": 1, \"decision\": \"ALLOW\", \"direction\": \"ENTRY\", \"reason_code\": \"VALID\"}",
+        "dataset_revision": "v58-event-2-1a6a32179bfc0206",
+        "device_occurred_at": "2026-10-25T03:11:45+00:00",
+        "queued_at": "2026-10-25T03:11:45+00:00",
+        "server_received_at": null,
+        "retry_count": 0,
+        "status": "PENDING",
+        "last_error": "",
+        "server_result_json": "{}",
+        "metadata_json": "{}",
+        "created_at": "2026-10-25T03:11:45+00:00",
+        "updated_at": "2026-10-25T03:11:45+00:00"
+      }
+    }
+  },
+  {
+    "operation": "Batch sync 1000",
+    "median_ms": 395.424,
+    "p95_ms": 404.499,
+    "errors": 0,
+    "throughput_ops_sec": 3.76,
+    "environment": "local SQLite certification harness",
+    "last": {
+      "ok": true,
+      "synced": 100,
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "operation_id": "perf-836526.6234537",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6237875",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6240303",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6242529",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6245002",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6247588",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.624981",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6252302",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6254494",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6256705",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6259175",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6261781",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6264335",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6266723",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6269362",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6271693",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6273857",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6276127",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6278536",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6280688",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6282829",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6285203",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6287362",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6289701",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6291855",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6294185",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6296521",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6298888",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6301052",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6303602",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6305805",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6308123",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6310711",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6313362",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.631572",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6318043",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6320592",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6323356",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6325506",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6327656",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6329784",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6331936",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.633408",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6336192",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6338588",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6341079",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6343215",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6345444",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6347563",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6349695",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6351994",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6354231",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6356425",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6359033",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6361772",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.636396",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6366079",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6368501",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6370634",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.63732",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6375343",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6377831",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6380206",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6382602",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6384708",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6386806",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6389053",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6391572",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6393673",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6395737",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6397987",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.640018",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6402287",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6404571",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6406773",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.640901",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.641127",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6413907",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6416028",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6418118",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.642029",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6422562",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6561236",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6564237",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6566553",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6569061",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6571384",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6573695",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6575899",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6578175",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6580559",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6582916",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.658507",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.658731",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6589752",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6592045",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.659438",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6596834",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6599058",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          },
+          {
+            "operation_id": "perf-836526.6601533",
+            "status": "CONFLICT",
+            "conflict_type": "ANTI_PASSBACK_CONFLICT"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "operation": "Command Center snapshot",
+    "median_ms": 6.631,
+    "p95_ms": 6.812,
+    "errors": 0,
+    "throughput_ops_sec": 148.59,
+    "environment": "local SQLite certification harness",
+    "last": {
+      "schema": "bitora.command_center.v5.7.snapshot",
+      "organization_id": 1,
+      "event_id": 2,
+      "generated_at": "2026-10-25T03:11:46+00:00",
+      "actor": "command-center",
+      "data_contract": "AGGREGATED_NO_PII",
+      "sections": {
+        "overview": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "people_inside": 1,
+            "cards": [
+              {
+                "label": "Personas dentro",
+                "value": 1
+              },
+              {
+                "label": "Entradas",
+                "value": 1
+              },
+              {
+                "label": "Rechazos",
+                "value": 0
+              },
+              {
+                "label": "Dispositivos activos",
+                "value": 1
+              },
+              {
+                "label": "Cola edge",
+                "value": 201
+              },
+              {
+                "label": "Conflictos",
+                "value": 5201
+              },
+              {
+                "label": "Veh\u00edculos dentro",
+                "value": 0
+              },
+              {
+                "label": "Leads",
+                "value": 0
+              }
+            ],
+            "entries": 1,
+            "exits": 0,
+            "denials": 0,
+            "devices": {
+              "active": 1,
+              "stale": 181,
+              "revoked": 0
+            },
+            "edge": {
+              "queue_depth": 201,
+              "oldest_pending": "2026-10-25T03:11:39+00:00",
+              "conflicts": 5201
+            }
+          }
+        },
+        "access": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "entries": 1,
+            "exits": 0,
+            "denials": 0,
+            "denials_by_reason": [],
+            "recent": [
+              {
+                "id": 1,
+                "direction": "ENTRY",
+                "decision": "ALLOW",
+                "reason_code": "VALID",
+                "occurred_at": "2026-10-25T03:11:40+00:00",
+                "source": "edge.sync"
+              }
+            ]
+          }
+        },
+        "occupancy": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "access_counter": {
+              "inside": 1,
+              "capacity": 100,
+              "occupancy_pct": 1.0,
+              "status": "OK"
+            },
+            "camera_counter": {
+              "status": "UNAVAILABLE",
+              "reason": "CAMERA_SOURCE_NOT_CONFIGURED"
+            },
+            "source_policy": "ACCESS_COUNTER_AND_CAMERA_COUNTER_ARE_SEPARATE"
+          }
+        },
+        "zones": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "items": []
+          }
+        },
+        "doors": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "items": []
+          }
+        },
+        "devices": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "items": [
+              {
+                "id": 1,
+                "device_type": "HANDHELD",
+                "display_name": "V5.9 Device",
+                "status": "ACTIVE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "2026-10-25T03:11:46+00:00",
+                "software_version": "v5.8-device",
+                "dataset_revision": "v58-event-2-1a6a32179bfc0206",
+                "sync_state": "OFFLINE",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 2,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 0",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 3,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 1",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 4,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 2",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 5,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 3",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 6,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 4",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 7,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 5",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 8,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 6",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 9,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 7",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 10,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 8",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 11,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 9",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 12,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 10",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 13,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 11",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 14,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 12",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 15,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 13",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 16,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 14",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 17,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 15",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 18,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 16",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 19,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 17",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 20,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 18",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 21,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 19",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 22,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 20",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 23,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 21",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 24,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 22",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 25,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 23",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 26,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 24",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 27,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 25",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 28,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 26",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 29,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 27",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 30,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 28",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 31,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 29",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 32,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 0",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 33,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 1",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 34,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 2",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 35,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 3",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 36,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 4",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 37,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 5",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 38,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 6",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 39,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 7",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 40,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 8",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 41,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 9",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 42,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 10",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 43,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 11",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 44,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 12",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 45,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 13",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 46,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 14",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 47,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 15",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 48,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 16",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 49,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 17",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 50,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 18",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 51,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 19",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 52,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 20",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 53,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 21",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 54,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 22",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 55,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 23",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 56,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 24",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 57,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 25",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 58,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 26",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 59,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 27",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 60,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 28",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 61,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 29",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 62,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 30",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 63,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 31",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 64,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 32",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 65,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 33",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 66,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 34",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 67,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 35",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 68,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 36",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 69,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 37",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 70,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 38",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 71,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 39",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 72,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 40",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 73,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 41",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 74,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 42",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 75,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 43",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 76,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 44",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 77,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 45",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 78,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 46",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 79,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 47",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 80,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 48",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 81,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 49",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 82,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 0",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 83,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 1",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 84,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 2",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 85,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 3",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 86,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 4",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 87,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 5",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 88,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 6",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 89,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 7",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 90,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 8",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 91,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 9",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 92,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 10",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 93,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 11",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 94,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 12",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 95,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 13",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 96,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 14",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 97,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 15",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 98,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 16",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 99,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 17",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 100,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 18",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 101,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 19",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 102,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 20",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 103,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 21",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 104,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 22",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 105,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 23",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 106,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 24",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 107,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 25",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 108,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 26",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 109,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 27",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 110,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 28",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 111,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 29",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 112,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 30",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 113,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 31",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 114,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 32",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 115,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 33",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 116,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 34",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 117,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 35",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 118,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 36",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 119,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 37",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 120,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 38",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 121,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 39",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 122,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 40",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 123,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 41",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 124,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 42",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 125,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 43",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 126,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 44",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 127,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 45",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 128,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 46",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 129,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 47",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 130,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 48",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 131,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 49",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 132,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 50",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 133,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 51",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 134,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 52",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 135,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 53",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 136,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 54",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 137,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 55",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 138,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 56",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 139,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 57",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 140,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 58",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 141,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 59",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 142,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 60",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 143,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 61",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 144,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 62",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 145,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 63",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 146,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 64",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 147,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 65",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 148,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 66",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 149,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 67",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 150,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 68",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 151,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 69",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 152,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 70",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 153,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 71",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 154,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 72",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 155,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 73",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 156,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 74",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 157,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 75",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 158,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 76",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 159,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 77",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 160,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 78",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 161,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 79",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 162,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 80",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 163,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 81",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 164,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 82",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 165,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 83",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 166,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 84",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 167,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 85",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 168,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 86",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 169,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 87",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 170,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 88",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 171,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 89",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 172,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 90",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 173,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 91",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 174,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 92",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 175,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 93",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 176,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 94",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 177,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 95",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 178,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 96",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 179,
+                "device_type": "HANDHELD",
+                "display_name": "Sim SERVICE 97",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              },
+              {
+                "id": 180,
+                "device_type": "HANDHELD",
+                "display_name": "Sim LOGISTICS 98",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "SYNC_DATASET",
+                  "VALIDATE_VEHICLE",
+                  "VEHICLE_ENTRY",
+                  "VEHICLE_EXIT"
+                ]
+              },
+              {
+                "id": 181,
+                "device_type": "HANDHELD",
+                "display_name": "Sim ACCESS_FAST 99",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CREDENTIAL_LOOKUP",
+                  "ENTRY",
+                  "EXIT",
+                  "SCAN_QR",
+                  "SYNC_DATASET",
+                  "VALIDATE_ACCESS"
+                ]
+              },
+              {
+                "id": 182,
+                "device_type": "HANDHELD",
+                "display_name": "V5.9 Service",
+                "status": "STALE",
+                "admin_status": "ACTIVE",
+                "last_seen_at": "",
+                "software_version": "v5.8-device",
+                "dataset_revision": "",
+                "sync_state": "NOT_CONFIGURED",
+                "capabilities": [
+                  "CONSUME_ENTITLEMENT",
+                  "CREDENTIAL_LOOKUP",
+                  "ENTITLEMENT_LOOKUP",
+                  "SYNC_DATASET"
+                ]
+              }
+            ],
+            "counts": {
+              "active": 1,
+              "stale": 181,
+              "revoked": 0
+            }
+          }
+        },
+        "edge": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "queue_depth": 201,
+            "oldest_pending": "2026-10-25T03:11:39+00:00",
+            "conflicts": 5201,
+            "event_edge": {
+              "id": 1,
+              "name": "V5.9 Edge",
+              "status": "READY",
+              "cloud": "ONLINE",
+              "dataset_revision": "v58-event-2-1a6a32179bfc0206",
+              "last_cloud_sync": "2026-10-25T03:11:46+00:00",
+              "clock_status": "OK",
+              "storage_status": "OK"
+            },
+            "readiness": {
+              "status": "READY",
+              "score": 100,
+              "checks": {
+                "cloud": "ONLINE",
+                "edge": "READY",
+                "dataset": "CURRENT",
+                "devices": "182 active / 182 total",
+                "clock": "OK",
+                "storage": "OK",
+                "queue": "READY",
+                "backup": "READY"
+              },
+              "blockers": [],
+              "warnings": [],
+              "dataset": {
+                "status": "CURRENT",
+                "revision": "v58-event-2-1a6a32179bfc0206",
+                "age_minutes": 0.13
+              }
+            },
+            "event_operation": {
+              "status": "NORMAL",
+              "readiness": {
+                "status": "READY",
+                "score": 100,
+                "checks": {
+                  "cloud": "ONLINE",
+                  "edge": "READY",
+                  "dataset": "CURRENT",
+                  "devices": "182 active / 182 total",
+                  "clock": "OK",
+                  "storage": "OK",
+                  "queue": "READY",
+                  "backup": "READY"
+                },
+                "blockers": [],
+                "warnings": [],
+                "dataset": {
+                  "status": "CURRENT",
+                  "revision": "v58-event-2-1a6a32179bfc0206",
+                  "age_minutes": 0.13
+                }
+              },
+              "cloud": "ONLINE",
+              "lan": "AVAILABLE"
+            }
+          }
+        },
+        "conflicts": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "edge_conflicts": [
+              {
+                "conflict_type": "UNKNOWN_CREDENTIAL",
+                "count": 5000
+              },
+              {
+                "conflict_type": "ANTI_PASSBACK_CONFLICT",
+                "count": 200
+              },
+              {
+                "conflict_type": "RULE_CONFLICT",
+                "count": 1
+              }
+            ],
+            "vehicle_conflicts": 0
+          }
+        },
+        "entitlements": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "active_entitlements": 1,
+            "consumptions": 0,
+            "service_points": 0
+          }
+        },
+        "vehicles": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "expected": 0,
+            "inside": 0,
+            "entries": 0,
+            "exits": 0,
+            "rejected": 0
+          }
+        },
+        "leads": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "licensed_companies": 0,
+            "stands": 0,
+            "scans": 0,
+            "unique_leads": 0,
+            "exports": 0
+          }
+        },
+        "system_health": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "db": "OK",
+            "storage": "NOT_CHECKED",
+            "jobs": {
+              "pending": 0,
+              "failed": 0
+            },
+            "safe_mode": "ON",
+            "live_mode": "OFF"
+          }
+        },
+        "alerts": {
+          "status": "OK",
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "data": {
+            "open": [
+              {
+                "id": 2,
+                "alert_key": "conflict_backlog",
+                "alert_type": "EDGE_CONFLICTS",
+                "severity": "CRITICAL",
+                "status": "OPEN",
+                "title": "Conflictos edge pendientes de revisi\u00f3n",
+                "detail": "5201 >= 1.0",
+                "metric_value": 5201.0,
+                "first_seen_at": "2026-10-25T03:11:45+00:00",
+                "last_seen_at": "2026-10-25T03:11:46+00:00"
+              },
+              {
+                "id": 1,
+                "alert_key": "queue_backlog",
+                "alert_type": "EDGE_QUEUE_BACKLOG",
+                "severity": "WARNING",
+                "status": "OPEN",
+                "title": "Cola edge con operaciones pendientes",
+                "detail": "201 >= 10.0",
+                "metric_value": 201.0,
+                "first_seen_at": "2026-10-25T03:11:45+00:00",
+                "last_seen_at": "2026-10-25T03:11:46+00:00"
+              },
+              {
+                "id": 3,
+                "alert_key": "stale_devices",
+                "alert_type": "DEVICE_STALE",
+                "severity": "WARNING",
+                "status": "OPEN",
+                "title": "Dispositivos sin heartbeat reciente",
+                "detail": "181 >= 1.0",
+                "metric_value": 181.0,
+                "first_seen_at": "2026-10-25T03:11:45+00:00",
+                "last_seen_at": "2026-10-25T03:11:46+00:00"
+              }
+            ],
+            "counts": {
+              "open": 3,
+              "acknowledged": 0
+            }
+          }
+        }
+      },
+      "freshness": {
+        "overview": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "access": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "occupancy": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "zones": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "doors": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "devices": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "edge": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "conflicts": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "entitlements": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "vehicles": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "leads": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "system_health": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        },
+        "alerts": {
+          "updated_at": "2026-10-25T03:11:46+00:00",
+          "stale": false,
+          "status": "OK"
+        }
+      },
+      "observability": {
+        "latency_ms": 6.466,
+        "failed_sections": []
+      }
+    }
+  }
+]
