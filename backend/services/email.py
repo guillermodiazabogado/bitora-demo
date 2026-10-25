@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import base64
 import os
 import re
+from email.message import EmailMessage
+from email.utils import make_msgid
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
+
+from backend.services.google_oauth import GoogleOAuthClient, GoogleOAuthConfig, GoogleOAuthError
 
 
 @dataclass(frozen=True)
@@ -215,11 +220,86 @@ class ResendEmailProvider(EmailProvider):
         return self._request("GET", f"/emails/{message_id}")
 
 
+class GmailEmailProvider(EmailProvider):
+    name = "gmail"
+
+    def __init__(self, *, client_id: str, client_secret: str, refresh_token: str,
+                 from_email: str, reply_to: str = "", timeout: float = 15.0):
+        self.client_id = client_id.strip()
+        self.client_secret = client_secret.strip()
+        self.refresh_token = refresh_token.strip()
+        self.from_email = from_email.strip()
+        self.reply_to = reply_to.strip()
+        self.timeout = timeout
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.client_id and self.client_secret and self.refresh_token and self.from_email)
+
+    def validate_configuration(self) -> dict[str, Any]:
+        errors = [] if self.ready else ["Falta autorizar la cuenta Gmail"]
+        if not valid_email_address(extract_email_address(self.from_email)):
+            errors.append("Remitente Gmail invalido")
+        return {"ok": not errors, "provider": self.name, "errors": errors}
+
+    def send_email(self, *, to: str, subject: str, html: str, text: str = "",
+                   reply_to: str = "", metadata: dict[str, str] | None = None) -> EmailSendResult:
+        if not self.validate_configuration()["ok"]:
+            return EmailSendResult(ok=False, error="Falta configurar y autorizar Gmail")
+        try:
+            message = EmailMessage()
+            message["From"] = self.from_email
+            message["To"] = to
+            message["Subject"] = subject
+            message["Message-ID"] = make_msgid()
+            if reply_to.strip() or self.reply_to:
+                message["Reply-To"] = reply_to.strip() or self.reply_to
+            message.set_content(text or re.sub(r"<[^>]+>", "", html))
+            if html:
+                message.add_alternative(html, subtype="html")
+            config = GoogleOAuthConfig(
+                enabled=True, client_id=self.client_id, client_secret=self.client_secret,
+                redirect_uri="", scopes="https://www.googleapis.com/auth/gmail.send",
+                timeout=self.timeout,
+            )
+            token = GoogleOAuthClient(config).refresh_access_token(self.refresh_token).get("access_token")
+            if not token:
+                return EmailSendResult(ok=False, error="Google no devolvio token de envio")
+            payload = {"raw": base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")}
+            request = urllib.request.Request(
+                "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                data=json.dumps(payload).encode("utf-8"), method="POST",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if not result.get("id"):
+                return EmailSendResult(ok=False, error="Gmail no devolvio identificador de mensaje")
+            return EmailSendResult(ok=True, message_id=result["id"], status="enviado")
+        except urllib.error.HTTPError as exc:
+            return EmailSendResult(ok=False, error=f"Gmail HTTP {exc.code}: revisa autorizacion, API y cuota")
+        except (urllib.error.URLError, GoogleOAuthError, OSError, ValueError):
+            return EmailSendResult(ok=False, error="No se pudo enviar por Gmail; revisa conexion y autorizacion")
+
+    def get_delivery_status(self, message_id: str) -> dict[str, Any]:
+        # The send-only scope cannot read inboxes or confirm recipient delivery.
+        return {"id": message_id, "status": "unknown"}
+
+
 def create_email_provider() -> EmailProvider:
     provider = (os.environ.get("EMAIL_PROVIDER", "demo").strip() or "demo").lower()
     enabled = os.environ.get("EMAIL_ENABLED", "true").strip().lower() in {"1", "true", "yes", "si"}
     if not enabled or provider == "demo":
         return DemoEmailProvider()
+    if provider == "gmail":
+        return GmailEmailProvider(
+            client_id=os.environ.get("GMAIL_CLIENT_ID", ""),
+            client_secret=os.environ.get("GMAIL_CLIENT_SECRET", ""),
+            refresh_token=os.environ.get("GMAIL_REFRESH_TOKEN", ""),
+            from_email=os.environ.get("EMAIL_FROM", "") or build_from_email(),
+            reply_to=os.environ.get("EMAIL_REPLY_TO", ""),
+            timeout=float(os.environ.get("EMAIL_TIMEOUT_SECONDS", "15")),
+        )
     if provider == "resend":
         return ResendEmailProvider(
             api_key=os.environ.get("EMAIL_API_KEY", ""),
