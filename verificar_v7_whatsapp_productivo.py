@@ -147,6 +147,26 @@ def main() -> None:
             assert duplicate_status["statuses"][0]["status"] == "duplicate"
             assert db.execute("SELECT COUNT(*) AS c FROM whatsapp_delivery_events").fetchone()["c"] == 1
 
+            unmatched_status = server.apply_whatsapp_webhook(
+                db,
+                {
+                    "entry": [
+                        {
+                            "changes": [
+                                {
+                                    "value": {
+                                        "metadata": {"phone_number_id": "123"},
+                                        "statuses": [{"id": "wamid.external.1", "status": "delivered", "timestamp": "3", "recipient_id": "5492990000000"}],
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+            )
+            assert unmatched_status["statuses"][0]["stored_status"] == "unresolved"
+            assert db.execute("SELECT COUNT(*) AS c FROM whatsapp_delivery_events").fetchone()["c"] == 1
+
             incoming = server.apply_whatsapp_webhook(
                 db,
                 {
@@ -166,6 +186,26 @@ def main() -> None:
             )
             assert incoming["messages"][0]["event_id"] == event_id
             assert db.execute("SELECT COUNT(*) AS c FROM communication_assistant_history WHERE event_id = ?", (event_id,)).fetchone()["c"] == 1
+
+            unknown_incoming = server.apply_whatsapp_webhook(
+                db,
+                {
+                    "entry": [
+                        {
+                            "changes": [
+                                {
+                                    "value": {
+                                        "metadata": {"phone_number_id": "123"},
+                                        "messages": [{"id": "wamid.in.unknown", "from": "5492990000000", "timestamp": "4", "type": "text", "text": {"body": "Hola"}}],
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+            )
+            assert unknown_incoming["messages"][0]["event_id"] == 0
+            assert db.execute("SELECT COUNT(*) AS c FROM whatsapp_delivery_events").fetchone()["c"] == 2
 
         os.environ["APP_ENV"] = "production"
         os.environ["WHATSAPP_ENABLED"] = "true"

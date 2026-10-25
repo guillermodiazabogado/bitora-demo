@@ -183,7 +183,7 @@ def main() -> None:
         qr = req(base, "GET", f"/api/qr.svg?token={token_one}", parse_json=False)
         assert_true(b"<svg" in qr, "No genero QR")
         portal_page = req(base, "GET", f"/p/{token_one}", parse_json=False)
-        assert_true(b"Credencial digital" in portal_page, "No abre portal participante")
+        assert_true(b"Portal del participante" in portal_page and b"Mi QR" in portal_page, "No abre portal participante")
         reserve_one = req(base, "POST", "/api/portal/reserve", {"token": token_one, "activity_id": activity_id, "confirmed": True, "verification_answer": "7"}, 201)
         assert_true(reserve_one["reservation"]["status"] == "confirmed", "Reserva portal no confirmada")
 
@@ -198,6 +198,7 @@ def main() -> None:
         repeated = req(base, "POST", "/api/validate", {"operator": "Acceso", "checkpoint": "General", "token": reg_two["token"]}, 200)
         assert_true(granted["result"] == "granted" and repeated["result"] == "rejected", "QR unico no se comporto correctamente")
         reg_three = req(base, "POST", "/api/register", {"actor": "public", "event_id": event_id, "first_name": "Tres", "last_name": "V4", "email": "tres.v4@example.test", "type": "General"}, 201)
+        req(base, "POST", "/api/validate", {"operator": "Acceso", "checkpoint": "General", "token": reg_three["token"]})
         no_reserve = req(base, "POST", "/api/validate", {"operator": "Acceso", "checkpoint": "Actividad", "token": reg_three["token"], "activity_id": activity_two_id})
         assert_true(no_reserve["result"] == "rejected" and "reserva" in no_reserve["reason"].lower(), "No rechazo actividad requerida sin reserva")
         acc_three = first(req(base, "GET", f"/api/accreditations?event_id={event_id}"), token=reg_three["token"])
@@ -233,7 +234,7 @@ def main() -> None:
         actions = {row["action"] for row in audit_rows}
         assert_true("access.validated" in actions, "Falta auditoria de acceso")
         assert_true("capacity_bag.moved" in actions, "Falta auditoria de movimiento de cupos")
-        assert_true("backup.created" in actions, "Falta auditoria de backup")
+        assert_true("backup.event_created" in actions, "Falta auditoria de backup")
         status = req(base, "GET", f"/api/system-status?event_id={event_id}")
         assert_true(status["latest_backup"]["integrity_ok"], "Estado no informa backup valido")
 

@@ -40,6 +40,7 @@ from reportlab.platypus import (
 
 from backend.database import connect_database, integrity_error_types, load_database_config, run_postgres_migrations
 from backend.repositories import create_repository
+from backend.services.access_state_engine import AccessStateContext, AccessStateEngine
 from backend.services.access_validation import AccessValidationService
 from backend.services.analytics_closure import AnalyticsClosureError, AnalyticsClosureService
 from backend.services.attendance import AttendanceDomainError, AttendanceService
@@ -48,6 +49,8 @@ from backend.services.backup import BackupService, EventBackupService, EventRest
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.certificates import CertificateDomainError, CertificateService
 from backend.services.communications_automation import CommunicationsAutomationError, CommunicationsAutomationService
+from backend.services.company_delegation import CompanyDelegationError, CompanyDelegationService
+from backend.services.command_center import CommandCenterError, CommandCenterService
 from backend.services.speakers import SpeakerDomainError, SpeakerService
 from backend.services.surveys import SurveyDomainError, SurveyService
 from backend.services.cache import TTLCache
@@ -56,7 +59,14 @@ from backend.services.demo_real import DemoRealService
 from backend.services.data_visualization import DataVisualizationService
 from backend.services.diagnostics import DiagnosticsService, RuntimeMetrics
 from backend.services.email import DemoEmailProvider, create_email_provider, valid_email_address
+from backend.services.enterprise_core import EnterpriseCoreError, EnterpriseCoreService
+from backend.services.edge_sync import DeviceEdgeSyncService
+from backend.services.event_edge import EventEdgeService
+from backend.services.entitlements_vouchers import EntitlementsVouchersError, EntitlementsVouchersService
 from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
+from backend.services.lead_retrieval import LeadRetrievalError, LeadRetrievalService
+from backend.services.vehicle_logistics import VehicleLogisticsError, VehicleLogisticsService
+from backend.services.venue_map import VenueMapError, VenueMapService
 from backend.services.networking import NetworkingService
 from backend.services.google_oauth import (
     GoogleOAuthClient,
@@ -372,6 +382,42 @@ def access_validation_service() -> AccessValidationService:
     return AccessValidationService(repository=REPOSITORY, audit_service=audit_service(), now=now_iso)
 
 
+def access_state_engine_service() -> AccessStateEngine:
+    return AccessStateEngine(enterprise_core=enterprise_core_service(), now=now_iso)
+
+
+def edge_sync_service() -> DeviceEdgeSyncService:
+    return DeviceEdgeSyncService(access_state_engine_service(), enterprise_core=enterprise_core_service(), now=now_iso)
+
+
+def event_edge_service() -> EventEdgeService:
+    return EventEdgeService(edge_sync=edge_sync_service(), enterprise_core=enterprise_core_service(), now=now_iso)
+
+
+def company_delegation_service() -> CompanyDelegationService:
+    return CompanyDelegationService(enterprise_core=enterprise_core_service(), audit_service=audit_service(), now=now_iso)
+
+
+def entitlements_vouchers_service() -> EntitlementsVouchersService:
+    return EntitlementsVouchersService(enterprise_core=enterprise_core_service(), audit_service=audit_service(), edge_sync=edge_sync_service(), now=now_iso)
+
+
+def lead_retrieval_service() -> LeadRetrievalService:
+    return LeadRetrievalService(enterprise_core=enterprise_core_service(), audit_service=audit_service(), edge_sync=edge_sync_service(), now=now_iso)
+
+
+def vehicle_logistics_service() -> VehicleLogisticsService:
+    return VehicleLogisticsService(enterprise_core=enterprise_core_service(), audit_service=audit_service(), edge_sync=edge_sync_service(), now=now_iso)
+
+
+def command_center_service() -> CommandCenterService:
+    return CommandCenterService(enterprise_core=enterprise_core_service(), edge_sync=edge_sync_service(), event_edge=event_edge_service(), entitlements=entitlements_vouchers_service(), leads=lead_retrieval_service(), vehicles=vehicle_logistics_service(), now=now_iso)
+
+
+def venue_map_service() -> VenueMapService:
+    return VenueMapService(now=now_iso)
+
+
 def attendance_service() -> AttendanceService:
     return AttendanceService(audit_service=audit_service(), now=now_iso)
 
@@ -386,6 +432,10 @@ def speaker_service() -> SpeakerService:
 
 def zone_permission_service() -> ZonePermissionService:
     return ZonePermissionService(audit_service=audit_service(), now=now_iso)
+
+
+def enterprise_core_service() -> EnterpriseCoreService:
+    return EnterpriseCoreService(audit_service=audit_service(), now=now_iso)
 
 
 def history_autocomplete_service() -> HistoryAutocompleteService:
@@ -827,6 +877,8 @@ def init_db() -> None:
                 waitlist_enabled INTEGER NOT NULL DEFAULT 0,
                 activity_access_open_minutes_before INTEGER NOT NULL DEFAULT 10,
                 production_email TEXT NOT NULL DEFAULT '',
+                registration_confirmation_subject TEXT NOT NULL DEFAULT 'Inscripcion confirmada',
+                registration_confirmation_message TEXT NOT NULL DEFAULT 'Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}',
                 landing_image_data TEXT NOT NULL DEFAULT '',
                 landing_image_name TEXT NOT NULL DEFAULT '',
                 landing_image_type TEXT NOT NULL DEFAULT '',
@@ -1571,6 +1623,16 @@ def init_db() -> None:
         ensure_v4_4_columns(db)
         ensure_v4_9_schema(db)
         ensure_v4_10_schema(db)
+        ensure_v5_0_schema(db)
+        ensure_v5_1_schema(db)
+        ensure_v5_2_schema(db)
+        ensure_v5_3_schema(db)
+        ensure_v5_4_schema(db)
+        ensure_v5_5_schema(db)
+        ensure_v5_6_schema(db)
+        ensure_v5_7_schema(db)
+        ensure_v5_7_1_schema(db)
+        ensure_v5_8_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -2111,6 +2173,106 @@ def ensure_v4_10_schema(db: sqlite3.Connection) -> None:
     db.executescript(sql)
 
 
+def ensure_v5_0_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "036_v5_0_enterprise_core_shadow.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_1_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "037_v5_1_access_state_engine_shadow.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_2_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "038_v5_2_device_edge_sync_foundation.sql"
+    sql = migration.read_text(encoding="utf-8")
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(enterprise_devices)").fetchall()}
+    safe_lines = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("ALTER TABLE enterprise_devices ADD COLUMN"):
+            name = stripped.split(" ADD COLUMN ", 1)[1].split()[0]
+            if name in columns:
+                continue
+        safe_lines.append(line)
+    sql = "\n".join(safe_lines)
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_3_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "039_v5_3_company_delegation_portal.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_4_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "040_v5_4_entitlements_vouchers.sql"
+    sql = migration.read_text(encoding="utf-8")
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(enterprise_entitlements)").fetchall()}
+    safe_lines = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("ALTER TABLE enterprise_entitlements ADD COLUMN"):
+            name = stripped.split(" ADD COLUMN ", 1)[1].split()[0]
+            if name in columns:
+                continue
+        safe_lines.append(line)
+    sql = "\n".join(safe_lines)
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_5_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "041_v5_5_lead_retrieval.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_6_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "042_v5_6_vapp_vehicle_logistics.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_7_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "043_v5_7_command_center.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_7_1_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "044_v5_7_1_enterprise_ui_venue_map.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
+def ensure_v5_8_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "045_v5_8_event_edge_device_infrastructure.sql"
+    sql = migration.read_text(encoding="utf-8")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+    db.executescript(sql)
+
+
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
     columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
     additions = {
@@ -2185,6 +2347,10 @@ def ensure_event_v3_columns(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE events ADD COLUMN portal_visible_tabs TEXT NOT NULL DEFAULT '[\"inicio\",\"qr\",\"agenda\",\"charlas\",\"asistencia\",\"encuesta\",\"certificado\",\"notificaciones\",\"perfil\"]'")
     if "production_email" not in columns:
         db.execute("ALTER TABLE events ADD COLUMN production_email TEXT NOT NULL DEFAULT ''")
+    if "registration_confirmation_subject" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN registration_confirmation_subject TEXT NOT NULL DEFAULT 'Inscripcion confirmada'")
+    if "registration_confirmation_message" not in columns:
+        db.execute("ALTER TABLE events ADD COLUMN registration_confirmation_message TEXT NOT NULL DEFAULT 'Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}'")
 
 
 def ensure_v4_2_columns(db: sqlite3.Connection) -> None:
@@ -3314,6 +3480,70 @@ def analytics_v4_enabled(db: sqlite3.Connection, event_id: int) -> bool:
     return feature_flag_enabled(db, "analytics_v4_enabled", organization_id=organization_id, event_id=event_id)
 
 
+def enterprise_core_model_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "enterprise_core_model", organization_id=organization_id, event_id=event_id)
+
+
+def access_state_engine_shadow_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "access_state_engine_shadow", organization_id=organization_id, event_id=event_id)
+
+
+def access_state_engine_enforced_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    return False
+
+
+def device_identity_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "device_identity", organization_id=organization_id, event_id=event_id)
+
+
+def edge_sync_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "edge_sync", organization_id=organization_id, event_id=event_id)
+
+
+def delegations_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "delegations", organization_id=organization_id, event_id=event_id)
+
+
+def company_portal_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "company_portal", organization_id=organization_id, event_id=event_id)
+
+
+def entitlements_vouchers_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "entitlements_vouchers", organization_id=organization_id, event_id=event_id)
+
+
+def lead_retrieval_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "lead_retrieval", organization_id=organization_id, event_id=event_id)
+
+
+def vehicle_logistics_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "vehicle_logistics", organization_id=organization_id, event_id=event_id)
+
+
+def command_center_v5_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "command_center_v5", organization_id=organization_id, event_id=event_id)
+
+
+def enterprise_ui_v5_7_1_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "enterprise_ui_v5_7_1", organization_id=organization_id, event_id=event_id)
+
+
+def venue_map_v5_7_1_enabled(db: sqlite3.Connection, event_id: int) -> bool:
+    organization_id = event_organization_id(db, event_id)
+    return feature_flag_enabled(db, "venue_map_v5_7_1", organization_id=organization_id, event_id=event_id)
+
+
 def event_feature_flags_payload(db: sqlite3.Connection, event_id: int) -> dict:
     return {
         "attendance_v4_enabled": attendance_v4_enabled(db, event_id),
@@ -3324,6 +3554,19 @@ def event_feature_flags_payload(db: sqlite3.Connection, event_id: int) -> dict:
         "operations_center_v4_enabled": operations_center_v4_enabled(db, event_id),
         "communications_automation_v4_enabled": communications_automation_v4_enabled(db, event_id),
         "analytics_v4_enabled": analytics_v4_enabled(db, event_id),
+        "enterprise_core_model": enterprise_core_model_enabled(db, event_id),
+        "access_state_engine_shadow": access_state_engine_shadow_enabled(db, event_id),
+        "access_state_engine_enforced": access_state_engine_enforced_enabled(db, event_id),
+        "device_identity": device_identity_enabled(db, event_id),
+        "edge_sync": edge_sync_enabled(db, event_id),
+        "delegations": delegations_enabled(db, event_id),
+        "company_portal": company_portal_enabled(db, event_id),
+        "entitlements_vouchers": entitlements_vouchers_enabled(db, event_id),
+        "lead_retrieval": lead_retrieval_enabled(db, event_id),
+        "vehicle_logistics": vehicle_logistics_enabled(db, event_id),
+        "command_center_v5": command_center_v5_enabled(db, event_id),
+        "enterprise_ui_v5_7_1": enterprise_ui_v5_7_1_enabled(db, event_id),
+        "venue_map_v5_7_1": venue_map_v5_7_1_enabled(db, event_id),
     }
 
 
@@ -4367,6 +4610,8 @@ def render_communication_template(text: str, row: sqlite3.Row | dict, activity: 
     source = dict(row)
     act = dict(activity) if activity else {}
     portal_url = public_link(f"/p.html?token={source.get('token') or ''}")
+    credential_pdf_url = public_link(f"/api/credential.pdf?token={source.get('token') or ''}")
+    qr_image_url = public_link(f"/api/qr.svg?token={source.get('token') or ''}")
     values = {
         "nombre": source.get("first_name", ""),
         "apellido": source.get("last_name", ""),
@@ -4379,6 +4624,8 @@ def render_communication_template(text: str, row: sqlite3.Row | dict, activity: 
         "empresa": source.get("company", ""),
         "tipo_acreditacion": source.get("type", ""),
         "portal_participante": portal_url,
+        "credencial_pdf": credential_pdf_url,
+        "qr_imagen": qr_image_url,
     }
     output = str(text or "")
     for key, value in values.items():
@@ -4581,20 +4828,50 @@ def queue_registration_confirmation(db, event_id: int, accreditation_id: int, ac
         for row in communication_audience_rows(db, event_id, "all")
         if int(row["accreditation_id"]) == int(accreditation_id)
     ]
+    empty_channel = {"queued": 0, "sent": 0, "skipped": 1, "errors": 0}
     if not rows:
-        return {"queued": 0, "sent": 0, "skipped": 1, "errors": 0, "_whatsapp_queue_ids": []}
-    return queue_communication(
-        db,
-        event_id=event_id,
-        actor=actor,
-        audience="registration",
-        channel="whatsapp",
-        template_code="registration_confirmation",
-        subject="Inscripcion confirmada",
-        content="Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}",
-        rows=rows,
-        process_now=True,
-    )
+        return {
+            "queued": 0,
+            "sent": 0,
+            "skipped": 2,
+            "errors": 0,
+            "email": dict(empty_channel),
+            "whatsapp": dict(empty_channel),
+            "_email_queue_ids": [],
+            "_whatsapp_queue_ids": [],
+        }
+    event = db.execute(
+        "SELECT registration_confirmation_subject, registration_confirmation_message FROM events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    subject = str(event["registration_confirmation_subject"] or "Inscripcion confirmada").strip()
+    content = str(event["registration_confirmation_message"] or "").strip()
+    if not content:
+        content = "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}"
+    channel_results = {}
+    for channel in ("email", "whatsapp"):
+        channel_results[channel] = queue_communication(
+            db,
+            event_id=event_id,
+            actor=actor,
+            audience="registration",
+            channel=channel,
+            template_code="registration_confirmation",
+            subject=subject,
+            content=content,
+            rows=rows,
+            process_now=True,
+        )
+    return {
+        "queued": sum(int(result.get("queued") or 0) for result in channel_results.values()),
+        "sent": sum(int(result.get("sent") or 0) for result in channel_results.values()),
+        "skipped": sum(int(result.get("skipped") or 0) for result in channel_results.values()),
+        "errors": sum(int(result.get("errors") or 0) for result in channel_results.values()),
+        "email": {key: value for key, value in channel_results["email"].items() if not key.startswith("_")},
+        "whatsapp": {key: value for key, value in channel_results["whatsapp"].items() if not key.startswith("_")},
+        "_email_queue_ids": channel_results["email"].get("_email_queue_ids", []),
+        "_whatsapp_queue_ids": channel_results["whatsapp"].get("_whatsapp_queue_ids", []),
+    }
 
 
 def process_email_queue_item(queue_id: int) -> dict:
@@ -4791,6 +5068,9 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
             "apellido": str(context["last_name"] if context else ""),
             "evento": str(context["event_name"] if context else ""),
             "portal": public_link(f"/p.html?token={context['token'] if context else ''}"),
+            "credencial_pdf": public_link(f"/api/credential.pdf?token={context['token'] if context else ''}"),
+            "qr_imagen": public_link(f"/api/qr.svg?token={context['token'] if context else ''}"),
+            "mensaje": content,
         }
         variable_names = [
             value.strip().lower()
@@ -4964,15 +5244,15 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
             row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone()
             event_id = int(row["event_id"]) if row else 0
             queue_id = int(row["id"]) if row else None
-            db.execute(
-                """
-                INSERT INTO whatsapp_delivery_events
-                    (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (event_id, queue_id, provider.name, message_id, external_event_id, str(event.get("raw_status") or status), str(event.get("phone") or ""), json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
-            )
             if row:
+                db.execute(
+                    """
+                    INSERT INTO whatsapp_delivery_events
+                        (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (event_id, queue_id, provider.name, message_id, external_event_id, str(event.get("raw_status") or status), str(event.get("phone") or ""), json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
+                )
                 current_status = str(row["status"] or "pendiente")
                 next_status = status
                 if state_rank.get(status, 0) < state_rank.get(current_status, 0):
@@ -5023,15 +5303,15 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                     (f"%{phone[-8:]}",),
                 ).fetchone()
                 event_id = int(participant["event_id"]) if participant else 0
-            db.execute(
-                """
-                INSERT INTO whatsapp_delivery_events
-                    (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
-                VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (event_id, provider.name, str(event.get("message_id") or ""), external_event_id, "incoming", phone, json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
-            )
             if event_id:
+                db.execute(
+                    """
+                    INSERT INTO whatsapp_delivery_events
+                        (event_id, queue_id, provider, message_id, external_event_id, event_type, phone, payload, created_at)
+                    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (event_id, provider.name, str(event.get("message_id") or ""), external_event_id, "incoming", phone, json.dumps(event.get("payload") or {}, ensure_ascii=False), now_iso()),
+                )
                 db.execute(
                     """
                     INSERT INTO communication_assistant_history (event_id, person_id, accreditation_id, phone, inbound, outbound, intent, status, created_at)
@@ -5143,7 +5423,8 @@ def event_structure_payload(db: sqlite3.Connection, event_id: int) -> dict | Non
         "generar_certificados", "controlar_asistencia", "attendance_mode",
         "porcentaje_minimo_asistencia", "captation_mode", "primary_action_label",
         "secondary_action_label", "whatsapp_number", "activity_access_open_minutes_before",
-        "production_email", "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
+        "production_email", "registration_confirmation_subject", "registration_confirmation_message",
+        "activities_enabled", "capacity_control_enabled", "waitlist_enabled", "project_type",
         "portal_visible_tabs",
     ]
     return {
@@ -5204,10 +5485,11 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             attendance_mode, porcentaje_minimo_asistencia, captation_mode,
             primary_action_label, secondary_action_label, whatsapp_number,
             activity_access_open_minutes_before, activities_enabled,
-            capacity_control_enabled, waitlist_enabled, production_email, created_at
-            , portal_visible_tabs
+            capacity_control_enabled, waitlist_enabled, production_email,
+            registration_confirmation_subject, registration_confirmation_message, created_at,
+            portal_visible_tabs
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             organization_id,
@@ -5233,6 +5515,8 @@ def insert_event_from_config(db: sqlite3.Connection, data: dict, actor: str, sta
             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
             1 if truthy(data.get("waitlist_enabled", False)) else 0,
             normalized_optional_email(data.get("production_email")),
+            str(data.get("registration_confirmation_subject") or "Inscripcion confirmada").strip(),
+            str(data.get("registration_confirmation_message") or "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}").strip(),
             now_iso(),
             portal_visible_tabs_json(data.get("portal_visible_tabs")),
         ),
@@ -7398,6 +7682,66 @@ class AppHandler(SimpleHTTPRequestHandler):
                     elif view == "incidents": result = {"ok": True, "items": service.incidents(db, organization_id=organization_id, event_id=event_id)}
                     else: result = {"ok": True, "items": service.tasks(db, organization_id=organization_id, event_id=event_id)}
                 self.send_json(result)
+                return
+            command_center_v5_match = re.fullmatch(r"/api/events/(\d+)/command-center-v5", path)
+            if command_center_v5_match:
+                event_id = int(command_center_v5_match.group(1))
+                with connect() as db:
+                    if not command_center_v5_enabled(db, event_id) or not enterprise_ui_v5_7_1_enabled(db, event_id):
+                        self.send_json({"ok": False, "code": "COMMAND_CENTER_V5_FEATURE_DISABLED", "error": "Command Center Enterprise deshabilitado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(db, event_id, "operations_center.read", "operations_center.read")
+                    if not ok:
+                        return
+                    organization_id = event_organization_id(db, event_id)
+                    actor = str((session or {}).get("name") or "command-center")
+                    snapshot = command_center_service().snapshot(db, organization_id=organization_id, event_id=event_id, actor=actor)
+                    venue_map_enabled = venue_map_v5_7_1_enabled(db, event_id)
+                    if venue_map_enabled:
+                        try:
+                            venue_model = venue_map_service().operational_model(db, organization_id=organization_id, event_id=event_id, command_snapshot=snapshot)
+                        except VenueMapError as exc:
+                            venue_model = {
+                                "schema": "bitora.enterprise_ui.v5.7.1.venue_map",
+                                "organization_id": organization_id,
+                                "event_id": event_id,
+                                "mode": "UNAVAILABLE",
+                                "status": "UNAVAILABLE",
+                                "reason": exc.code,
+                                "occupancy_policy": {"projected": "reservations/pre-event demand", "access": "real access counter", "camera": "unavailable unless configured"},
+                                "venue": None,
+                                "map": None,
+                                "layers": [],
+                                "elements": [],
+                            }
+                    else:
+                        venue_model = {
+                            "schema": "bitora.enterprise_ui.v5.7.1.venue_map",
+                            "organization_id": organization_id,
+                            "event_id": event_id,
+                            "mode": "UNAVAILABLE",
+                            "status": "UNAVAILABLE",
+                            "reason": "VENUE_MAP_FEATURE_DISABLED",
+                            "occupancy_policy": {"projected": "reservations/pre-event demand", "access": "real access counter", "camera": "unavailable unless configured"},
+                            "venue": None,
+                            "map": None,
+                            "layers": [],
+                        "elements": [],
+                    }
+                    generated_at = now_iso()
+                self.send_json({
+                    "ok": True,
+                    "event_id": event_id,
+                    "organization_id": organization_id,
+                    "generated_at": generated_at,
+                    "feature_flags": {
+                        "command_center_v5": True,
+                        "enterprise_ui_v5_7_1": True,
+                        "venue_map_v5_7_1": venue_map_enabled,
+                    },
+                    "snapshot": snapshot,
+                    "venue_model": venue_model,
+                })
                 return
             communications_v4_match = re.fullmatch(r"/api/events/(\d+)/communications-v4(?:/(templates|segments|campaigns|recipients|messages|deliveries|automations|suppressions))?", path)
             if communications_v4_match:
@@ -13206,6 +13550,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             primary_action_label = ?, secondary_action_label = ?, whatsapp_number = ?,
                             activity_access_open_minutes_before = ?, activities_enabled = ?,
                             capacity_control_enabled = ?, waitlist_enabled = ?, production_email = ?,
+                            registration_confirmation_subject = ?, registration_confirmation_message = ?,
                             portal_visible_tabs = ?
                         WHERE id = ?
                         """,
@@ -13231,6 +13576,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
                             production_email,
+                            str(data.get("registration_confirmation_subject") or "Inscripcion confirmada").strip(),
+                            str(data.get("registration_confirmation_message") or "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}").strip(),
                             portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             event_id,
                         ),
@@ -13265,9 +13612,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                             primary_action_label, secondary_action_label, whatsapp_number,
                             activity_access_open_minutes_before, activities_enabled,
                             capacity_control_enabled, waitlist_enabled, production_email,
+                            registration_confirmation_subject, registration_confirmation_message,
                             portal_visible_tabs, created_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             organization_id,
@@ -13293,6 +13641,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                             1 if truthy(data.get("capacity_control_enabled", True)) else 0,
                             1 if truthy(data.get("waitlist_enabled", False)) else 0,
                             production_email,
+                            str(data.get("registration_confirmation_subject") or "Inscripcion confirmada").strip(),
+                            str(data.get("registration_confirmation_message") or "Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}").strip(),
                             portal_visible_tabs_json(data.get("portal_visible_tabs")),
                             now_iso(),
                         ),
@@ -14852,7 +15202,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if len(activity_ids) > 1:
                     self.send_json({"error": "Solo se permite inscribirse a una actividad por vez. Repeti el paso para sumar otra actividad."}, 400)
                     return
-                communication_result = {"queued": 0, "sent": 0, "skipped": 0, "errors": 0}
+                communication_result = {"queued": 0, "sent": 0, "skipped": 0, "errors": 0, "email": {}, "whatsapp": {}}
+                email_queue_ids: list[int] = []
                 whatsapp_queue_ids: list[int] = []
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
@@ -14929,7 +15280,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 actor="public",
                             )
                             whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
-                            communication_result.pop("_email_queue_ids", None)
+                            email_queue_ids = communication_result.pop("_email_queue_ids", [])
                     reservations = []
                     for activity_id in activity_ids:
                         reservation = create_reservation(db, event_id, activity_id, registration["id"], "public" if data.get("actor") == "public" else "reception")
@@ -14944,6 +15295,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 {"event_id": event_id, "activity_id": activity_id, "accreditation_id": registration["id"], "status": reservation["status"]},
                             )
                     db.execute("COMMIT")
+                for queue_id in email_queue_ids:
+                    job_queue_service().enqueue(
+                        "email.send",
+                        {"queue_id": queue_id},
+                        priority="high",
+                        actor="public",
+                        event_id=event_id,
+                    )
                 for queue_id in whatsapp_queue_ids:
                     job_queue_service().enqueue(
                         "whatsapp.send",
@@ -14952,14 +15311,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                         actor="public",
                         event_id=event_id,
                     )
-                if communication_result.get("errors"):
-                    whatsapp_status = "error"
-                elif whatsapp_queue_ids:
-                    whatsapp_status = "pending"
-                elif communication_result.get("sent"):
-                    whatsapp_status = "sent"
-                else:
-                    whatsapp_status = "skipped"
+                def registration_channel_status(channel: str, queue_ids: list[int]) -> str:
+                    result = communication_result.get(channel) or {}
+                    if result.get("errors"):
+                        return "error"
+                    if queue_ids:
+                        return "pending"
+                    if result.get("sent"):
+                        return "sent"
+                    return "skipped"
+
+                email_status = registration_channel_status("email", email_queue_ids)
+                whatsapp_status = registration_channel_status("whatsapp", whatsapp_queue_ids)
                 self.send_json(
                     {
                         "ok": True,
@@ -14968,11 +15331,17 @@ class AppHandler(SimpleHTTPRequestHandler):
                         "portal_url": public_link(f"/p.html?token={registration['token']}", self),
                         "reservations": reservations,
                         "communications": {
+                            "email": {
+                                "status": email_status,
+                                "queued": int((communication_result.get("email") or {}).get("queued") or 0),
+                                "sent": int((communication_result.get("email") or {}).get("sent") or 0),
+                                "skipped": int((communication_result.get("email") or {}).get("skipped") or 0),
+                            },
                             "whatsapp": {
                                 "status": whatsapp_status,
-                                "queued": int(communication_result.get("queued") or 0),
-                                "sent": int(communication_result.get("sent") or 0),
-                                "skipped": int(communication_result.get("skipped") or 0),
+                                "queued": int((communication_result.get("whatsapp") or {}).get("queued") or 0),
+                                "sent": int((communication_result.get("whatsapp") or {}).get("sent") or 0),
+                                "skipped": int((communication_result.get("whatsapp") or {}).get("skipped") or 0),
                             }
                         },
                     },
@@ -15029,6 +15398,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 operator = data.get("operator", "operador").strip()
                 checkpoint = data.get("checkpoint", "Acceso principal").strip()
                 activity_id = int(data.get("activity_id") or 0)
+                direction = str(data.get("direction") or "ENTRY").strip().upper()
+                correlation_id = str(data.get("correlation_id") or "").strip()
+                idempotency_key = str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or "").strip()
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     if not can_actor(db, operator, ACCESS_ROLES):
@@ -15042,6 +15414,41 @@ class AppHandler(SimpleHTTPRequestHandler):
                         validation["attendance"] = attendance
                         if attendance.get("ok") and not attendance.get("ignored"):
                             validation["reason"] = f"{validation['reason']} - asistencia {attendance['status']}"
+                    try:
+                        event_row = db.execute(
+                            """
+                            SELECT e.id AS event_id, e.organization_id
+                            FROM accreditations a
+                            JOIN events e ON e.id = a.event_id
+                            WHERE lower(a.token) = lower(?)
+                            """,
+                            (token,),
+                        ).fetchone()
+                        if event_row and access_state_engine_shadow_enabled(db, int(event_row["event_id"])):
+                            access_state_engine_service().evaluate_and_record(
+                                db,
+                                AccessStateContext(
+                                    organization_id=int(event_row["organization_id"]),
+                                    event_id=int(event_row["event_id"]),
+                                    token=token,
+                                    direction=direction,
+                                    checkpoint=checkpoint,
+                                    activity_id=activity_id or None,
+                                    door_id=int(data.get("door_id") or 0) or None,
+                                    zone_id=int(data.get("zone_id") or 0) or None,
+                                    device_id=int(data.get("device_id") or 0) or None,
+                                    source="api.validate.shadow",
+                                    correlation_id=correlation_id,
+                                    idempotency_key=idempotency_key,
+                                    cooldown_seconds=int(data.get("cooldown_seconds") or 0),
+                                    current_occupancy=int(data["current_occupancy"]) if str(data.get("current_occupancy", "")).strip() else None,
+                                    capacity=int(data["capacity"]) if str(data.get("capacity", "")).strip() else None,
+                                    force_error=bool(data.get("force_v5_error")),
+                                ),
+                                dict(validation),
+                            )
+                    except Exception as exc:
+                        technical_log("warning", "access_state_engine_shadow", "V5.1 shadow aislado", str(exc))
                     db.execute("COMMIT")
                 status_code = int(validation.pop("status_code", 200))
                 self.send_json(validation, status_code)

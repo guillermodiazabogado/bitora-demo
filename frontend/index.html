@@ -21,6 +21,7 @@
     <nav>
       <button data-view="owner" id="ownerNav">Mis eventos</button>
       <button data-view="home" id="homeNav">Inicio</button>
+      <button data-view="commandCenter" id="commandCenterNav" class="hidden">Command Center</button>
       <button data-view="dashboard" class="active">Panel</button>
       <button data-view="register">Inscribir</button>
       <button data-view="reception">Recepcion</button>
@@ -107,6 +108,134 @@
             <div><strong>Entorno</strong><span id="producerHomeEnv">Staging</span></div>
             <div><strong>Ultima actualizacion</strong><span id="producerHomeUpdated">-</span></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="commandCenter" class="view enterprise-command-view" aria-label="BITORA Enterprise Command Center">
+      <div class="enterprise-admin-shell">
+        <aside class="enterprise-sidebar" aria-label="Navegacion Enterprise">
+          <div class="enterprise-brand">
+            <span class="enterprise-brand-mark">B</span>
+            <div>
+              <strong>BITORA</strong>
+              <span>La bitacora digital de tus eventos</span>
+            </div>
+          </div>
+          <div class="enterprise-event-switcher">
+            <span id="enterpriseSidebarEvent">Evento activo</span>
+            <strong id="enterpriseSidebarVenue">Command Center</strong>
+          </div>
+          <nav>
+            <span>Operacion</span>
+            <button type="button" class="active" data-view-target="commandCenter" data-icon="command">Command Center</button>
+            <button type="button" data-view-target="register" data-icon="people">Personas</button>
+            <button type="button" data-view-target="reception" data-icon="badge">Acreditaciones</button>
+            <button type="button" data-view-target="access" data-icon="door">Accesos</button>
+            <span>Evento</span>
+            <button type="button" data-view-target="agenda" data-icon="calendar">Actividades</button>
+            <button type="button" data-view-target="reports" data-icon="chart">Servicios</button>
+            <button type="button" data-view-target="reports" data-icon="people">Networking</button>
+            <span>Comercial</span>
+            <button type="button" data-view-target="reports" data-icon="badge">Empresas</button>
+            <button type="button" data-view-target="reports" data-icon="activity">Expositores / Leads</button>
+            <span>Logistica</span>
+            <button type="button" data-view-target="reports" data-icon="door">Vehiculos</button>
+            <button type="button" data-view-target="reports" data-icon="device">Dispositivos</button>
+            <span>Gestion</span>
+            <button type="button" data-view-target="communications" data-icon="message">Comunicaciones</button>
+            <button type="button" data-view-target="reports" data-icon="chart">Reportes</button>
+            <button type="button" data-view-target="configure" data-icon="settings">Configuracion</button>
+          </nav>
+          <div class="enterprise-user-chip">
+            <strong id="enterpriseUserInitials">BI</strong>
+            <span id="enterpriseUserName">BITORA</span>
+          </div>
+        </aside>
+
+        <div class="enterprise-workspace">
+          <header class="enterprise-topbar" aria-label="Estado operativo del evento">
+            <div>
+              <span class="enterprise-eyebrow" id="enterpriseEventMeta">Evento actual</span>
+              <h1 id="enterpriseEventName">Command Center</h1>
+            </div>
+            <div class="enterprise-topbar-status">
+              <span id="enterpriseWeatherBadge" class="enterprise-badge neutral">Cloud</span>
+              <span id="enterprisePhaseBadge" class="enterprise-badge">UNAVAILABLE</span>
+              <span id="enterpriseHealthBadge" class="enterprise-badge neutral">SYSTEM UNAVAILABLE</span>
+              <span id="enterpriseUpdated" class="enterprise-updated">Sin datos</span>
+              <button type="button" class="enterprise-operator-button">Vista operador</button>
+            </div>
+          </header>
+
+          <div id="enterpriseStatusNotice" class="enterprise-notice hidden" role="status"></div>
+
+          <section class="enterprise-strip" aria-label="Resumen operacional">
+            <div id="enterpriseAlertStrip" class="enterprise-alert-strip"></div>
+          </section>
+
+          <section id="enterpriseKpis" class="enterprise-kpi-grid" aria-label="Indicadores principales"></section>
+
+          <section class="enterprise-command-grid">
+            <article class="enterprise-map-panel" aria-label="Master Venue Map">
+              <div class="enterprise-panel-head">
+                <div>
+                  <span class="enterprise-eyebrow">Master Venue Map</span>
+                  <h2 id="enterpriseMapTitle">Venue Map</h2>
+                </div>
+                <div class="enterprise-map-tools" aria-label="Herramientas del mapa">
+                  <button type="button" data-map-action="fit">Fit</button>
+                  <button type="button" data-map-action="zoom-in">Zoom</button>
+                  <button type="button" data-map-action="layers">Layers</button>
+                </div>
+              </div>
+              <div id="enterpriseVenueMap" class="enterprise-venue-map" tabindex="0" aria-label="Mapa operativo del evento"></div>
+              <div id="enterpriseLayers" class="enterprise-layer-list" aria-label="Capas del mapa"></div>
+              <div id="enterpriseSelectedZone" class="enterprise-zone-detail" aria-live="polite"></div>
+            </article>
+
+            <aside class="enterprise-live-column">
+              <article class="enterprise-card">
+                <div class="enterprise-panel-head compact">
+                  <h2>Actividad reciente</h2>
+                </div>
+                <div id="enterpriseActivityStream" class="enterprise-activity-stream"></div>
+              </article>
+              <article class="enterprise-card">
+                <div class="enterprise-panel-head compact">
+                  <h2>Alertas</h2>
+                </div>
+                <div id="enterpriseAlerts" class="enterprise-alert-list"></div>
+              </article>
+            </aside>
+          </section>
+
+          <section class="enterprise-lower-grid">
+            <article class="enterprise-card">
+              <div class="enterprise-panel-head compact">
+                <h2>Projected / Access / Camera</h2>
+              </div>
+              <div id="enterpriseOccupancy" class="enterprise-source-grid"></div>
+            </article>
+            <article class="enterprise-card">
+              <div class="enterprise-panel-head compact">
+                <h2>Dispositivos</h2>
+                <div class="enterprise-segmented" aria-label="Vista de dispositivos">
+                  <button type="button" class="active" data-device-view="visual">Visual</button>
+                  <button type="button" data-device-view="table">Tabla</button>
+                </div>
+              </div>
+              <div id="enterpriseDevices" class="enterprise-device-grid"></div>
+            </article>
+            <article class="enterprise-card">
+              <div class="enterprise-panel-head compact">
+                <h2>Salud del sistema</h2>
+              </div>
+              <div id="enterpriseSystemHealth" class="enterprise-health-grid"></div>
+            </article>
+          </section>
+
+          <section id="enterpriseModuleSummaries" class="enterprise-module-grid" aria-label="Modulos enterprise"></section>
         </div>
       </div>
     </section>
@@ -262,6 +391,12 @@
               <input name="production_email" type="email" placeholder="produccion@empresa.com">
             </label>
             <input name="whatsapp_number" placeholder="WhatsApp de captacion">
+            <fieldset>
+              <legend>Confirmacion de inscripcion</legend>
+              <p class="empty">Se enviara por email y WhatsApp. Variables disponibles: {{nombre}}, {{apellido}}, {{evento}}, {{fecha_evento}}, {{hora_evento}}, {{portal_participante}}, {{credencial_pdf}}, {{qr_imagen}}, {{qr}}, {{empresa}} y {{tipo_acreditacion}}.</p>
+              <input name="registration_confirmation_subject" placeholder="Asunto del email" value="Inscripcion confirmada">
+              <textarea name="registration_confirmation_message" rows="7" placeholder="Mensaje de confirmacion">Hola {{nombre}}, tu inscripcion a {{evento}} fue confirmada. Tu QR y portal: {{portal_participante}}</textarea>
+            </fieldset>
             <input name="primary_action_label" placeholder="Texto boton principal">
             <input name="secondary_action_label" placeholder="Texto boton secundario">
             <fieldset class="portal-tabs-field">

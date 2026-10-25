@@ -55,15 +55,41 @@ def setup_app():
 def main() -> None:
     tmp_path, httpd, base = setup_app()
     try:
-        event = req(base, "POST", "/api/events", {"actor": "Admin", "name": "V5 Comunicaciones", "status": "published"}, 201)
+        event = req(base, "POST", "/api/events", {
+            "actor": "Admin",
+            "name": "V5 Comunicaciones",
+            "status": "published",
+            "registration_confirmation_subject": "Tu acceso a {{evento}}",
+            "registration_confirmation_message": "Hola {{nombre}}. Descarga o imprime tu QR desde {{portal_participante}}. Referencia: https://example.test/info",
+        }, 201)
         event_id = event["id"]
+        req(base, "POST", "/api/events/update", {
+            "actor": "Admin",
+            "event_id": event_id,
+            "name": "V5 Comunicaciones",
+            "registration_confirmation_subject": "Tu acceso a {{evento}}",
+            "registration_confirmation_message": "Hola {{nombre}}. Descarga o imprime tu QR desde {{portal_participante}}. Referencia: https://example.test/info",
+        })
+        configured_event = next(row for row in req(base, "GET", "/api/events") if int(row["id"]) == event_id)
+        assert_true(configured_event["registration_confirmation_subject"] == "Tu acceso a {{evento}}", "No se guardo el asunto configurable")
+        assert_true("https://example.test/info" in configured_event["registration_confirmation_message"], "No se guardo el mensaje configurable")
         ok = req(base, "POST", "/api/register", {"actor": "public", "event_id": event_id, "first_name": "Con", "last_name": "Consentimiento", "email": "ok@example.test", "phone": "54911111111", "type": "General", "acepta_email": True, "acepta_whatsapp": True}, 201)
         req(base, "POST", "/api/register", {"actor": "public", "event_id": event_id, "first_name": "Sin", "last_name": "Consentimiento", "email": "no@example.test", "phone": "54922222222", "type": "General"}, 201)
+        assert_true(ok["communications"]["email"]["status"] == "sent", "La confirmacion automatica por email no fue enviada")
+        assert_true(ok["communications"]["whatsapp"]["status"] == "sent", "La confirmacion automatica por WhatsApp no fue enviada")
+        with server.connect() as db:
+            automatic = db.execute(
+                "SELECT channel, subject, content FROM communication_queue WHERE event_id = ? AND accreditation_id = ? ORDER BY channel",
+                (event_id, db.execute("SELECT id FROM accreditations WHERE token = ?", (ok["token"],)).fetchone()["id"]),
+            ).fetchall()
+        assert_true(len(automatic) == 2, "La inscripcion debe generar exactamente email y WhatsApp")
+        assert_true(all(row["subject"] == "Tu acceso a V5 Comunicaciones" for row in automatic), "El asunto parametrizado no se renderizo")
+        assert_true(all("https://example.test/info" in row["content"] and "Hola Con" in row["content"] for row in automatic), "El mensaje parametrizado no llego a ambos canales")
         result = req(base, "POST", "/api/communications/send", {"actor": "Admin", "event_id": event_id, "audience": "all", "channel": "both", "template_code": "registration_confirmation", "subject": "Hola {{nombre}}", "content": "Portal {{portal_participante}}", "confirm": True})
         assert_true(result["queued"] == 2 and result["sent"] == 2 and result["skipped"] == 2, "Cola/exclusiones por consentimiento incorrectas")
         dashboard = req(base, "GET", f"/api/communications?event_id={event_id}")
         assert_true(dashboard["mode"] == "demo", "Debe iniciar en modo demo")
-        assert_true(dashboard["queue_metrics"]["emails_sent"] == 1 and dashboard["queue_metrics"]["whatsapp_sent"] == 1, "Metricas de cola incorrectas")
+        assert_true(dashboard["queue_metrics"]["emails_sent"] == 2 and dashboard["queue_metrics"]["whatsapp_sent"] == 2, "Metricas de cola incorrectas")
         assert_true(any("{{nombre}}" in row["contenido"] for row in dashboard["templates"]), "Plantillas no incluyen variables")
         history = req(base, "GET", f"/api/communications/history?event_id={event_id}")
         assert_true(len(history) >= 2, "Historial por persona incompleto")

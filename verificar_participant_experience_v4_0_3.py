@@ -67,11 +67,12 @@ def main() -> int:
 
     results.append(check(
         "portal_event_scope",
-        "WHERE a.token = ?" in server
+        "WHERE lower(a.token) = lower(?)" in server
         and "WHERE person_id = ? AND event_id = ?" in server
         and "WHERE event_id = ? AND status = 'published'" in server
-        and "WHERE at.accreditation_id = ?" in server,
-        "El payload del portal se resuelve por token y consultas acotadas a evento/acreditacion.",
+        and "WHERE at.accreditation_id = ?" in server
+        and "WHERE r.accreditation_id = ?" in server,
+        "El payload del portal se resuelve por token case-insensitive y consultas acotadas a evento/acreditacion.",
     ))
 
     results.append(check(
