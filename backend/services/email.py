@@ -193,9 +193,12 @@ class ResendEmailProvider(EmailProvider):
             payload["reply_to"] = effective_reply_to
         if metadata:
             payload["tags"] = [
-                {"name": str(key)[:256], "value": str(value)[:256]}
+                {
+                    "name": re.sub(r"[^A-Za-z0-9_-]", "_", str(key))[:256],
+                    "value": re.sub(r"[^A-Za-z0-9_-]", "_", str(value))[:256],
+                }
                 for key, value in metadata.items()
-                if value is not None
+                if value is not None and str(key) and str(value)
             ]
         try:
             result = self._request("POST", "/emails", payload)
