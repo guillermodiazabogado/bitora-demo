@@ -73,6 +73,14 @@ def schema_fingerprint(dsn: str) -> dict[str, list[dict]]:
          AND kcu.constraint_name = tc.constraint_name
          AND kcu.table_name = tc.table_name
         WHERE tc.table_schema = 'public' AND tc.table_name <> 'schema_migrations'
+          -- PostgreSQL exposes internal NOT NULL constraints with names that
+          -- embed relation OIDs (for example 2200_16399_10_not_null). Their
+          -- semantics are already captured by columns.is_nullable; their
+          -- generated names necessarily differ between temporary databases.
+          AND NOT (
+              tc.constraint_type = 'CHECK'
+              AND tc.constraint_name ~ '^[0-9]+_[0-9]+_[0-9]+_not_null$'
+          )
         ORDER BY tc.table_name, tc.constraint_name, ordinal_position
     """
     indexes_query = """
