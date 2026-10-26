@@ -7443,6 +7443,7 @@ def public_static_path(path: str) -> bool:
     return clean in {
         "/login.html",
         "/privacy.html",
+        "/bitora.html",
         "/display.html",
         "/scan.html",
         "/web.html",
