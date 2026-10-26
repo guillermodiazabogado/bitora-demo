@@ -1,0 +1,13 @@
+{
+  "application": "BITORA",
+  "version_file": "VERSION",
+  "minimum_python": "3.12",
+  "database": "PostgreSQL 16",
+  "latest_migration": "048_auth_login_rate_limits.sql",
+  "dependency_lock": "requirements.lock",
+  "sbom_generator": "scripts/generate_sbom.py",
+  "postgres_certifier": "scripts/certify_postgres.py",
+  "endurance_gate": "scripts/run_endurance_gate.py",
+  "endurance_workflow": ".github/workflows/endurance.yml",
+  "release_gate": ".github/workflows/ci.yml"
+}

@@ -10,16 +10,84 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: bitora_ci_postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.lock
       - name: Compile Python
-        run: python -m compileall backend server.py verificar_v4.py
+        run: python -m compileall backend scripts server.py verificar_*.py
+      - name: Endurance harness smoke test
+        run: python scripts/run_endurance_gate.py --seconds 3 --participants 5 --pause-ms 10 --report artifacts/endurance-smoke.json
+      - name: Critical regression gates
+        run: |
+          python verificar_p0_runtime_lock.py
+          python verificar_p0_postgres_certification_harness.py
+          python verificar_p0_migration_readiness.py
+          python verificar_p0_access_event_scope.py
+          python verificar_p0_access_authority.py
+          python verificar_p0_access_activation.py
+          python verificar_p0_edge_admin_api.py
+          python verificar_p0_device_api_security.py
+          python verificar_p0_device_http_api.py
+          python verificar_v5_4_voucher_application_contract.py
+          python verificar_v5_5_v5_6_contracts.py
+          python verificar_seguridad_p1.py
+          python verificar_p1_auth_http_security.py
+          python verificar_p1_access_distributed_lock.py
+          python verificar_p1_access_concurrency_direct.py
+          python verificar_p2_sbom.py
+          python verificar_p2_release_manifest.py
+          python verificar_multievent_isolation_20_events.py
+          python verificar_e2e_10_participants_closure.py
+          python verificar_v5_1_access_state_engine_shadow.py
+          python verificar_v5_8_event_edge.py
+          python verificar_v4.py
       - name: Secret scan
         run: python scripts/secret_scan.py
+      - name: Generate CycloneDX SBOM
+        run: python scripts/generate_sbom.py --output artifacts/sbom.cdx.json
+      - name: Certify PostgreSQL migrations
+        env:
+          BITORA_CERT_POSTGRES_DSN: postgresql://postgres:bitora_ci_postgres@127.0.0.1:5432/postgres
+          BITORA_CERT_CONFIRM: TEMPORARY_DATABASES
+        run: python scripts/certify_postgres.py --report artifacts/postgres-certification.json
+      - name: Upload PostgreSQL certification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-certification
+          path: artifacts/postgres-certification.json
+          if-no-files-found: error
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitora-sbom
+          path: artifacts/sbom.cdx.json
+          if-no-files-found: error
+      - name: Upload endurance smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: endurance-smoke
+          path: artifacts/endurance-smoke.json
+          if-no-files-found: error
       - name: Docker build
         run: docker build -t bitora-ci .

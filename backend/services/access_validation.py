@@ -27,7 +27,7 @@ class AccessValidationService:
         self.audit_service = audit_service or AuditService(repository=self.repository, now=now)
 
     def validate(self, db, token: str, operator: str, checkpoint: str, activity_id: int | None = None) -> dict:
-        token = self._normalize_token(token)
+        token = self.normalize_token(token)
         operator = operator.strip() or "operador"
         checkpoint = checkpoint.strip() or "Acceso principal"
         activity_id = int(activity_id or 0)
@@ -113,6 +113,46 @@ class AccessValidationService:
         )
         return {"result": result, "reason": reason, "color": color, "status_code": 200}
 
+    def record_authoritative_decision(
+        self,
+        db,
+        token: str,
+        operator: str,
+        checkpoint: str,
+        *,
+        activity_id: int | None,
+        result: str,
+        reason: str,
+        color: str,
+        status_code: int = 200,
+    ) -> dict:
+        """Persist a decision already made by the authoritative state engine."""
+        token = self.normalize_token(token)
+        operator = operator.strip() or "operador"
+        checkpoint = checkpoint.strip() or "Acceso principal"
+        activity_id = int(activity_id or 0)
+        acc = self.repository.accreditation_for_access(db, token)
+        if not acc:
+            self.repository.add_access_log(db, token=token, operator=operator, checkpoint=checkpoint, result="rejected", reason=reason, created_at=self._now())
+            return {"result": "rejected", "reason": reason, "color": color, "status_code": status_code}
+        if result == "granted":
+            if activity_id:
+                self.repository.increment_activity_access(db, acc["id"])
+            else:
+                self.repository.mark_general_access(db, acc["id"], operator, self._now())
+        self.repository.add_access_log(
+            db,
+            accreditation_id=acc["id"], event_id=acc["event_id"], activity_id=activity_id or None,
+            token=token, operator=operator, checkpoint=checkpoint,
+            access_context="activity_entry" if activity_id else "event_entry" if result == "granted" else "event_validation",
+            access_point=checkpoint, result=result, reason=reason, created_at=self._now(),
+        )
+        self.audit_service.record(
+            db, operator, "access.validated", "accreditation", acc["id"],
+            {"event_id": acc["event_id"], "result": result, "reason": reason, "checkpoint": checkpoint, "activity_id": activity_id, "authority": "v5"},
+        )
+        return {"result": result, "reason": reason, "color": color, "status_code": status_code}
+
     def _activity_open_at(self, activity) -> tuple[datetime, int]:
         raw_activity_minutes = activity["access_open_minutes_before"]
         raw_event_minutes = activity["event_access_open_minutes_before"]
@@ -131,7 +171,7 @@ class AccessValidationService:
             raise RuntimeError("AccessValidationService requires a now provider")
         return self.now()
 
-    def _normalize_token(self, token: str) -> str:
+    def normalize_token(self, token: str) -> str:
         raw = str(token or "").strip()
         match = re.search(r"EVT-[A-Z0-9]+", raw, re.IGNORECASE)
         if match:
@@ -143,3 +183,7 @@ class AccessValidationService:
             if match:
                 return match.group(0).upper()
         return raw.upper()
+
+    def _normalize_token(self, token: str) -> str:
+        """Backward-compatible alias for callers predating the public helper."""
+        return self.normalize_token(token)

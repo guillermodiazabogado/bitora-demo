@@ -147,6 +147,8 @@ class AccessStateEngine:
         if not int(accreditation["type_access_enabled"] or 0):
             return self._deny(decision, "RULE_DENIED")
         if context.activity_id:
+            if not accreditation["checked_in_at"]:
+                return self._deny(decision, "RULE_DENIED")
             activity = db.execute(
                 """
                 SELECT a.*, e.activity_access_open_minutes_before AS event_access_open_minutes_before

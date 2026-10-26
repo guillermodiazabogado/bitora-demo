@@ -70,14 +70,17 @@
     const $ = (selector) => document.querySelector(selector);
     const params = new URLSearchParams(location.search);
     let currentUser = null;
+    let csrfToken = "";
     let cameraStream = null;
     let scanning = false;
     let scanCanvas = null;
 
     async function api(path, options = {}) {
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      if (csrfToken && String(options.method || "GET").toUpperCase() !== "GET") headers["X-CSRF-Token"] = csrfToken;
       const response = await fetch(path, {
-        headers: { "Content-Type": "application/json" },
         ...options,
+        headers,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Error inesperado");
@@ -108,6 +111,7 @@
     async function init() {
       $("#scanEventId").value = params.get("event_id") || "";
       const me = await api("/api/auth/me");
+      csrfToken = me.csrf_token || "";
       if (me.authenticated) {
         currentUser = me.user.name;
         $("#scanPanel").classList.remove("hidden");
@@ -124,7 +128,8 @@
     async function login(event) {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-      await api("/api/auth/login", { method: "POST", body: JSON.stringify(data) });
+      const loginResult = await api("/api/auth/login", { method: "POST", body: JSON.stringify(data) });
+      csrfToken = loginResult.csrf_token || "";
       currentUser = data.name;
       $("#scanLoginPanel").classList.add("hidden");
       $("#scanPanel").classList.remove("hidden");

@@ -1,0 +1,19 @@
+# Resolved for CPython 3.12. Regenerate deliberately; CI installs this file.
+boto3==1.43.118
+botocore==1.43.118
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+jmespath==1.1.0
+pillow==12.3.0
+psycopg==3.3.6
+psycopg-binary==3.3.6
+psycopg-pool==3.3.3
+pycparser==3.12
+python-dateutil==2.9.0.post0
+reportlab==4.4.9
+s3transfer==0.19.3
+six==1.17.0
+typing_extensions==4.16.0
+tzdata==2026.5
+urllib3==2.8.0

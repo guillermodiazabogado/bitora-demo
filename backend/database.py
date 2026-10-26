@@ -88,6 +88,26 @@ def run_postgres_migrations(config: DatabaseConfig, migrations_dir: Path) -> lis
     return applied
 
 
+def migration_status(connection: Any, migrations_dir: Path) -> dict[str, Any]:
+    """Compare the exact migration file set with the database ledger."""
+    expected = sorted(path.name for path in migrations_dir.glob("*.sql"))
+    rows = connection.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
+    applied = sorted(str(row["version"]) for row in rows)
+    expected_set = set(expected)
+    applied_set = set(applied)
+    missing = sorted(expected_set - applied_set)
+    unexpected = sorted(applied_set - expected_set)
+    duplicates = sorted(version for version in applied_set if applied.count(version) > 1)
+    return {
+        "ok": not missing and not unexpected and not duplicates and len(applied) == len(expected),
+        "expected_count": len(expected),
+        "applied_count": len(applied),
+        "missing": missing,
+        "unexpected": unexpected,
+        "duplicates": duplicates,
+    }
+
+
 def postgres_driver_available() -> bool:
     try:
         _load_psycopg()
@@ -134,6 +154,7 @@ _ID_TABLES = {
     "attendance_rule_set_versions",
     "attendance_rule_sets",
     "audit_logs",
+    "auth_login_rate_limits",
     "capacity_bags",
     "captation_events",
     "certificate_eligibility",
@@ -181,6 +202,7 @@ _ID_TABLES = {
     "enterprise_event_edges",
     "enterprise_device_profiles",
     "enterprise_device_pairing_codes",
+    "enterprise_pairing_rate_limits",
     "enterprise_capability_execution_classes",
     "enterprise_edge_checkpoints",
     "enterprise_edge_queue",

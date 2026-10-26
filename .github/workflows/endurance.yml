@@ -1,0 +1,30 @@
+name: BITORA Endurance
+
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Wall-clock duration in hours
+        required: true
+        default: "24"
+
+jobs:
+  access-endurance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1500
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: pip install -r requirements.lock
+      - name: Run isolated wall-clock endurance gate
+        run: python scripts/run_endurance_gate.py --hours "${{ inputs.hours }}" --report artifacts/endurance.json
+      - name: Upload endurance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitora-endurance
+          path: artifacts/endurance.json
+          if-no-files-found: error

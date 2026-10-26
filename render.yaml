@@ -82,6 +82,14 @@ services:
         generateValue: true
       - key: SESSION_SECRET
         generateValue: true
+      - key: BITORA_SPEAKER_SECRET
+        generateValue: true
+      - key: BITORA_SURVEY_SECRET
+        generateValue: true
+      - key: BITORA_DATASET_SIGNING_KEY
+        generateValue: true
+      - key: BITORA_DATASET_SIGNING_KEY_ID
+        value: staging-v1
       - key: BITORA_INTEGRATION_ENCRYPTION_KEY
         generateValue: true
       - key: BITORA_HEALTH_TOKEN

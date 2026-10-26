@@ -32,13 +32,16 @@ class SpeakerDomainError(Exception):
         self.status_code = status_code
 
 
+RUNTIME_SPEAKER_SECRET = secrets.token_urlsafe(48)
+
+
 class SpeakerService:
-    def __init__(self, audit_service, storage=None, now=None, token_factory=None, secret: str = "bitora-speakers-local-secret") -> None:
+    def __init__(self, audit_service, storage=None, now=None, token_factory=None, secret: str = "") -> None:
         self.audit_service = audit_service
         self.storage = storage
         self.now = now or (lambda: "")
         self.token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
-        self.secret = secret or "bitora-speakers-local-secret"
+        self.secret = secret or RUNTIME_SPEAKER_SECRET
 
     def create_profile(self, db, *, organization_id: int, actor: str, data: dict) -> dict:
         now = self.now()

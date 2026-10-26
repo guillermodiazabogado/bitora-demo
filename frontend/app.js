@@ -15,6 +15,7 @@ const state = {
   readiness: null,
   networkInfo: null,
   authUser: null,
+  csrfToken: "",
   users: [],
   eventUsers: [],
   permissions: null,
@@ -278,6 +279,8 @@ const DEFAULT_PORTAL_VISIBLE_TABS = ["inicio", "qr", "agenda", "charlas", "asist
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+let commandCenterRefreshTimer = null;
+let commandCenterLoading = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -303,9 +306,13 @@ function applyAppConfig(config) {
 }
 
 async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.csrfToken && String(options.method || "GET").toUpperCase() !== "GET") {
+    headers["X-CSRF-Token"] = state.csrfToken;
+  }
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers,
   });
   const data = await response.json();
   if (response.status === 401) {
@@ -343,6 +350,13 @@ function setView(name) {
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
   $$("nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   document.body.classList.toggle("command-center-mode", name === "commandCenter");
+  if (commandCenterRefreshTimer) {
+    clearInterval(commandCenterRefreshTimer);
+    commandCenterRefreshTimer = null;
+  }
+  if (name === "commandCenter" && commandCenterAvailable()) {
+    commandCenterRefreshTimer = setInterval(() => loadCommandCenter(), 15000);
+  }
   updateProducerHomeReturn(name);
   if (name === "commandCenter" && commandCenterAvailable() && !state.commandCenter) {
     loadCommandCenter();
@@ -410,6 +424,7 @@ async function selectActiveEvent(eventId) {
 async function loadAuth() {
   const auth = await api("/api/auth/me");
   applyAppConfig(auth.config);
+  state.csrfToken = auth.csrf_token || "";
   state.authUser = auth.user || null;
   if (state.authUser) {
     state.currentUser = state.authUser.name;
@@ -1208,15 +1223,19 @@ function enterpriseSection(name) {
 }
 
 async function loadCommandCenter() {
+  if (commandCenterLoading) return;
   if (!state.eventId || !commandCenterAvailable()) {
     state.commandCenter = null;
     renderCommandCenter();
     return;
   }
+  commandCenterLoading = true;
   try {
     state.commandCenter = await api(`/api/events/${state.eventId}/command-center-v5`);
   } catch (err) {
     state.commandCenter = { ok: false, error: err.message };
+  } finally {
+    commandCenterLoading = false;
   }
   renderCommandCenter();
 }

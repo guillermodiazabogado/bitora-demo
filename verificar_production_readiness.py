@@ -18,6 +18,15 @@ def main() -> None:
             "QR_DB_ENGINE": "postgres",
             "QR_POSTGRES_DSN": "postgresql://user:secret@db/bitora",
             "STORAGE_BACKEND": "local",
+            "SECRET_KEY": "test-secret-key",
+            "SESSION_SECRET": "test-session-secret",
+            "BITORA_SPEAKER_SECRET": "test-speaker-secret",
+            "BITORA_SURVEY_SECRET": "test-survey-secret",
+            "BITORA_DATASET_SIGNING_KEY": "test-dataset-secret",
+            "BITORA_ALLOWED_HOSTS": "app.bitora.ar",
+            "BITORA_SAFE_MODE": "true",
+            "BITORA_ADMIN_BOOTSTRAP_USER": "Admin",
+            "BITORA_ADMIN_BOOTSTRAP_PASSWORD": "Strong-Test-Password-2026!",
         }
     )
     assert valid["ok"]

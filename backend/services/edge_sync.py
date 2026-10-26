@@ -78,7 +78,10 @@ class DeviceEdgeSyncService:
             return DeviceAuth(False, error="DEVICE_NOT_FOUND")
         if row["status"] == "REVOKED":
             return DeviceAuth(False, error="DEVICE_REVOKED")
-        if row["status"] not in {"ACTIVE", "PROVISIONED"}:
+        # Provisioning only establishes the device identity.  Operational
+        # credentials must not be accepted until an administrator explicitly
+        # activates the device.
+        if row["status"] != "ACTIVE":
             return DeviceAuth(False, error="DEVICE_INACTIVE")
         if row["credential_hash"] != self._hash(secret):
             return DeviceAuth(False, error="INVALID_DEVICE_SECRET")

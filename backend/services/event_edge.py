@@ -20,6 +20,7 @@ READINESS_STATES = {"READY", "READY_WITH_WARNINGS", "NOT_READY"}
 EVENT_OPERATION_STATES = {"NORMAL", "DEGRADED", "CRITICAL"}
 EXECUTION_CLASSES = {"EDGE_LOCAL_SAFE", "DEVICE_LOCAL_SAFE", "CLOUD_REQUIRED"}
 PROFILE_KEYS = {"ACCESS_FAST", "RECEPTION", "SERVICE", "LEAD_RETRIEVAL", "LOGISTICS", "SELF_SERVICE"}
+RUNTIME_DATASET_SIGNING_KEY = secrets.token_urlsafe(48)
 DEFAULT_CAPABILITIES = {
     "VALIDATE_ACCESS": "EDGE_LOCAL_SAFE",
     "ENTRY": "EDGE_LOCAL_SAFE",
@@ -173,8 +174,10 @@ class EventEdgeService:
         self._domain(db, organization_id, event_id, "DEVICE_PAIRING_CODE_CREATED", {"edge_id": edge_id, "profile_key": profile_key})
         return {"ok": True, "pairing_id": int(cur.lastrowid), "pairing_code": raw, "expires_at": expires}
 
-    def pair_device(self, db, *, organization_id: int, event_id: int, pairing_code: str, display_name: str, software_version: str = "v5.8-device") -> dict:
+    def pair_device(self, db, *, organization_id: int, event_id: int, pairing_code: str, display_name: str, software_version: str = "v5.8-device", request_fingerprint: str = "") -> dict:
         now = self.now()
+        if request_fingerprint:
+            self._check_pairing_rate_limit(db, organization_id, event_id, request_fingerprint, now)
         row = db.execute(
             """
             SELECT pc.*, p.capabilities_json, p.profile_key, p.revision AS profile_revision
@@ -185,9 +188,13 @@ class EventEdgeService:
             (organization_id, event_id, self._hash(pairing_code)),
         ).fetchone()
         if not row:
+            if request_fingerprint:
+                self._record_pairing_failure(db, organization_id, event_id, request_fingerprint, now)
             raise ValueError("PAIRING_CODE_INVALID")
         if row["expires_at"] < now:
             db.execute("UPDATE enterprise_device_pairing_codes SET status = 'EXPIRED', updated_at = ? WHERE id = ?", (now, row["id"]))
+            if request_fingerprint:
+                self._record_pairing_failure(db, organization_id, event_id, request_fingerprint, now)
             raise ValueError("PAIRING_CODE_EXPIRED")
         capabilities = json.loads(row["capabilities_json"] or "[]")
         provision = self.edge_sync.provision_device(
@@ -206,9 +213,55 @@ class EventEdgeService:
         metadata.update({"profile_key": row["profile_key"], "profile_revision": row["profile_revision"], "edge_id": row["edge_id"], "zone_id": row["zone_id"], "door_id": row["door_id"]})
         db.execute("UPDATE enterprise_devices SET metadata_json = ?, updated_at = ? WHERE id = ?", (json.dumps(metadata, sort_keys=True), now, device_id))
         db.execute("UPDATE enterprise_device_pairing_codes SET status = 'USED', used_at = ?, used_device_id = ?, updated_at = ? WHERE id = ?", (now, device_id, now, row["id"]))
+        if request_fingerprint:
+            db.execute(
+                "DELETE FROM enterprise_pairing_rate_limits WHERE organization_id = ? AND event_id = ? AND request_fingerprint = ?",
+                (organization_id, event_id, request_fingerprint),
+            )
         self._domain(db, organization_id, event_id, "DEVICE_PAIRED", {"device_id": device_id, "profile_key": row["profile_key"]})
         provision["device"] = dict(db.execute("SELECT * FROM enterprise_devices WHERE id = ?", (device_id,)).fetchone())
         return provision
+
+    def _check_pairing_rate_limit(self, db, organization_id: int, event_id: int, fingerprint: str, now: str) -> None:
+        row = db.execute(
+            "SELECT * FROM enterprise_pairing_rate_limits WHERE organization_id = ? AND event_id = ? AND request_fingerprint = ?",
+            (organization_id, event_id, fingerprint),
+        ).fetchone()
+        if row and row["blocked_until"] and row["blocked_until"] > now:
+            raise ValueError("PAIRING_RATE_LIMITED")
+
+    def _record_pairing_failure(self, db, organization_id: int, event_id: int, fingerprint: str, now: str) -> None:
+        row = db.execute(
+            "SELECT * FROM enterprise_pairing_rate_limits WHERE organization_id = ? AND event_id = ? AND request_fingerprint = ?",
+            (organization_id, event_id, fingerprint),
+        ).fetchone()
+        current = datetime.fromisoformat(now)
+        attempts = 1
+        window_started = now
+        if row:
+            try:
+                started = datetime.fromisoformat(row["window_started_at"])
+            except (TypeError, ValueError):
+                started = current
+            if current - started <= timedelta(minutes=15):
+                attempts = int(row["attempts"] or 0) + 1
+                window_started = row["window_started_at"]
+        blocked_until = (current + timedelta(minutes=15)).isoformat() if attempts >= 5 else None
+        db.execute(
+            """
+            INSERT INTO enterprise_pairing_rate_limits (
+                organization_id, event_id, request_fingerprint, window_started_at,
+                attempts, blocked_until, last_attempt_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(organization_id, event_id, request_fingerprint)
+            DO UPDATE SET window_started_at = excluded.window_started_at,
+                          attempts = excluded.attempts,
+                          blocked_until = excluded.blocked_until,
+                          last_attempt_at = excluded.last_attempt_at,
+                          updated_at = excluded.updated_at
+            """,
+            (organization_id, event_id, fingerprint, window_started, attempts, blocked_until, now, now, now),
+        )
 
     def generate_event_dataset(self, db, *, organization_id: int, event_id: int, edge_id: int | None = None, generated_by: str = "v5.8") -> dict:
         generated = self.edge_sync.generate_dataset(db, organization_id=organization_id, event_id=event_id, dataset_type="EVENT_EDGE_FULL", generated_by=generated_by)
@@ -577,7 +630,7 @@ class EventEdgeService:
                 return {str(k): str(v) for k, v in parsed.items() if str(k) and str(v)}
             except Exception:
                 pass
-        key = os.environ.get("BITORA_DATASET_SIGNING_KEY") or "bitora-v59-local-certification-key"
+        key = os.environ.get("BITORA_DATASET_SIGNING_KEY") or RUNTIME_DATASET_SIGNING_KEY
         key_id = os.environ.get("BITORA_DATASET_SIGNING_KEY_ID") or "v59-local"
         return {key_id: key}
 

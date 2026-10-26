@@ -33,12 +33,15 @@ class SurveyDomainError(Exception):
         self.status_code = status_code
 
 
+RUNTIME_SURVEY_SECRET = secrets.token_urlsafe(48)
+
+
 class SurveyService:
     def __init__(self, audit_service: AuditService, now: Callable[[], str], token_factory: Callable[[], str] | None = None, secret: str = "") -> None:
         self.audit_service = audit_service
         self.now = now
         self.token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
-        self.secret = secret or "bitora-surveys-local-secret"
+        self.secret = secret or RUNTIME_SURVEY_SECRET
 
     def create_type(self, db, *, organization_id: int, event_id: int | None, actor: str, code: str, name: str, description: str = "") -> dict:
         event_id = self._validate_optional_event(db, organization_id, event_id)
