@@ -15526,15 +15526,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                             accreditation_id=registration["id"],
                             person_id=registration["person_id"],
                         )
-                        if data.get("actor") == "public":
-                            communication_result = queue_registration_confirmation(
-                                db,
-                                event_id,
-                                registration["id"],
-                                actor="public",
-                            )
-                            whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
-                            email_queue_ids = communication_result.pop("_email_queue_ids", [])
+                    # Queueing checks consent and idempotency, including existing registrations.
+                    communication_result = queue_registration_confirmation(
+                        db,
+                        event_id,
+                        registration["id"],
+                        actor=data.get("actor") or "public",
+                    )
+                    whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
+                    email_queue_ids = communication_result.pop("_email_queue_ids", [])
                     reservations = []
                     for activity_id in activity_ids:
                         reservation = create_reservation(db, event_id, activity_id, registration["id"], "public" if data.get("actor") == "public" else "reception")
