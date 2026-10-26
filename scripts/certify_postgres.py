@@ -82,11 +82,31 @@ def schema_fingerprint(dsn: str) -> dict[str, list[dict]]:
         ORDER BY tablename, indexname
     """
     with psycopg.connect(dsn, row_factory=dict_row) as conn:
-        return {
+        fingerprint = {
             "columns": [dict(row) for row in conn.execute(columns_query).fetchall()],
             "constraints": [dict(row) for row in conn.execute(constraints_query).fetchall()],
             "indexes": [dict(row) for row in conn.execute(indexes_query).fetchall()],
         }
+    # PostgreSQL catalog queries may return tied rows in a different physical
+    # order across two otherwise identical databases. Compare a canonical
+    # representation so the gate measures schema semantics, not heap order.
+    return {
+        key: sorted(rows, key=lambda row: json.dumps(row, sort_keys=True, default=str))
+        for key, rows in fingerprint.items()
+    }
+
+
+def fingerprint_diff(clean: dict[str, list[dict]], upgrade: dict[str, list[dict]]) -> dict:
+    differences = {}
+    for key in clean:
+        clean_rows = {json.dumps(row, sort_keys=True, default=str) for row in clean[key]}
+        upgrade_rows = {json.dumps(row, sort_keys=True, default=str) for row in upgrade[key]}
+        if clean_rows != upgrade_rows:
+            differences[key] = {
+                "only_clean": [json.loads(row) for row in sorted(clean_rows - upgrade_rows)[:20]],
+                "only_upgrade": [json.loads(row) for row in sorted(upgrade_rows - clean_rows)[:20]],
+            }
+    return differences
 
 
 def certify() -> dict:
@@ -139,6 +159,7 @@ def certify() -> dict:
 
             clean_fingerprint = schema_fingerprint(clean_dsn)
             upgrade_fingerprint = schema_fingerprint(upgrade_dsn)
+            schema_diff = fingerprint_diff(clean_fingerprint, upgrade_fingerprint)
             result["checks"] = {
                 "clean_install": bool(first) and clean_status["ok"],
                 "idempotent_rerun": second == [],
@@ -147,13 +168,14 @@ def certify() -> dict:
                 "upgrade_applied_prefix": len(partial_applied) == max(0, len(migration_files) - 1),
                 "upgrade_applied_tail": upgrade_applied == ([migration_files[-1].name] if migration_files else []),
                 "upgrade_ledger_exact": upgrade_status["ok"],
-                "clean_upgrade_schema_equal": clean_fingerprint == upgrade_fingerprint,
+                "clean_upgrade_schema_equal": not schema_diff,
             }
             result["clean_status"] = clean_status
             result["upgrade_status"] = upgrade_status
             result["applied_clean"] = first
             result["applied_upgrade_tail"] = upgrade_applied
             result["schema_objects"] = {key: len(value) for key, value in clean_fingerprint.items()}
+            result["schema_diff"] = schema_diff
             result["ok"] = all(result["checks"].values())
         finally:
             for name in databases:
