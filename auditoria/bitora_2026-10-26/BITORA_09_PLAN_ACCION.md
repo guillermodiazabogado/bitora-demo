@@ -1,23 +1,24 @@
 # BITORA — Plan de acción priorizado y estado de ejecución
 
-Fecha de actualización: 2026-10-26. Esta tabla describe cambios presentes en el
-working tree; no implica despliegue ni certificación productiva.
+Fecha de cierre: 2026-10-27. Los resultados corresponden al baseline
+`116a612f7f14ae543b2bff112b503fa15b61665d`. No implican despliegue productivo.
 
 | Ítem | Estado actual | Evidencia reproducible | Pendiente externo |
 |---|---|---|---|
-| P0-01 Autoridad de accesos | Implementado y validado localmente | `verificar_p0_access_authority.py`, `verificar_p0_access_activation.py` | Certificación PostgreSQL real |
+| P0-01 Autoridad de accesos | Cerrado y verificado | verificadores de autoridad/activación, concurrencia y CI verde | Monitoreo productivo continuo |
 | P0-02 Aislamiento multievento | Implementado y validado | `verificar_p0_access_event_scope.py`, matriz 20 eventos/1000 participantes | Ninguno para alcance local |
-| P0-03 Contratos enterprise | Implementados en dominio y HTTP | verificadores V5.4/V5.5/V5.6 y Edge | E2E HTTP en host que permita sockets; clientes operativos dedicados |
-| P0-04 Certificación PostgreSQL | Harness y gate CI implementados | `scripts/certify_postgres.py` | Ejecutar contra PostgreSQL 16; Docker local no disponible |
-| P0-05 Runtime reproducible | Implementado | `requirements.lock`, CI, SBOM, manifest | Ejecutar CI remota |
-| P1 Seguridad web/dispositivos | Implementado y validado directamente | Argon2id, migración legacy, CSRF, cookie segura, rate limit persistente, dispositivos `ACTIVE` | Repetir E2E HTTP fuera de este sandbox |
-| P1 Concurrencia | Implementado y validado localmente | 30 ENTRY: 1 ALLOW/29 anti-passback; advisory lock PostgreSQL | Prueba multiinstancia con PostgreSQL real |
-| P1 Endurance | Harness real y workflow manual implementados | smoke local 3 s, 16 operaciones, integridad `ok`, cero fallos | Ejecutar y conservar corrida formal de 24 h |
-| P2 Versionado/SBOM | Implementado | `VERSION`, `release-manifest.json`, SBOM CycloneDX | Publicar artefactos mediante CI |
+| P0-03 Contratos enterprise | Implementados y verificados | V5.4/V5.5/V5.6, Edge y E2E HTTP CI | Clientes operativos dedicados |
+| P0-04 Certificación PostgreSQL | Cerrado | CI `40387964080`, 50 migraciones, clean/upgrade equivalentes | Repetir por release |
+| P0-05 Runtime reproducible | Cerrado | Python 3.12, lockfile, CI, SBOM y Docker build | Renovación periódica de dependencias |
+| P1 Seguridad web/dispositivos | Cerrado para el alcance evaluado | Argon2id, CSRF, cookie segura, rate limit, dispositivos `ACTIVE`, E2E CI | Pruebas periódicas y rotación operativa |
+| P1 Concurrencia | Cerrado para el alcance evaluado | 30 ENTRY: 1 ALLOW/29 anti-passback; advisory lock; CI PostgreSQL | Ensayo multiinstancia de infraestructura antes de gran escala |
+| P1 Endurance | Cerrado | 24 h, 159.226 operaciones, integridad `ok`, cero fallos | Repetir sobre cada release candidate |
+| P2 Versionado/SBOM | Cerrado | `VERSION`, manifest, SBOM CycloneDX y artefactos CI | Publicación por release |
 
-Los estados “implementado” no convierten por sí solos al producto en apto para
-producción. Los tres gates externos —PostgreSQL real, E2E HTTP completo y endurance
-24 h— deben terminar satisfactoriamente sobre el mismo commit congelado.
+Los tres gates externos definidos por la auditoría —PostgreSQL real, E2E HTTP y
+endurance 24 h— terminaron satisfactoriamente. La autorización de despliegue sigue
+requiriendo revisión de configuración, secretos, capacidad e infraestructura del
+entorno productivo concreto.
 
 ## P0 — Bloqueantes críticos
 
@@ -43,19 +44,19 @@ producción. Los tres gates externos —PostgreSQL real, E2E HTTP completo y end
 - Objetivo: exponer APIs autenticadas para Edge, vouchers, leads y vehículos, o declarar esos módulos no operativos.
 - Complejidad: alta. Dependencias: RBAC, idempotencia y UI/cliente.
 - Aceptación: contratos documentados, scoping org/event, auditoría y E2E.
-- Resultado: contratos y rutas cerrados; E2E HTTP queda condicionado por el host.
+- Resultado: contratos, rutas y E2E HTTP cerrados en CI.
 
 ### P0-04 — Certificación PostgreSQL
 
 - Objetivo: validar instalación limpia, upgrade y drift.
 - Aceptación: todas las migraciones esperadas aplicadas exactamente una vez y schema diff aprobado.
-- Resultado: automatización cerrada; ejecución PostgreSQL real pendiente y no sustituida por SQLite.
+- Resultado: cerrado en PostgreSQL 16 CI; clean/upgrade equivalentes y ledger exacto.
 
 ### P0-05 — Runtime y suite reproducible
 
 - Objetivo: ejecutar tests del HEAD en CI.
 - Aceptación: entorno Python 3.12 bloqueado por lockfile, resultados persistidos y cero gates omitidos críticos.
-- Resultado: cerrado en configuración; requiere una ejecución CI para generar evidencia externa.
+- Resultado: cerrado; ejecución CI `40387964080` exitosa y artefactos conservados.
 
 ## P1 — Prioridad alta
 
@@ -68,10 +69,10 @@ producción. Los tres gates externos —PostgreSQL real, E2E HTTP completo y end
 - Concurrencia PostgreSQL multiinstancia.
 - Nuevo endurance 24 h sobre el commit congelado.
 
-Implementados: controles web, autenticación de dispositivos, secretos online,
-refresh/freshness del Command Center, bloqueo distribuido de accesos y harness de
-endurance. Pendientes de evidencia o producto adicional: cliente Edge dedicado,
-E2E HTTP A–G, PostgreSQL multiinstancia real y corrida formal de 24 horas.
+Implementados y verificados: controles web, autenticación de dispositivos, secretos
+online, refresh/freshness del Command Center, bloqueo distribuido, E2E HTTP,
+PostgreSQL y endurance formal de 24 horas. Permanecen como evolución de producto
+el cliente Edge dedicado y ensayos de infraestructura multiinstancia a escala.
 
 ## P2 — Mejoras necesarias
 

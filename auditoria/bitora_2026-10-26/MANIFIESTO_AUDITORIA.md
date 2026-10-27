@@ -1,5 +1,23 @@
 # BITORA — Manifiesto de auditoría
 
+## Cierre de certificación — 2026-10-27
+
+- Baseline certificado: `116a612f7f14ae543b2bff112b503fa15b61665d`.
+- Rama publicada: `deployment/v4-online`.
+- GitHub Actions: ejecución `40387964080`, resultado `success`.
+- PostgreSQL 16: 50 migraciones aplicadas; instalación limpia, upgrade,
+  idempotencia, detección de drift y equivalencia de esquema aprobadas; bases
+  temporales eliminadas.
+- Suite crítica y E2E HTTP: aprobadas en Linux CI.
+- Secret scan, SBOM CycloneDX y Docker build: aprobados.
+- Endurance real: 86.400,391 segundos; 159.226 operaciones; 159.226 eventos
+  persistidos; 20 participantes; integridad SQLite `ok`; cero fallos; memoria
+  pico observada 1.476.047 bytes por `tracemalloc`.
+- Alcance del endurance: base SQLite temporal y aislada, sin servicios externos.
+  La certificación PostgreSQL se obtuvo separadamente en CI sobre el mismo
+  baseline funcional.
+- Evidencia conservada bajo `auditoria/bitora_2026-10-26/evidencia/`.
+
 ## Adenda de ejecución del plan — 2026-10-26
 
 - Se implementaron gates P0/P1/P2 en el working tree, sin commit, push ni despliegue.
@@ -21,9 +39,8 @@
 - Fecha de cierre documental: 2026-10-26.
 - Repositorio: `C:\Users\Noxie-PC\Documents\qr white label`.
 - Rama: `deployment/v4-online`.
-- Commit: `1dc025ab15a529ade17d3dda740d7dfb296c49b9`.
-- Commit subject: `feat: add dual-channel registration confirmations`.
-- Git describe: `v4.0.0-69-g1dc025a-dirty`.
+- Commit inicial auditado: `1dc025ab15a529ade17d3dda740d7dfb296c49b9`.
+- Baseline final certificado: `116a612f7f14ae543b2bff112b503fa15b61665d`.
 
 ## Estado inicial preservado
 
