@@ -156,7 +156,7 @@ def inspect(event_id: int) -> None:
             (event_id,),
         ).fetchall()
         sessions = db.execute(
-            "SELECT revoked_at, expires_at FROM auth_sessions ORDER BY id"
+            "SELECT revoked_at, expires_at FROM auth_sessions ORDER BY token_hash"
         ).fetchall()
     emit(
         {

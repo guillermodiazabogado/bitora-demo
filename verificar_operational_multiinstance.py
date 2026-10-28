@@ -33,6 +33,7 @@ def main() -> None:
     missing = [label for token, label in required_harness.items() if token not in harness]
     required_fixture = [
         "set_access_state_enforcement", "auth_sessions", "enterprise_access_events",
+        "ORDER BY token_hash",
         'for flag_key in ("command_center_v5", "enterprise_ui_v5_7_1")',
         "sys.path.insert(0, str(Path(__file__).resolve().parents[1]))",
     ]
