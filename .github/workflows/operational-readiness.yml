@@ -9,7 +9,7 @@ on:
       endurance_seconds:
         description: Integrated HTTP/PostgreSQL duration in seconds
         required: true
-        default: "60"
+        default: "300"
 
 jobs:
   operational:
@@ -42,7 +42,7 @@ jobs:
       - name: Multi-instance and integrated endurance
         run: >-
           python scripts/operational_multiinstance.py
-          --endurance-seconds "${{ inputs.endurance_seconds || '60' }}"
+          --endurance-seconds "${{ inputs.endurance_seconds || '300' }}"
           --report artifacts/multiinstance-endurance.json
       - name: Build candidate image
         run: docker build -t bitora-operational:${{ github.sha }} .

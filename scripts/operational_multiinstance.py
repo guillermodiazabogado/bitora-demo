@@ -117,6 +117,19 @@ def wait_ready(base: str, deadline_seconds: int = 90) -> None:
     raise HarnessError(f"APP_NOT_READY:{base}")
 
 
+def wait_not_ready(base: str, deadline_seconds: int = 30) -> dict:
+    client = Client()
+    deadline = time.monotonic() + deadline_seconds
+    last: dict = {}
+    while time.monotonic() < deadline:
+        status, payload = client.request(base, "/ready", expected={200, 503})
+        last = {"status": status, "payload": payload}
+        if status == 503 and payload.get("checks", {}).get("database") is False:
+            return last
+        time.sleep(0.5)
+    raise HarnessError(f"DATABASE_DEGRADATION_NOT_OBSERVED:{last}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="BITORA PostgreSQL multi-instance operational harness")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "operational-multiinstance.json")
@@ -270,6 +283,36 @@ def main() -> int:
             }, expected={200},
         )
         report["checks"]["cross_instance_idempotent_replay"] = bool(replay.get("idempotent_replay"))
+
+        docker("restart", postgres, timeout=90)
+        wait_postgres(postgres)
+        wait_ready(base_a)
+        wait_ready(base_b)
+        status, me = continuity.request(base_a, "/api/auth/me", expected={200})
+        report["checks"]["postgres_restart_recovers"] = (
+            status == 200 and me.get("authenticated") is True
+        )
+
+        docker("network", "disconnect", network, postgres)
+        degraded_a = wait_not_ready(base_a)
+        degraded_b = wait_not_ready(base_b)
+        docker("network", "connect", "--alias", "postgres", network, postgres)
+        wait_postgres(postgres)
+        wait_ready(base_a)
+        wait_ready(base_b)
+        status, me = continuity.request(base_b, "/api/auth/me", expected={200})
+        report["checks"]["database_disconnect_observable"] = (
+            degraded_a["status"] == 503 and degraded_b["status"] == 503
+        )
+        report["checks"]["database_reconnect_recovers"] = (
+            status == 200 and me.get("authenticated") is True
+        )
+        report["observed_failures"] = {
+            "database_disconnect": {
+                "app_a_ready_status": degraded_a["status"],
+                "app_b_ready_status": degraded_b["status"],
+            }
+        }
 
         endurance_started = time.monotonic()
         endurance_latencies: list[float] = []
