@@ -1,0 +1,9 @@
+{
+  "checks": {},
+  "error": "Command '['docker', 'info']' timed out after 30 seconds",
+  "finished_at": "2026-10-28T08:46:03.147460+00:00",
+  "ok": false,
+  "run_id": "567e1f8a70",
+  "sha": "8985301835e5a581281e5f5c3edb8d3e279e1a32",
+  "started_at": "2026-10-28T08:45:33.127901+00:00"
+}

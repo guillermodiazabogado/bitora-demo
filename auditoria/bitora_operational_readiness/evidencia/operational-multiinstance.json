@@ -1,0 +1,12 @@
+{
+  "checks": {},
+  "error": "Command '['docker', 'info']' timed out after 30 seconds",
+  "finished_at": "2026-10-28T08:43:08.737798+00:00",
+  "limitations": [
+    "Docker loopback networking is simulated infrastructure, not an event venue network."
+  ],
+  "ok": false,
+  "resources_removed": false,
+  "run_id": "d0fdfb29e4",
+  "started_at": "2026-10-28T08:42:38.712202+00:00"
+}
