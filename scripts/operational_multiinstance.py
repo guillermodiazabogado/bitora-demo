@@ -190,8 +190,10 @@ def main() -> int:
             "run", "--rm", "--network", network, *env, image,
             "python", "scripts/operational_multiinstance_fixture.py", "set-admin-role", "Visualizador",
         )
-        status, _ = admin.request(base_b, "/api/auth/me", expected={401})
-        report["checks"]["role_change_invalidates_session"] = status == 401
+        status, revoked_me = admin.request(base_b, "/api/auth/me", expected={200})
+        report["checks"]["role_change_invalidates_session"] = (
+            status == 200 and revoked_me.get("authenticated") is False
+        )
         docker(
             "run", "--rm", "--network", network, *env, image,
             "python", "scripts/operational_multiinstance_fixture.py", "set-admin-role", "Super Admin",
@@ -200,8 +202,10 @@ def main() -> int:
         admin = Client()
         admin.login(base_a, "Admin", "Operational-Admin-582!")
         admin.request(base_b, "/api/auth/logout", {}, expected={200})
-        status, _ = admin.request(base_a, "/api/auth/me", expected={401})
-        report["checks"]["logout_cross_instance_revokes"] = status == 401
+        status, logged_out_me = admin.request(base_a, "/api/auth/me", expected={200})
+        report["checks"]["logout_cross_instance_revokes"] = (
+            status == 200 and logged_out_me.get("authenticated") is False
+        )
 
         continuity = Client()
         continuity.login(base_b, "Admin", "Operational-Admin-582!")
