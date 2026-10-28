@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
+import sys
 
+# Direct execution sets sys.path to /app/scripts; add the immutable image root
+# so the fixture exercises the same server module as the application containers.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import server
 
 

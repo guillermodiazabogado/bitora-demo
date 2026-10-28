@@ -27,7 +27,10 @@ def main() -> None:
         'docker("rm", "-f"': "isolated cleanup",
     }
     missing = [label for token, label in required_harness.items() if token not in harness]
-    required_fixture = ["set_access_state_enforcement", "auth_sessions", "enterprise_access_events"]
+    required_fixture = [
+        "set_access_state_enforcement", "auth_sessions", "enterprise_access_events",
+        "sys.path.insert(0, str(Path(__file__).resolve().parents[1]))",
+    ]
     missing.extend(token for token in required_fixture if token not in fixture_source)
     if missing:
         raise AssertionError({"missing_multiinstance_coverage": missing})
