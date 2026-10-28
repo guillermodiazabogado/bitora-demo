@@ -105,3 +105,33 @@ jobs:
           if-no-files-found: error
       - name: Docker build
         run: docker build -t bitora-ci .
+      - name: Docker runtime and healthcheck
+        run: |
+          docker run -d --name bitora-ci-runtime \
+            -p 8787:8787 \
+            -e APP_ENV=testing \
+            -e BITORA_ENV=testing \
+            -e QR_HOST=0.0.0.0 \
+            -e QR_DB_ENGINE=sqlite \
+            -e QR_DB_PATH=/tmp/bitora-ci.db \
+            bitora-ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/ready > artifacts/docker-ready.json; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs bitora-ci-runtime
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.Config.User}}' bitora-ci-runtime)" = "bitora"
+          docker stop --time 10 bitora-ci-runtime
+          docker inspect --format '{{.State.ExitCode}}' bitora-ci-runtime | grep '^0$'
+      - name: Upload Docker runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-runtime
+          path: artifacts/docker-ready.json
+          if-no-files-found: warn
