@@ -33,6 +33,7 @@ jobs:
           python verificar_session_revocation_security.py
       - name: Audit locked Python dependencies
         run: |
+          mkdir -p artifacts
           python -m pip install pip-audit==2.10.1
           pip-audit -r requirements.lock --format json --output artifacts/pip-audit.json
       - name: PostgreSQL backup and restore
