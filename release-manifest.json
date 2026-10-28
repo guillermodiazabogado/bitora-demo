@@ -1,9 +1,10 @@
 {
   "application": "BITORA",
+  "release_channel": "release-candidate",
   "version_file": "VERSION",
   "minimum_python": "3.12",
   "database": "PostgreSQL 16",
-  "latest_migration": "048_auth_login_rate_limits.sql",
+  "latest_migration": "049_persistent_auth_sessions.sql",
   "dependency_lock": "requirements.lock",
   "sbom_generator": "scripts/generate_sbom.py",
   "postgres_certifier": "scripts/certify_postgres.py",

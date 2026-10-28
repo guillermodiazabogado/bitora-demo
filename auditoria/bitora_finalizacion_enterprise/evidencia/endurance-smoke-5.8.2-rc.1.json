@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "started_at": "2026-10-28T00:11:43+00:00",
+  "finished_at": "2026-10-28T00:11:46+00:00",
+  "requested_duration_seconds": 3.0,
+  "elapsed_seconds": 3.015,
+  "participants": 5,
+  "operations": 113,
+  "persisted_access_events": 113,
+  "database_integrity": "ok",
+  "memory_current_bytes": 165123,
+  "memory_peak_bytes": 205500,
+  "failures": [],
+  "scope": "isolated SQLite wall-clock endurance; no external services"
+}

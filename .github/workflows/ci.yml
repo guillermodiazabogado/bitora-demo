@@ -4,8 +4,10 @@ on:
   pull_request:
   push:
     branches:
+      - main
       - develop/v4
       - deployment/v4-online
+      - "release/**"
 
 jobs:
   validate:
@@ -46,14 +48,24 @@ jobs:
           python verificar_p0_edge_admin_api.py
           python verificar_p0_device_api_security.py
           python verificar_p0_device_http_api.py
+          python verificar_p0_lead_company_scope.py
           python verificar_v5_4_voucher_application_contract.py
           python verificar_v5_5_v5_6_contracts.py
+          python verificar_v5_5_v5_6_db_integration.py
           python verificar_seguridad_p1.py
           python verificar_p1_auth_http_security.py
           python verificar_p1_access_distributed_lock.py
           python verificar_p1_access_concurrency_direct.py
           python verificar_p2_sbom.py
           python verificar_p2_release_manifest.py
+          python verificar_docker_reproducible.py
+          python verificar_restore_postgres_seguro.py
+          python verificar_enterprise_leads_ui.py
+          python verificar_enterprise_vouchers_ui.py
+          python verificar_enterprise_vehicles_ui.py
+          python verificar_command_center_live_resilience.py
+          python -m tools.edge_client.verify_reference_client
+          python verificar_persistent_sessions.py
           python verificar_multievent_isolation_20_events.py
           python verificar_e2e_10_participants_closure.py
           python verificar_v5_1_access_state_engine_shadow.py

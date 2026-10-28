@@ -1,0 +1,124 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "name": "boto3",
+      "purl": "pkg:pypi/boto3@1.43.118",
+      "type": "library",
+      "version": "1.43.118"
+    },
+    {
+      "name": "botocore",
+      "purl": "pkg:pypi/botocore@1.43.118",
+      "type": "library",
+      "version": "1.43.118"
+    },
+    {
+      "name": "cffi",
+      "purl": "pkg:pypi/cffi@2.1.1",
+      "type": "library",
+      "version": "2.1.1"
+    },
+    {
+      "name": "charset-normalizer",
+      "purl": "pkg:pypi/charset-normalizer@3.5.2",
+      "type": "library",
+      "version": "3.5.2"
+    },
+    {
+      "name": "cryptography",
+      "purl": "pkg:pypi/cryptography@50.0.2",
+      "type": "library",
+      "version": "50.0.2"
+    },
+    {
+      "name": "jmespath",
+      "purl": "pkg:pypi/jmespath@1.1.0",
+      "type": "library",
+      "version": "1.1.0"
+    },
+    {
+      "name": "pillow",
+      "purl": "pkg:pypi/pillow@12.3.0",
+      "type": "library",
+      "version": "12.3.0"
+    },
+    {
+      "name": "psycopg",
+      "purl": "pkg:pypi/psycopg@3.3.6",
+      "type": "library",
+      "version": "3.3.6"
+    },
+    {
+      "name": "psycopg-binary",
+      "purl": "pkg:pypi/psycopg-binary@3.3.6",
+      "type": "library",
+      "version": "3.3.6"
+    },
+    {
+      "name": "psycopg-pool",
+      "purl": "pkg:pypi/psycopg-pool@3.3.3",
+      "type": "library",
+      "version": "3.3.3"
+    },
+    {
+      "name": "pycparser",
+      "purl": "pkg:pypi/pycparser@3.12",
+      "type": "library",
+      "version": "3.12"
+    },
+    {
+      "name": "python-dateutil",
+      "purl": "pkg:pypi/python-dateutil@2.9.0.post0",
+      "type": "library",
+      "version": "2.9.0.post0"
+    },
+    {
+      "name": "reportlab",
+      "purl": "pkg:pypi/reportlab@4.4.9",
+      "type": "library",
+      "version": "4.4.9"
+    },
+    {
+      "name": "s3transfer",
+      "purl": "pkg:pypi/s3transfer@0.19.3",
+      "type": "library",
+      "version": "0.19.3"
+    },
+    {
+      "name": "six",
+      "purl": "pkg:pypi/six@1.17.0",
+      "type": "library",
+      "version": "1.17.0"
+    },
+    {
+      "name": "typing_extensions",
+      "purl": "pkg:pypi/typing-extensions@4.16.0",
+      "type": "library",
+      "version": "4.16.0"
+    },
+    {
+      "name": "tzdata",
+      "purl": "pkg:pypi/tzdata@2026.5",
+      "type": "library",
+      "version": "2026.5"
+    },
+    {
+      "name": "urllib3",
+      "purl": "pkg:pypi/urllib3@2.8.0",
+      "type": "library",
+      "version": "2.8.0"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "BITORA",
+      "type": "application",
+      "version": "workspace"
+    },
+    "timestamp": "2026-10-28T00:11:43.357456+00:00"
+  },
+  "serialNumber": "urn:uuid:00000000-0000-4000-8000-000000000000",
+  "specVersion": "1.5",
+  "version": 1
+}
