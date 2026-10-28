@@ -8,6 +8,7 @@ import os
 import shutil
 import json
 import secrets
+import signal
 import socket
 import sqlite3
 import threading
@@ -16371,6 +16372,16 @@ def main() -> None:
     port = int(os.environ.get("PORT") or os.environ.get("QR_PORT") or "8787")
     start_auto_backup()
     httpd = OperationalHTTPServer((host, port), AppHandler)
+
+    def request_shutdown(signum, _frame) -> None:
+        # BaseServer.shutdown() must run outside the serve_forever thread.
+        # Container runtimes send SIGTERM and expect the process to drain and
+        # exit before their grace period expires.
+        print(f"BITORA deteniendo por signal {int(signum)}")
+        threading.Thread(target=httpd.shutdown, name="bitora-http-shutdown", daemon=True).start()
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGINT, request_shutdown)
     httpd.require_login = REQUIRE_LOGIN or host not in {"localhost", "127.0.0.1"}
     print(f"BITORA {APP_VERSION} iniciada")
     print(f"Entorno: {APP_ENV}")

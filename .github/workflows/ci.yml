@@ -59,6 +59,7 @@ jobs:
           python verificar_p2_sbom.py
           python verificar_p2_release_manifest.py
           python verificar_docker_reproducible.py
+          python verificar_graceful_shutdown.py
           python verificar_restore_postgres_seguro.py
           python verificar_enterprise_leads_ui.py
           python verificar_enterprise_vouchers_ui.py
