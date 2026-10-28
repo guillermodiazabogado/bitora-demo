@@ -12,6 +12,7 @@ from scripts import operational_multiinstance_fixture as fixture
 def main() -> None:
     harness = Path("scripts/operational_multiinstance.py").read_text(encoding="utf-8")
     fixture_source = Path("scripts/operational_multiinstance_fixture.py").read_text(encoding="utf-8")
+    database_source = Path("backend/database.py").read_text(encoding="utf-8")
     required_harness = {
         "postgres:16-alpine": "PostgreSQL 16",
         "two_distinct_instances_ready": "two application instances",
@@ -45,6 +46,14 @@ def main() -> None:
     missing.extend(token for token in required_fixture if token not in fixture_source)
     if missing:
         raise AssertionError({"missing_multiinstance_coverage": missing})
+    required_database = [
+        "timeout=config.connection_timeout",
+        "reconnect_timeout=config.connection_timeout",
+        "_POSTGRES_POOL.close(timeout=config.connection_timeout)",
+    ]
+    missing_database = [token for token in required_database if token not in database_source]
+    if missing_database:
+        raise AssertionError({"missing_database_resilience": missing_database})
     forbidden = ["docker system prune", "docker volume prune", "--network host", "deployment/v4-online"]
     present = [token for token in forbidden if token in harness.lower()]
     if present:

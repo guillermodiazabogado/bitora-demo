@@ -333,6 +333,8 @@ def _postgres_connection(config: DatabaseConfig):
                     conninfo=config.postgres_dsn,
                     min_size=config.postgres_pool_min,
                     max_size=max(config.postgres_pool_min, config.postgres_pool_max),
+                    timeout=config.connection_timeout,
+                    reconnect_timeout=config.connection_timeout,
                     kwargs={"autocommit": True, "row_factory": dict_row},
                     open=True,
                     check=ConnectionPool.check_connection,
@@ -345,7 +347,7 @@ def _postgres_connection(config: DatabaseConfig):
             last_error = exc
             if _POSTGRES_POOL is not None:
                 try:
-                    _POSTGRES_POOL.close()
+                    _POSTGRES_POOL.close(timeout=config.connection_timeout)
                 except Exception:
                     pass
                 _POSTGRES_POOL = None
