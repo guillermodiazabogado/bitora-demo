@@ -42,6 +42,27 @@ def signal(value, provenance: str, detail: str = "") -> dict:
     return {"value": value, "provenance": provenance, "detail": detail}
 
 
+class CpuSampler:
+    """Measure this collector's CPU consumption between consecutive samples."""
+
+    def __init__(self) -> None:
+        self.previous_process = time.process_time()
+        self.previous_wall = time.perf_counter()
+
+    def sample(self) -> dict:
+        current_process = time.process_time()
+        current_wall = time.perf_counter()
+        process_delta = current_process - self.previous_process
+        wall_delta = current_wall - self.previous_wall
+        self.previous_process = current_process
+        self.previous_wall = current_wall
+        if wall_delta <= 0:
+            return signal(None, "unavailable", "CPU sampling interval is zero")
+        cores = max(os.cpu_count() or 1, 1)
+        percent = max(0.0, min(100.0, 100.0 * process_delta / wall_delta / cores))
+        return signal(round(percent, 3), "observed", "collector process delta normalized by logical CPUs")
+
+
 def http_probe(url: str) -> tuple[dict, dict]:
     if not url:
         return signal(None,"unavailable","no --http-url"), signal(None,"unavailable","no --http-url")
@@ -59,13 +80,13 @@ def fixture_sample(index: int) -> dict:
     return {key:signal(value,"simulated","deterministic alert fixture") for key,value in values.items()}
 
 
-def observed_sample(http_url: str, edge_file: Path | None) -> dict:
+def observed_sample(http_url: str, edge_file: Path | None, cpu_sampler: CpuSampler) -> dict:
     api,latency=http_probe(http_url); edge=signal(None,"unavailable","no --edge-file"); device=signal(None,"unavailable","no --edge-file"); snapshot=signal(None,"unavailable","no --edge-file"); queue=signal(None,"unavailable","application metric not configured")
     if edge_file:
         try:
             payload=json.loads(edge_file.read_text(encoding="utf-8")); edge=signal(bool(payload.get("online")),"observed"); device=signal(float(payload.get("device_age_seconds",0)),"observed"); snapshot=signal(float(payload.get("snapshot_age_seconds",0)),"observed"); queue=signal(int(payload.get("queue_depth",0)),"observed")
         except Exception as exc: edge=signal(None,"unavailable",type(exc).__name__)
-    return {"api_ok":api,"http_latency_ms":latency,"db_ok":signal(None,"unavailable","PostgreSQL probe adapter not configured"),"error_rate":signal(None,"unavailable","application metric not configured"),"queue_depth":queue,"device_age_seconds":device,"snapshot_age_seconds":snapshot,"cpu_percent":signal(round(100*time.process_time()/max(time.monotonic(),1),3),"observed","collector process lifetime ratio"),"ram_bytes":signal(memory_bytes(),"observed" if memory_bytes() is not None else "unavailable"),"postgres_connections":signal(None,"unavailable","PostgreSQL probe adapter not configured"),"edge_online":edge,"freshness_seconds":snapshot}
+    return {"api_ok":api,"http_latency_ms":latency,"db_ok":signal(None,"unavailable","PostgreSQL probe adapter not configured"),"error_rate":signal(None,"unavailable","application metric not configured"),"queue_depth":queue,"device_age_seconds":device,"snapshot_age_seconds":snapshot,"cpu_percent":cpu_sampler.sample(),"ram_bytes":signal(memory_bytes(),"observed" if memory_bytes() is not None else "unavailable"),"postgres_connections":signal(None,"unavailable","PostgreSQL probe adapter not configured"),"edge_online":edge,"freshness_seconds":snapshot}
 
 
 def evaluate(sample: dict, active: dict[str,dict], events: list[dict], timestamp: str) -> None:
@@ -87,9 +108,9 @@ def render_html(report: dict) -> str:
 
 
 def collect(args) -> dict:
-    active={}; events=[]; series=[]
+    active={}; events=[]; series=[]; cpu_sampler=CpuSampler()
     for index in range(args.samples):
-        timestamp=now(); signals=fixture_sample(index) if args.simulate else observed_sample(args.http_url,args.edge_file)
+        timestamp=now(); signals=fixture_sample(index) if args.simulate else observed_sample(args.http_url,args.edge_file,cpu_sampler)
         evaluate(signals,active,events,timestamp); series.append({"timestamp":timestamp,"signals":signals})
         if index+1 < args.samples: time.sleep(args.interval)
     return {"generated_at":now(),"mode":"simulated" if args.simulate else "observed","series":series,"alert_events":events,"active_alerts":list(active.values()),"rules":sorted(RULES)}

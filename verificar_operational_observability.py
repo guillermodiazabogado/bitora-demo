@@ -3,6 +3,9 @@ import json, subprocess, sys, tempfile
 from pathlib import Path
 
 def main() -> None:
+    source=Path("scripts/operational_observability.py").read_text(encoding="utf-8")
+    assert "process_delta / wall_delta / cores" in source
+    assert "collector process lifetime ratio" not in source
     with tempfile.TemporaryDirectory(dir=Path.cwd()/"tmp") as directory:
         root=Path(directory); report=root/"observability.json"; html=root/"observability.html"
         result=subprocess.run([sys.executable,"scripts/operational_observability.py","--json",str(report),"--html",str(html),"--samples","2","--interval","0","--simulate"],text=True,capture_output=True)
