@@ -97,6 +97,13 @@ def setup() -> None:
             "UPDATE user_event_roles SET active = 0 WHERE user_id = ? AND event_id = ?",
             (operator_id, isolated_event_id),
         )
+        for flag_key in ("command_center_v5", "enterprise_ui_v5_7_1"):
+            db.execute(
+                "INSERT INTO feature_flags (flag_key, scope_type, scope_id, enabled, updated_by, updated_at) "
+                "VALUES (?, 'event', ?, 1, 'operational-harness', ?) "
+                "ON CONFLICT(flag_key, scope_type, scope_id) DO UPDATE SET enabled = 1, updated_at = excluded.updated_at",
+                (flag_key, isolated_event_id, now),
+            )
 
         registration = server.register_accreditation(
             db,
