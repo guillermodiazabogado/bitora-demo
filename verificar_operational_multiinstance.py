@@ -21,6 +21,7 @@ def main() -> None:
         "role_change_invalidates_session": "role-change revocation",
         'revoked_me.get("authenticated") is False': "role-change auth contract",
         "restart_preserves_shared_session": "restart continuity",
+        'base_a = mapped_url(app_a)': "post-restart port discovery",
         "multievent_isolation": "multi-event isolation",
         "concurrent_entry_anti_passback": "concurrent anti-passback",
         "cross_instance_idempotent_replay": "idempotency",

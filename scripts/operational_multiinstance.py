@@ -210,7 +210,17 @@ def main() -> int:
         continuity = Client()
         continuity.login(base_b, "Admin", "Operational-Admin-582!")
         docker("restart", app_a, timeout=90)
-        wait_ready(base_a)
+        base_a = mapped_url(app_a)
+        try:
+            wait_ready(base_a)
+        except HarnessError as exc:
+            state = docker(
+                "inspect", "--format",
+                "{{.State.Status}}|{{.State.ExitCode}}|{{.State.OOMKilled}}|{{.RestartCount}}",
+                app_a, check=False,
+            ).stdout.strip()
+            logs = docker("logs", "--tail", "40", app_a, check=False).stderr[-2000:]
+            raise HarnessError(f"{exc}:STATE={state}:LOGS={logs}") from exc
         status, me = continuity.request(base_a, "/api/auth/me", expected={200})
         report["checks"]["restart_preserves_shared_session"] = status == 200 and me.get("user", {}).get("name") == "Admin"
 
