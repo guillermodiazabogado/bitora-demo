@@ -1089,7 +1089,8 @@ body.command-center-mode main {
   border-radius: var(--bt-radius-sm);
   color: var(--bt-ink);
   padding: 8px;
-  transform: none;
+  transform: scale(var(--enterprise-map-zoom, 1));
+  transform-origin: center;
 }
 
 .enterprise-map-node:hover,
@@ -1098,7 +1099,7 @@ body.command-center-mode main {
   border-color: var(--bt-arena-dark);
   box-shadow: 0 0 0 3px rgba(210, 184, 154, 0.22);
   color: var(--bt-ink);
-  transform: none;
+  transform: scale(var(--enterprise-map-zoom, 1));
 }
 
 .enterprise-map-node:hover span,
@@ -1146,6 +1147,11 @@ body.command-center-mode main {
   font-size: 12px;
   font-weight: 700;
 }
+
+.enterprise-device-grid.table-view { display: block; overflow-x: auto; }
+.enterprise-device-table { min-width: 680px; display: grid; gap: 1px; background: var(--bt-border); }
+.enterprise-device-table [role="row"] { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 8px; padding: 10px; background: var(--bt-surface); align-items: center; }
+.enterprise-device-table .head { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--bt-ink-soft); }
 
 .enterprise-live-column,
 .enterprise-card {

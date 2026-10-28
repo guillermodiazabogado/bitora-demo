@@ -29,6 +29,9 @@ const state = {
   simulator: null,
   visualization: null,
   commandCenter: null,
+  commandCenterDeviceView: "visual",
+  commandCenterMapZoom: 1,
+  commandCenterLayersVisible: true,
   visualizationLayouts: [],
   demoReal: null,
   eventRestore: null,
@@ -1389,6 +1392,8 @@ function renderEnterpriseVenueMap() {
   const elements = venue.elements || [];
   $("#enterpriseMapTitle").textContent = venue.venue?.name || "Venue Map";
   const map = $("#enterpriseVenueMap");
+  map.style.setProperty("--enterprise-map-zoom", String(state.commandCenterMapZoom));
+  $("#enterpriseLayers")?.classList.toggle("hidden", !state.commandCenterLayersVisible);
   if (!elements.length) {
     map.innerHTML = `<div class="enterprise-map-empty">${enterpriseIcon("map")}<strong>UNAVAILABLE</strong><span>No hay mapa activo configurado para este evento.</span></div>`;
   } else {
@@ -1461,7 +1466,16 @@ function renderEnterpriseOccupancy() {
 
 function renderEnterpriseDevices() {
   const devices = enterpriseSection("devices").data?.items || [];
-  $("#enterpriseDevices").innerHTML = devices.length ? devices.slice(0, 8).map((device) => `
+  const target = $("#enterpriseDevices");
+  target.classList.toggle("table-view", state.commandCenterDeviceView === "table");
+  if (state.commandCenterDeviceView === "table" && devices.length) {
+    target.innerHTML = `<div class="enterprise-device-table" role="table" aria-label="Estado de dispositivos">
+      <div role="row" class="head"><span>Dispositivo</span><span>Estado</span><span>Sync</span><span>Dataset</span><span>Last seen</span></div>
+      ${devices.map((device) => `<div role="row"><strong>${escapeHtml(device.display_name || "Device")}</strong><span>${escapeHtml(device.status || "UNKNOWN")}</span><span>${escapeHtml(device.sync_state || "UNKNOWN")}</span><span>${escapeHtml(device.dataset_revision || "UNAVAILABLE")}</span><span>${escapeHtml(formatEnterpriseTime(device.last_seen_at))}</span></div>`).join("")}
+    </div>`;
+    return;
+  }
+  target.innerHTML = devices.length ? devices.slice(0, 8).map((device) => `
     <article class="enterprise-device-card ${enterpriseStatusClass(device.status)}">
       <div>${enterpriseIcon("device")}<strong>${escapeHtml(device.display_name || "Device")}</strong></div>
       <span>${escapeHtml(device.device_type || "DEVICE")} - ${escapeHtml(device.status || "UNKNOWN")}</span>
@@ -1469,6 +1483,24 @@ function renderEnterpriseDevices() {
       <small>Last seen ${escapeHtml(formatEnterpriseTime(device.last_seen_at))}</small>
     </article>
   `).join("") : `<p class="enterprise-empty">No hay dispositivos registrados.</p>`;
+}
+
+function handleEnterpriseMapAction(action) {
+  if (action === "fit") state.commandCenterMapZoom = 1;
+  if (action === "zoom-in") state.commandCenterMapZoom = state.commandCenterMapZoom >= 1.4 ? 1 : Number((state.commandCenterMapZoom + 0.2).toFixed(1));
+  if (action === "layers") state.commandCenterLayersVisible = !state.commandCenterLayersVisible;
+  $$('[data-map-action]').forEach((button) => button.setAttribute("aria-pressed", String(action === "layers" && state.commandCenterLayersVisible)));
+  renderEnterpriseVenueMap();
+}
+
+function setEnterpriseDeviceView(view) {
+  state.commandCenterDeviceView = view === "table" ? "table" : "visual";
+  $$('[data-device-view]').forEach((button) => {
+    const active = button.dataset.deviceView === state.commandCenterDeviceView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  renderEnterpriseDevices();
 }
 
 function renderEnterpriseSystemHealth(section) {
@@ -3741,6 +3773,8 @@ function stopCameraScan() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  $$('[data-map-action]').forEach((button) => button.addEventListener("click", () => handleEnterpriseMapAction(button.dataset.mapAction)));
+  $$('[data-device-view]').forEach((button) => button.addEventListener("click", () => setEnterpriseDeviceView(button.dataset.deviceView)));
   organizeReportAndDiagnosticViews();
   $$("nav button").forEach((button) => button.addEventListener("click", () => {
     if (button.dataset.view === "home") {

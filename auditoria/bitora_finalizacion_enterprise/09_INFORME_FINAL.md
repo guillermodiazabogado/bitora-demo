@@ -6,7 +6,7 @@
 - Aislamiento de Leads por compañía y consentimiento endurecido.
 - Cliente Edge de referencia con cola durable y reconciliación.
 - Interfaces conectadas de Vouchers, Leads y Vehículos.
-- Command Center resiliente ante desconexión y datos vencidos.
+- Command Center resiliente ante desconexión y datos vencidos, con Fit/Zoom/Layers y vista visual/tabla funcionales.
 - Docker reproducible/no-root, restore aislado y CI de releases.
 
 ## Software probado localmente

@@ -64,6 +64,7 @@ jobs:
           python verificar_enterprise_vouchers_ui.py
           python verificar_enterprise_vehicles_ui.py
           python verificar_command_center_live_resilience.py
+          python verificar_command_center_controls.py
           python -m tools.edge_client.verify_reference_client
           python verificar_persistent_sessions.py
           python verificar_multievent_isolation_20_events.py

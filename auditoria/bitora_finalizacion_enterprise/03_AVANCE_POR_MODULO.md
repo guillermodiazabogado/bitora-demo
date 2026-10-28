@@ -9,6 +9,6 @@
 | Leads | Backend, aislamiento y UI integrados | E2E externo sobre RC |
 | Vehículos | Backend, DB real temporal y UI integrados | E2E externo sobre RC |
 | Networking | Módulo histórico amplio | Integración y regresión |
-| Command Center | Refresh/freshness y degradación verificados | Cámaras/monitoring externo |
+| Command Center | Refresh/freshness, mapa y vista dispositivos verificados | Cámaras/monitoring externo |
 | Infraestructura | Docker/restore/CI endurecidos | Revalidación externa sobre RC |
 
