@@ -157,6 +157,7 @@ def main() -> int:
         "-e", "QR_PORT=8787",
         "-e", "BITORA_DISABLE_EMBEDDED_WORKER=1",
         "-e", "QR_AUTO_BACKUP_MINUTES=0",
+        "-e", "DB_CONNECTION_TIMEOUT=3",
     ]
     report: dict = {
         "ok": False,

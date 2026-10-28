@@ -29,6 +29,7 @@ def main() -> None:
         "postgres_restart_recovers": "PostgreSQL restart recovery",
         "database_disconnect_observable": "database outage readiness signal",
         "database_reconnect_recovers": "database reconnect recovery",
+        '"DB_CONNECTION_TIMEOUT=3"': "bounded database outage detection",
         "integrated_http_postgres_endurance": "integrated HTTP/PostgreSQL endurance",
         '"p95"': "latency percentiles",
         'docker("rm", "-f"': "isolated cleanup",
