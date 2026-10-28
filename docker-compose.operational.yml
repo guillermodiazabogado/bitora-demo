@@ -1,0 +1,93 @@
+name: bitora-operational-readiness
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bitora_operational
+      POSTGRES_USER: bitora_operational
+      POSTGRES_PASSWORD: ${BITORA_OP_POSTGRES_PASSWORD:?Set BITORA_OP_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitora_operational -d bitora_operational"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - operational-postgres:/var/lib/postgresql/data
+
+  app1: &bitora-app
+    build:
+      context: .
+    environment: &bitora-env
+      APP_ENV: staging
+      BITORA_ENV: staging
+      QR_HOST: 0.0.0.0
+      QR_PORT: 8787
+      QR_DB_ENGINE: postgres
+      QR_POSTGRES_DSN: postgresql://bitora_operational:${BITORA_OP_POSTGRES_PASSWORD}@postgres:5432/bitora_operational
+      DATABASE_URL: postgresql://bitora_operational:${BITORA_OP_POSTGRES_PASSWORD}@postgres:5432/bitora_operational
+      BASE_URL: https://bitora-operational.local
+      BITORA_PUBLIC_URL: https://bitora-operational.local
+      HTTPS_REQUIRED: "true"
+      QR_REQUIRE_LOGIN: "true"
+      BITORA_COOKIE_SECURE: "true"
+      BITORA_TRUST_PROXY: "true"
+      BITORA_ALLOWED_HOSTS: bitora-operational.local,localhost,127.0.0.1
+      BITORA_SAFE_MODE: "true"
+      BITORA_LIVE_MODE: "false"
+      BITORA_COMMUNICATIONS_LIVE_MODE_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      EMAIL_SAFE_MODE: "true"
+      WHATSAPP_ENABLED: "false"
+      WHATSAPP_SAFE_MODE: "true"
+      BITORA_DISABLE_EMBEDDED_WORKER: "1"
+      BITORA_STORAGE_PATH: /bitora/storage
+      BITORA_BACKUP_PATH: /bitora/backups
+      SECRET_KEY: ${BITORA_OP_SECRET_KEY:?Set BITORA_OP_SECRET_KEY}
+      SESSION_SECRET: ${BITORA_OP_SESSION_SECRET:?Set BITORA_OP_SESSION_SECRET}
+      BITORA_SPEAKER_SECRET: ${BITORA_OP_SPEAKER_SECRET:?Set BITORA_OP_SPEAKER_SECRET}
+      BITORA_SURVEY_SECRET: ${BITORA_OP_SURVEY_SECRET:?Set BITORA_OP_SURVEY_SECRET}
+      BITORA_DATASET_SIGNING_KEY: ${BITORA_OP_DATASET_SIGNING_KEY:?Set BITORA_OP_DATASET_SIGNING_KEY}
+      BITORA_ADMIN_BOOTSTRAP_USER: ${BITORA_OP_ADMIN_USER:?Set BITORA_OP_ADMIN_USER}
+      BITORA_ADMIN_BOOTSTRAP_PASSWORD: ${BITORA_OP_ADMIN_PASSWORD:?Set BITORA_OP_ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/ready', timeout=4).read()"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 20
+    volumes:
+      - operational-storage:/bitora/storage
+      - operational-backups:/bitora/backups
+
+  app2:
+    <<: *bitora-app
+    environment:
+      <<: *bitora-env
+      BITORA_DISABLE_EMBEDDED_WORKER: "1"
+
+  gateway:
+    image: nginx:1.29-alpine
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18787:8080"
+    volumes:
+      - ./deployment/operational-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  operational-postgres:
+  operational-storage:
+  operational-backups:
+

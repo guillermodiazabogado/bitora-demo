@@ -1,0 +1,55 @@
+name: BITORA Operational Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      endurance_seconds:
+        description: Integrated HTTP/PostgreSQL duration in seconds
+        required: true
+        default: "60"
+
+jobs:
+  operational:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked application dependencies
+        run: pip install -r requirements.lock
+      - name: Static operational gates
+        run: |
+          python verificar_operational_postgres_restore.py
+          python verificar_operational_multiinstance.py
+          python verificar_operational_staging.py
+          python verificar_operational_security.py
+          python scripts/secret_scan.py
+          python verificar_persistent_sessions.py
+          python verificar_session_revocation_security.py
+      - name: Audit locked Python dependencies
+        run: |
+          python -m pip install pip-audit==2.10.1
+          pip-audit -r requirements.lock --format json --output artifacts/pip-audit.json
+      - name: PostgreSQL backup and restore
+        run: python scripts/operational_postgres_restore.py --report artifacts/postgres-restore.json
+      - name: Multi-instance and integrated endurance
+        run: >-
+          python scripts/operational_multiinstance.py
+          --endurance-seconds "${{ inputs.endurance_seconds }}"
+          --report artifacts/multiinstance-endurance.json
+      - name: Build candidate image
+        run: docker build -t bitora-operational:${{ github.sha }} .
+      - name: Scan candidate image
+        run: >-
+          python scripts/operational_cve_scan.py
+          --image bitora-operational:${{ github.sha }}
+          --report artifacts/cve-image.json
+      - name: Upload operational evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitora-operational-readiness-${{ github.sha }}
+          path: artifacts/*.json
+          if-no-files-found: warn
