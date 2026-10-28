@@ -1,6 +1,9 @@
 name: BITORA Operational Readiness
 
 on:
+  push:
+    branches:
+      - certification/5.8.2-operational-readiness
   workflow_dispatch:
     inputs:
       endurance_seconds:
