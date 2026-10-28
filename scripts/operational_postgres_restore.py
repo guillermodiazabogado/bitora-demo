@@ -55,7 +55,7 @@ def main() -> int:
         docker("build", "-t", image, ".", timeout=1200)
         env = ["-e", "APP_ENV=development", "-e", "BITORA_SAFE_MODE=true", "-e", "QR_DB_ENGINE=postgres", "-e", f"QR_POSTGRES_DSN={dsn}", "-e", f"DATABASE_URL={dsn}"]
         docker("run", "--rm", "--network", network, *env, image, "python", "-c", "import server; server.init_db(); server.seed_if_empty()", timeout=600)
-        sql(container, source_db, "INSERT INTO technical_logs(level,category,message,details,created_at) VALUES ('info','operational_restore','controlled-marker','{}',CURRENT_TIMESTAMP)")
+        sql(container, source_db, "INSERT INTO technical_logs(level,module,message,detail,request_path,created_at) VALUES ('info','operational_restore','controlled-marker','{}','operational-restore',CURRENT_TIMESTAMP)")
         summary_query = "SELECT json_build_object('migrations',(SELECT count(*) FROM schema_migrations),'users',(SELECT count(*) FROM users),'events',(SELECT count(*) FROM events),'marker',(SELECT count(*) FROM technical_logs WHERE message='controlled-marker'))::text"
         source_summary = json.loads(sql(container, source_db, summary_query))
         backup_started = time.perf_counter()

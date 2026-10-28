@@ -12,6 +12,7 @@ required = {
     "observed_rpo_seconds": "RPO observation",
     "not a production RPO objective": "RPO qualification",
     'docker("rm", "-f", container': "isolated cleanup",
+    "technical_logs(level,module,message,detail,request_path,created_at)": "current technical_logs schema",
 }
 missing = [label for token, label in required.items() if token not in source]
 forbidden = [token for token in ("docker system prune", "docker volume prune", "DROP DATABASE bitora_staging") if token.lower() in source.lower()]
