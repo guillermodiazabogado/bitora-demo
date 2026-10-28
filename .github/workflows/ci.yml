@@ -109,8 +109,10 @@ jobs:
         run: |
           docker run -d --name bitora-ci-runtime \
             -p 8787:8787 \
-            -e APP_ENV=testing \
-            -e BITORA_ENV=testing \
+            -e APP_ENV=development \
+            -e BITORA_ENV=development \
+            -e BITORA_SAFE_MODE=true \
+            -e BITORA_LIVE_MODE=false \
             -e QR_HOST=0.0.0.0 \
             -e QR_DB_ENGINE=sqlite \
             -e QR_DB_PATH=/tmp/bitora-ci.db \
