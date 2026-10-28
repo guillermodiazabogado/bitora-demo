@@ -6,15 +6,19 @@ on:
       - certification/5.8.2-operational-readiness
   workflow_dispatch:
     inputs:
-      endurance_seconds:
-        description: Integrated HTTP/PostgreSQL duration in seconds
+      endurance_stage:
+        description: Integrated HTTP/PostgreSQL field-readiness stage
         required: true
-        default: "300"
+        type: choice
+        options:
+          - 15m
+          - 60m
+        default: 15m
 
 jobs:
   operational:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,8 +45,9 @@ jobs:
         run: python scripts/operational_postgres_restore.py --report artifacts/postgres-restore.json
       - name: Multi-instance and integrated endurance
         run: >-
-          python scripts/operational_multiinstance.py
-          --endurance-seconds "${{ inputs.endurance_seconds || '300' }}"
+          python scripts/operational_integrated_endurance.py
+          --stage "${{ inputs.endurance_stage || '15m' }}"
+          --checkpoint artifacts/field-endurance-checkpoint.json
           --report artifacts/multiinstance-endurance.json
       - name: Build candidate image
         run: docker build -t bitora-operational:${{ github.sha }} .
