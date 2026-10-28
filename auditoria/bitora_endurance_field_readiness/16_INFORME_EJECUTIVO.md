@@ -6,6 +6,8 @@ Los runs remotos `40735837313` y `40738606063` demostraron HTTP + PostgreSQL 16 
 
 La endurance de seis horas no puede ejecutarse honestamente en el recurso disponible: no hay runner self-hosted y el límite del runner hospedado es seis horas, sin margen para preparar o cerrar evidencia. Permanece BLOCKED, no PASS.
 
+El commit final funcional `a402f8e48db842454738561374e18efa7454bf8e` agregó el disparo explícito de CI y aprobó el Run `40749664713`, incluyendo PostgreSQL, SBOM, Docker build y healthcheck. La rama auxiliar `release/5.8.2-endurance-field-ci` solo se utilizó para activar el workflow existente; no hubo merge, release ni despliegue.
+
 Decisiones vigentes:
 
 - Software: GO.

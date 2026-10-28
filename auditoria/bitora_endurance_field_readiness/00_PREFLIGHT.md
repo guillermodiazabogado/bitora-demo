@@ -6,6 +6,7 @@
 - Worktree: aislado del checkout principal con cambios del usuario.
 - Publicación remota: **NO EJECUTADA**.
 - SHA local evaluado por QA: `3fa5c7da55677b32d9babc2aeb49a3e72bf66e7d`.
+- SHA funcional final certificado por CI: `a402f8e48db842454738561374e18efa7454bf8e` (Run `40749664713`).
 - Docker CLI: presente; daemon local sin respuesta dentro de 30 segundos.
 - Runner requerido para pruebas Docker prolongadas: GitHub Actions o runner persistente autorizado.
 - Producción, bases reales y secretos productivos: fuera de alcance.
