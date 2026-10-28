@@ -67,6 +67,7 @@ jobs:
           python verificar_command_center_controls.py
           python -m tools.edge_client.verify_reference_client
           python verificar_persistent_sessions.py
+          python verificar_session_revocation_security.py
           python verificar_multievent_isolation_20_events.py
           python verificar_e2e_10_participants_closure.py
           python verificar_v5_1_access_state_engine_shadow.py

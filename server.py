@@ -7933,7 +7933,24 @@ class AppHandler(SimpleHTTPRequestHandler):
             stored = store.get(token, touch=True)
             if not stored:
                 return None
-            session = {"id": stored.user_id, **stored.data}
+            user = db.execute("SELECT * FROM users WHERE id = ? AND active = 1", (stored.user_id,)).fetchone()
+            if not user:
+                store.revoke(token)
+                return None
+            stored_role = str(stored.data.get("role") or "")
+            current_role = str(user["role"] or "")
+            if stored_role != current_role:
+                # A platform-role change invalidates the authorization snapshot.
+                # Reauthentication is required before the new role takes effect.
+                store.revoke(token)
+                return None
+            session = {
+                "id": stored.user_id,
+                **stored.data,
+                "name": str(user["name"] or ""),
+                "role": current_role,
+                "must_change_password": int(user["must_change_password"] or 0),
+            }
             csrf_token = cookies.get("qr_csrf", "")
             if csrf_token and store.verify_csrf(token, csrf_token):
                 session["csrf_token"] = csrf_token
@@ -13232,14 +13249,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (hash_pin(new_pin), now, now, int(user["id"])),
                     )
                     audit(db, user["name"], "user.password_changed", "user", int(user["id"]), {"self_service": True})
-                token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
-                if token:
-                    with connect() as db:
-                        store = SessionStore(db)
-                        current = store.get(token)
-                        if current:
-                            store.update(token, data={**current.data, "must_change_password": 0})
-                self.send_json({"ok": True})
+                    SessionStore(db).revoke_user(int(user["id"]))
+                self.send_json({"ok": True, "reauthentication_required": True})
                 return
 
             if path == "/api/admin/bootstrap-reset":
@@ -13286,6 +13297,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (hash_pin(password), now, now, int(user["id"])),
                     )
                     audit(db, "bootstrap", "user.bootstrap_admin_reset_endpoint", "user", int(user["id"]), {"name": user["name"], "reset_token_hash": token_hash})
+                    SessionStore(db).revoke_user(int(user["id"]))
                 self.send_json({"ok": True, "user": bootstrap_user, "must_change_password": True})
                 return
 
@@ -15067,6 +15079,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not can_actor(db, actor, ADMIN_ROLES):
                         self.send_json(deny_message(actor), 403)
                         return
+                    existing = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
                     now = now_iso()
                     db.execute(
                         """
@@ -15086,6 +15099,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     )
                     row = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
                     audit(db, actor, "user.saved", "user", int(row["id"]) if row else None, {"name": name, "role": role, "active": active, "must_change_password": must_change})
+                    if existing and row and (
+                        str(existing["role"] or "") != str(row["role"] or "")
+                        or int(existing["active"] or 0) != int(row["active"] or 0)
+                        or bool(password)
+                    ):
+                        SessionStore(db).revoke_user(int(row["id"]))
                 self.send_json({"ok": True, "user": sanitize_user_row(row) if row else None})
                 return
 
@@ -15116,6 +15135,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (hash_pin(password), now, now, user_id),
                     )
                     audit(db, actor, "user.password_reset", "user", user_id, {"name": row["name"], "must_change_password": 1})
+                    SessionStore(db).revoke_user(user_id)
                 response = {"ok": True}
                 if generate:
                     response["temporary_password"] = password
@@ -15147,6 +15167,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                         (active, now, now if not active else None, user_id),
                     )
                     audit(db, actor, "user.activated" if active else "user.deactivated", "user", user_id, {"name": row["name"]})
+                    if not active:
+                        SessionStore(db).revoke_user(user_id)
                 self.send_json({"ok": True})
                 return
 
