@@ -37,7 +37,6 @@ def main() -> None:
     original_backup_dir = server.BACKUP_DIR
     httpd = None
     try:
-        server.AUTH_SESSIONS.clear()
         server.DB_PATH = temp_root / "auth.sqlite3"
         server.BACKUP_DIR = temp_root / "backups"
         server.init_db()
@@ -55,7 +54,7 @@ def main() -> None:
         base = f"http://127.0.0.1:{httpd.server_address[1]}"
 
         login, headers = call(base, "/api/auth/login", {"name": "Admin", "pin": password})
-        cookie = headers.get("Set-Cookie", "").split(";", 1)[0]
+        cookie = "; ".join(value.split(";", 1)[0] for value in (headers.get_all("Set-Cookie") or []))
         if not cookie or not login.get("csrf_token"):
             raise AssertionError((cookie, login))
         with server.connect() as db:
@@ -88,7 +87,6 @@ def main() -> None:
         if httpd:
             httpd.shutdown()
             httpd.server_close()
-        server.AUTH_SESSIONS.clear()
         server.DB_PATH = original_db_path
         server.BACKUP_DIR = original_backup_dir
         shutil.rmtree(temp_root, ignore_errors=True)

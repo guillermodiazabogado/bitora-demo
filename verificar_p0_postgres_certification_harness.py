@@ -39,7 +39,7 @@ def main() -> None:
         inventory = certify_postgres.migration_inventory()
         if set(inventory["duplicate_sequence_prefixes"]) != {"007", "015"}:
             raise AssertionError(inventory["duplicate_sequence_prefixes"])
-        if not migrations or migrations[-1].name != "048_auth_login_rate_limits.sql":
+        if not migrations or migrations[-1].name != "049_persistent_auth_sessions.sql":
             raise AssertionError(migrations[-1].name if migrations else "no migrations")
         print("P0 PostgreSQL certification harness safety and migration inventory: OK")
     finally:

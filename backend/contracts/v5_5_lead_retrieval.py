@@ -25,6 +25,17 @@ class EventScope:
             raise LeadRetrievalError("SCOPE_INVALID", "Organization y event son obligatorios", 400)
 
 
+@dataclass(frozen=True)
+class ActorContext:
+    user_id: int
+    name: str
+    role: str
+
+    @property
+    def can_manage_all_companies(self) -> bool:
+        return self.role in {"Super Admin", "Productor"}
+
+
 class LeadRetrievalContract:
     """Validated, transport-neutral boundary for V5.5 routes.
 
@@ -85,26 +96,28 @@ class LeadRetrievalContract:
             operation=operation,
         )
 
-    def list_company(self, db, scope: EventScope, company_id: Any) -> dict:
+    def list_company(self, db, scope: EventScope, company_id: Any, actor: ActorContext) -> dict:
         scope.validate()
         value = self._positive_int(company_id, "company_id")
         self._assert_company_scope(db, scope, value)
+        self._assert_actor_company_access(db, scope, value, actor, "leads.read")
         return {"ok": True, "items": self.service.list_leads(db, organization_id=scope.organization_id, event_id=scope.event_id, company_id=value)}
 
-    def export_company(self, db, scope: EventScope, company_id: Any, payload: dict[str, Any]) -> dict:
+    def export_company(self, db, scope: EventScope, company_id: Any, payload: dict[str, Any], actor: ActorContext) -> dict:
         scope.validate()
         fields = payload.get("fields")
         if not isinstance(fields, list):
             raise LeadRetrievalError("FIELDS_INVALID", "fields debe ser una lista", 400)
         company = self._positive_int(company_id, "company_id")
         self._assert_company_scope(db, scope, company)
+        self._assert_actor_company_access(db, scope, company, actor, "leads.export")
         return self.service.export_csv(
             db,
             organization_id=scope.organization_id,
             event_id=scope.event_id,
             company_id=company,
             fields=[self._key(item, 40).lower() for item in fields],
-            exported_by=self._text(payload.get("exported_by"), 120),
+            exported_by=self._text(actor.name, 120),
             idempotency_key=self._idempotency(payload),
         )
 
@@ -116,6 +129,36 @@ class LeadRetrievalContract:
         ).fetchone()
         if not row:
             raise LeadRetrievalError("COMPANY_SCOPE_ERROR", "Company fuera de evento", 403)
+
+    @staticmethod
+    def _assert_actor_company_access(db, scope: EventScope, company_id: int, actor: ActorContext, permission: str) -> None:
+        if actor.can_manage_all_companies:
+            return
+        if actor.user_id <= 0:
+            raise LeadRetrievalError("COMPANY_ACCESS_DENIED", "Acceso a company denegado", 403)
+        row = db.execute(
+            """
+            SELECT ecu.permissions_json
+            FROM enterprise_company_users ecu
+            LEFT JOIN users u ON u.id = ?
+            WHERE ecu.organization_id = ? AND ecu.event_id = ? AND ecu.company_id = ?
+              AND ecu.status = 'ACTIVE'
+              AND (ecu.user_id = ? OR (u.email <> '' AND LOWER(ecu.email) = LOWER(u.email)))
+            LIMIT 1
+            """,
+            (actor.user_id, scope.organization_id, scope.event_id, company_id, actor.user_id),
+        ).fetchone()
+        if not row:
+            raise LeadRetrievalError("COMPANY_ACCESS_DENIED", "Acceso a company denegado", 403)
+        raw_permissions = row["permissions_json"] if hasattr(row, "keys") and "permissions_json" in row.keys() else row[0]
+        try:
+            import json
+
+            permissions = json.loads(raw_permissions or "[]")
+        except (TypeError, ValueError):
+            permissions = []
+        if permission not in permissions and "*" not in permissions:
+            raise LeadRetrievalError("COMPANY_ACCESS_DENIED", "Acceso a company denegado", 403)
 
     @staticmethod
     def _idempotency(payload: dict[str, Any]) -> str:

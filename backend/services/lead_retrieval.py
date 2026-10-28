@@ -178,7 +178,10 @@ class LeadRetrievalService:
 
     def _consent(self, db, organization_id, event_id, entity_id, company_id, consent_id=None):
         if consent_id:
-            return db.execute("SELECT * FROM enterprise_lead_consents WHERE id = ? AND organization_id = ? AND event_id = ? AND participant_entity_id = ? AND status = 'GRANTED'", (consent_id, organization_id, event_id, entity_id)).fetchone()
+            return db.execute(
+                "SELECT * FROM enterprise_lead_consents WHERE id = ? AND organization_id = ? AND event_id = ? AND participant_entity_id = ? AND (company_id IS NULL OR company_id = ?) AND status = 'GRANTED'",
+                (consent_id, organization_id, event_id, entity_id, company_id),
+            ).fetchone()
         return db.execute("SELECT * FROM enterprise_lead_consents WHERE organization_id = ? AND event_id = ? AND participant_entity_id = ? AND (company_id IS NULL OR company_id = ?) AND status = 'GRANTED' ORDER BY id DESC LIMIT 1", (organization_id, event_id, entity_id, company_id)).fetchone()
 
     def _company_user_allowed(self, db, organization_id, event_id, company_id, email):

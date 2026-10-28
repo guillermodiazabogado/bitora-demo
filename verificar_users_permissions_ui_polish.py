@@ -46,7 +46,6 @@ def dynamic_delete_checks() -> tuple[bool, str]:
         server.DB_PATH = tmp
         server.BACKUP_DIR = backup_tmp
         server.AppHandler.log_message = lambda self, format, *args: None
-        server.AUTH_SESSIONS.clear()
         server.init_db()
         server.seed_if_empty()
         admin_pin = server.generate_temporary_password()
@@ -82,8 +81,9 @@ def dynamic_delete_checks() -> tuple[bool, str]:
         if delete_status != 200 or not delete_body.get("ok"):
             return False, f"eliminar usuario temporal devolvio {delete_status}: {delete_body}"
 
-        if session_token in server.AUTH_SESSIONS:
-            return False, "sesion del usuario eliminado siguio activa"
+        with server.connect() as db:
+            if server.SessionStore(db).get(session_token) is not None:
+                return False, "sesion del usuario eliminado siguio activa"
 
         relogin_status, _body, _ = request(base, "POST", "/api/auth/login", {"name": "DeleteVerifier", "pin": delete_pin})
         if relogin_status != 403:
@@ -199,9 +199,9 @@ def main() -> int:
         ),
         (
             "session_invalidation",
-            contains("server.py", "AUTH_SESSIONS.pop(token, None)")
+            contains("server.py", "SessionStore(session_db).revoke_user(user_id)")
             and contains("server.py", "deleted_user"),
-            "Sesiones en memoria del usuario eliminado se invalidan.",
+            "Sesiones persistentes del usuario eliminado se invalidan.",
         ),
         (
             "static_sync",

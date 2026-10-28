@@ -40,6 +40,7 @@ from reportlab.platypus import (
 
 from backend.database import connect_database, integrity_error_types, is_postgres_connection, load_database_config, migration_status, run_postgres_migrations
 from backend.security.passwords import hash_password, verify_and_upgrade, verify_password
+from backend.security.sessions import SessionStore
 from backend.repositories import create_repository
 from backend.services.access_state_engine import AccessStateContext, AccessStateEngine
 from backend.services.access_validation import AccessValidationService
@@ -94,7 +95,7 @@ from backend.services.whatsapp import (
     whatsapp_safe_mode_enabled,
 )
 from backend.application.vouchers import VoucherApplicationContract, VoucherContractError, VoucherScope
-from backend.contracts.v5_5_lead_retrieval import EventScope as LeadEventScope, LeadRetrievalContract
+from backend.contracts.v5_5_lead_retrieval import ActorContext as LeadActorContext, EventScope as LeadEventScope, LeadRetrievalContract
 from backend.contracts.v5_6_vehicle_logistics import EventScope as VehicleEventScope, VehicleLogisticsContract
 from backend.services.zones import ZoneDomainError, ZonePermissionService
 from backend.storage import StorageService
@@ -128,7 +129,6 @@ APP_ENV = os.environ.get("APP_ENV", os.environ.get("QR_APP_ENV", "development"))
 BASE_URL = os.environ.get("BASE_URL", "").strip().rstrip("/")
 HTTPS_REQUIRED = os.environ.get("HTTPS_REQUIRED", "").lower() in {"1", "true", "si", "yes"}
 STARTED_AT = now_iso() if "now_iso" in globals() else datetime.now(timezone.utc).isoformat(timespec="seconds")
-AUTH_SESSIONS: dict[str, dict] = {}
 RUNTIME_SPEAKER_SECRET = os.environ.get("BITORA_SPEAKER_SECRET", "").strip() or secrets.token_urlsafe(48)
 RUNTIME_SURVEY_SECRET = os.environ.get("BITORA_SURVEY_SECRET", "").strip() or secrets.token_urlsafe(48)
 REQUIRE_LOGIN = os.environ.get("QR_REQUIRE_LOGIN", "").lower() in {"1", "true", "si", "yes"}
@@ -2308,9 +2308,9 @@ def ensure_v5_8_schema(db: sqlite3.Connection) -> None:
 
 
 def ensure_security_schema(db: sqlite3.Connection) -> None:
-    migration = ROOT / "backend" / "migrations" / "048_auth_login_rate_limits.sql"
-    sql = migration.read_text(encoding="utf-8")
-    db.executescript(sql)
+    for name in ("048_auth_login_rate_limits.sql", "049_persistent_auth_sessions.sql"):
+        migration = ROOT / "backend" / "migrations" / name
+        db.executescript(migration.read_text(encoding="utf-8"))
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -7825,6 +7825,15 @@ def session_cookie_header(token: str, *, clear: bool = False) -> str:
     return "; ".join(parts)
 
 
+def csrf_cookie_header(token: str, *, clear: bool = False) -> str:
+    parts = [f"qr_csrf={token}", "Path=/", "SameSite=Strict"]
+    if clear:
+        parts.append("Max-Age=0")
+    if APP_ENV in {"production", "staging"} or str(BASE_URL).lower().startswith("https://"):
+        parts.append("Secure")
+    return "; ".join(parts)
+
+
 def login_request_fingerprint(handler: SimpleHTTPRequestHandler, name: str) -> str:
     remote_address = str((handler.client_address or ("", 0))[0] or "unknown")
     salt = os.environ.get("SESSION_SECRET", "").strip() or str(DB_PATH.resolve())
@@ -7915,13 +7924,19 @@ class AppHandler(SimpleHTTPRequestHandler):
         return bool(getattr(self.server, "require_login", False))
 
     def session_user(self) -> dict | None:
-        token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
-        session = AUTH_SESSIONS.get(token)
-        if not session:
+        cookies = parse_cookies(self.headers.get("Cookie"))
+        token = cookies.get("qr_session", "")
+        if not token:
             return None
-        if time.time() - float(session.get("created_at", 0)) > 12 * 60 * 60:
-            AUTH_SESSIONS.pop(token, None)
-            return None
+        with connect() as db:
+            store = SessionStore(db)
+            stored = store.get(token, touch=True)
+            if not stored:
+                return None
+            session = {"id": stored.user_id, **stored.data}
+            csrf_token = cookies.get("qr_csrf", "")
+            if csrf_token and store.verify_csrf(token, csrf_token):
+                session["csrf_token"] = csrf_token
         return session
 
     def is_authenticated(self) -> bool:
@@ -8136,7 +8151,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 result = contract.participant(db, scope, str(self.headers.get("X-Credential-Token") or ""))
                         elif lead_get_match:
                             result = LeadRetrievalContract(lead_retrieval_service()).list_company(
-                                db, LeadEventScope(organization_id, event_id), int(lead_get_match.group(3))
+                                db,
+                                LeadEventScope(organization_id, event_id),
+                                int(lead_get_match.group(3)),
+                                LeadActorContext(
+                                    int((allowed_session or {}).get("id") or 0),
+                                    str((allowed_session or {}).get("name") or ""),
+                                    str((allowed_session or {}).get("role") or ""),
+                                ),
                             )
                         else:
                             result = VehicleLogisticsContract(vehicle_logistics_service()).dashboard(
@@ -9410,7 +9432,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                             "worker_alive": bool(WORKER and WORKER.thread and WORKER.thread.is_alive()),
                             "worker_heartbeat_age": round(time.time() - WORKER.last_heartbeat, 2) if WORKER and WORKER.last_heartbeat else None,
                         },
-                        sessions=list(AUTH_SESSIONS.values()),
+                        sessions=SessionStore(db).active_payloads(),
                         auto_backup_minutes=AUTO_BACKUP_MINUTES,
                     )
                     whatsapp_provider = create_whatsapp_provider()
@@ -11708,7 +11730,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                             result = contract.capture(db, LeadEventScope(organization_id, event_id), payload) if lead_post_match.group(3) == "captures" else contract.offline_sync(db, LeadEventScope(organization_id, event_id), payload)
                         elif lead_export_match:
                             result = LeadRetrievalContract(lead_retrieval_service()).export_company(
-                                db, LeadEventScope(organization_id, event_id), int(lead_export_match.group(3)), data
+                                db,
+                                LeadEventScope(organization_id, event_id),
+                                int(lead_export_match.group(3)),
+                                data,
+                                LeadActorContext(
+                                    int((allowed_session or {}).get("id") or 0),
+                                    str((allowed_session or {}).get("name") or actor),
+                                    str((allowed_session or {}).get("role") or ""),
+                                ),
                             )
                         else:
                             contract = VehicleLogisticsContract(vehicle_logistics_service())
@@ -13154,10 +13184,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                 token = secrets.token_urlsafe(32)
                 csrf_token = secrets.token_urlsafe(32)
                 must_change = int(user["must_change_password"] or 0) if "must_change_password" in user.keys() else 0
-                AUTH_SESSIONS[token] = {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change, "csrf_token": csrf_token, "created_at": time.time()}
+                with connect() as db:
+                    SessionStore(db).create(
+                        token,
+                        int(user["id"]),
+                        csrf_token,
+                        {"name": user["name"], "role": user["role"], "must_change_password": must_change},
+                        ttl_seconds=12 * 60 * 60,
+                    )
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Set-Cookie", session_cookie_header(token))
+                self.send_header("Set-Cookie", csrf_cookie_header(csrf_token))
                 body = json.dumps({"ok": True, "csrf_token": csrf_token, "user": {"id": int(user["id"]), "name": user["name"], "role": user["role"], "must_change_password": must_change}}, ensure_ascii=False).encode("utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -13195,8 +13233,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     )
                     audit(db, user["name"], "user.password_changed", "user", int(user["id"]), {"self_service": True})
                 token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
-                if token in AUTH_SESSIONS:
-                    AUTH_SESSIONS[token]["must_change_password"] = 0
+                if token:
+                    with connect() as db:
+                        store = SessionStore(db)
+                        current = store.get(token)
+                        if current:
+                            store.update(token, data={**current.data, "must_change_password": 0})
                 self.send_json({"ok": True})
                 return
 
@@ -13632,10 +13674,13 @@ class AppHandler(SimpleHTTPRequestHandler):
 
             if path == "/api/auth/logout":
                 token = parse_cookies(self.headers.get("Cookie")).get("qr_session", "")
-                AUTH_SESSIONS.pop(token, None)
+                if token:
+                    with connect() as db:
+                        SessionStore(db).revoke(token)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Set-Cookie", session_cookie_header("", clear=True))
+                self.send_header("Set-Cookie", csrf_cookie_header("", clear=True))
                 body = b'{"ok": true}'
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -15140,9 +15185,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                     }
                     audit(db, actor, "user.deleted", "user", user_id, payload)
                     db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-                for token, auth_session in list(AUTH_SESSIONS.items()):
-                    if int(auth_session.get("id") or 0) == user_id:
-                        AUTH_SESSIONS.pop(token, None)
+                with connect() as session_db:
+                    SessionStore(session_db).revoke_user(user_id)
                 self.send_json({"ok": True, "deleted_user": {"id": user_id, "name": payload["name"], "role": payload["role"]}})
                 return
 
