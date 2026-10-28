@@ -23,6 +23,7 @@ def main() -> None:
         "restart_preserves_shared_session": "restart continuity",
         'base_a = mapped_url(app_a)': "post-restart port discovery",
         "multievent_isolation": "multi-event isolation",
+        'if not isinstance(events, list)': "events API list contract",
         "concurrent_entry_anti_passback": "concurrent anti-passback",
         "cross_instance_idempotent_replay": "idempotency",
         "integrated_http_postgres_endurance": "integrated HTTP/PostgreSQL endurance",

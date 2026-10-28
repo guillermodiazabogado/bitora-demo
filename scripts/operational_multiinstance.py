@@ -227,7 +227,9 @@ def main() -> int:
         operator = Client()
         operator.login(base_a, "multi-access", "Operational-Access-582!")
         status, events = operator.request(base_b, "/api/events", expected={200})
-        visible = {int(item["id"]) for item in events.get("items", [])}
+        if not isinstance(events, list):
+            raise HarnessError(f"EVENTS_CONTRACT:{type(events).__name__}")
+        visible = {int(item["id"]) for item in events}
         isolation_status, _ = operator.request(
             base_b, f"/api/events/{setup['isolated_event_id']}/command-center-v5", expected={403}
         )
