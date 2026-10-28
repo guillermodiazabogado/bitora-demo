@@ -28,6 +28,7 @@ jobs:
           python verificar_operational_multiinstance.py
           python verificar_operational_staging.py
           python verificar_operational_security.py
+          python verificar_operational_workflow.py
           python scripts/secret_scan.py
           python verificar_persistent_sessions.py
           python verificar_session_revocation_security.py
@@ -41,7 +42,7 @@ jobs:
       - name: Multi-instance and integrated endurance
         run: >-
           python scripts/operational_multiinstance.py
-          --endurance-seconds "${{ inputs.endurance_seconds }}"
+          --endurance-seconds "${{ inputs.endurance_seconds || '60' }}"
           --report artifacts/multiinstance-endurance.json
       - name: Build candidate image
         run: docker build -t bitora-operational:${{ github.sha }} .
