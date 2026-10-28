@@ -5,6 +5,7 @@
 - Rama local: `certification/5.8.2-endurance-field-readiness`.
 - Worktree: aislado del checkout principal con cambios del usuario.
 - Publicación remota: **NO EJECUTADA**.
+- SHA local evaluado por QA: `3fa5c7da55677b32d9babc2aeb49a3e72bf66e7d`.
 - Docker CLI: presente; daemon local sin respuesta dentro de 30 segundos.
 - Runner requerido para pruebas Docker prolongadas: GitHub Actions o runner persistente autorizado.
 - Producción, bases reales y secretos productivos: fuera de alcance.
