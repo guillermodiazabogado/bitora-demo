@@ -56,6 +56,21 @@ def connect_database(config: DatabaseConfig, sqlite_path: Path | None = None):
     return conn
 
 
+def connect_database_probe(config: DatabaseConfig, sqlite_path: Path | None = None, *, timeout_seconds: int = 1):
+    """Open a short-lived, fail-fast connection for health/readiness probes."""
+    if config.engine != "postgres":
+        return connect_database(config, sqlite_path)
+    if not config.postgres_dsn:
+        raise RuntimeError("QR_POSTGRES_DSN es obligatorio cuando QR_DB_ENGINE=postgres")
+    psycopg, dict_row = _load_psycopg()
+    return psycopg.connect(
+        config.postgres_dsn,
+        row_factory=dict_row,
+        autocommit=True,
+        connect_timeout=max(1, int(timeout_seconds)),
+    )
+
+
 def run_postgres_migrations(config: DatabaseConfig, migrations_dir: Path) -> list[str]:
     if config.engine != "postgres":
         return []

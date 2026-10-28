@@ -39,7 +39,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from backend.database import connect_database, integrity_error_types, is_postgres_connection, load_database_config, migration_status, run_postgres_migrations
+from backend.database import connect_database, connect_database_probe, integrity_error_types, is_postgres_connection, load_database_config, migration_status, run_postgres_migrations
 from backend.security.passwords import hash_password, verify_and_upgrade, verify_password
 from backend.security.sessions import SessionStore
 from backend.repositories import create_repository
@@ -118,6 +118,10 @@ STORAGE_ROOT = Path(os.environ.get("BITORA_STORAGE_PATH", str(ROOT / "storage"))
 if not STORAGE_ROOT.is_absolute():
     STORAGE_ROOT = ROOT / STORAGE_ROOT
 STORAGE_BACKEND = os.environ.get("BITORA_STORAGE_PROVIDER", os.environ.get("STORAGE_BACKEND", "local")).strip().lower() or "local"
+DB_PROBE_CACHE_TTL_SECONDS = max(0.5, float(os.environ.get("BITORA_DB_PROBE_CACHE_SECONDS", "2")))
+DB_PROBE_TIMEOUT_SECONDS = max(1, int(os.environ.get("BITORA_DB_PROBE_TIMEOUT_SECONDS", "1")))
+DB_PROBE_LOCK = threading.Lock()
+DB_PROBE_CACHE: dict[str, object] = {"at": 0.0, "value": None}
 DB_LOCK = threading.Lock()
 BACKUP_STOP = threading.Event()
 WORKER: JobWorker | None = None
@@ -678,17 +682,46 @@ def validate_production_configuration(environment: dict[str, str] | None = None)
     }
 
 
+def database_probe_snapshot() -> dict:
+    now = time.monotonic()
+    cached = DB_PROBE_CACHE.get("value")
+    if cached is not None and now - float(DB_PROBE_CACHE.get("at") or 0.0) < DB_PROBE_CACHE_TTL_SECONDS:
+        return dict(cached)
+    with DB_PROBE_LOCK:
+        now = time.monotonic()
+        cached = DB_PROBE_CACHE.get("value")
+        if cached is not None and now - float(DB_PROBE_CACHE.get("at") or 0.0) < DB_PROBE_CACHE_TTL_SECONDS:
+            return dict(cached)
+        result = {
+            "db_status": "offline",
+            "pending": 0,
+            "failed": 0,
+            "migrations_ok": False,
+            "migration_detail": {"ok": False, "mode": DB_CONFIG.engine, "error": "database_unavailable"},
+        }
+        try:
+            with connect_database_probe(DB_CONFIG, DB_PATH, timeout_seconds=DB_PROBE_TIMEOUT_SECONDS) as db:
+                db.execute("SELECT 1 AS ok").fetchone()
+                result["pending"] = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status IN ('pending', 'retrying', 'processing')").fetchone()["c"] or 0)
+                result["failed"] = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status = 'failed'").fetchone()["c"] or 0)
+                if DB_CONFIG.engine == "postgres":
+                    result["migration_detail"] = migration_status(db, ROOT / "backend" / "migrations")
+                else:
+                    result["migration_detail"] = {"ok": True, "mode": "embedded_sqlite_schema", "expected_count": 0, "applied_count": 0, "missing": [], "unexpected": [], "duplicates": []}
+                result["migrations_ok"] = bool(result["migration_detail"]["ok"])
+                result["db_status"] = "online"
+        except Exception:
+            pass
+        DB_PROBE_CACHE["at"] = now
+        DB_PROBE_CACHE["value"] = dict(result)
+        return result
+
+
 def production_health_payload() -> tuple[dict, int]:
-    db_status = "online"
-    try:
-        with connect() as db:
-            db.execute("SELECT 1 AS ok").fetchone()
-            pending = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status IN ('pending', 'retrying', 'processing')").fetchone()["c"] or 0)
-            failed = int(db.execute("SELECT COUNT(*) AS c FROM jobs WHERE status = 'failed'").fetchone()["c"] or 0)
-    except Exception:
-        db_status = "offline"
-        pending = 0
-        failed = 0
+    probe = database_probe_snapshot()
+    db_status = str(probe["db_status"])
+    pending = int(probe["pending"])
+    failed = int(probe["failed"])
     backup_files = []
     if BACKUP_DIR.exists():
         backup_files = sorted(
@@ -721,25 +754,12 @@ def production_health_payload() -> tuple[dict, int]:
 
 def readiness_payload() -> tuple[dict, int]:
     configuration = validate_production_configuration()
-    db_ok = False
-    migrations_ok = False
-    migration_detail = {"ok": False, "mode": "unknown"}
+    probe = database_probe_snapshot()
+    db_ok = probe["db_status"] == "online"
+    migrations_ok = bool(probe["migrations_ok"])
+    migration_detail = dict(probe["migration_detail"])
     storage_check = STORAGE.check()
     storage_ok = bool(storage_check.get("ok"))
-    try:
-        with connect() as db:
-            db.execute("SELECT 1 AS ok").fetchone()
-            if DB_CONFIG.engine == "postgres":
-                migration_detail = migration_status(db, ROOT / "backend" / "migrations")
-                migrations_ok = bool(migration_detail["ok"])
-            else:
-                migration_detail = {"ok": True, "mode": "embedded_sqlite_schema", "expected_count": 0, "applied_count": 0, "missing": [], "unexpected": [], "duplicates": []}
-                migrations_ok = True
-            db_ok = True
-    except Exception as exc:
-        db_ok = False
-        migrations_ok = False
-        migration_detail = {"ok": False, "mode": DB_CONFIG.engine, "error": safe_public_error(exc)}
     checks = {
         "configuration": configuration["ok"],
         "database": db_ok,
