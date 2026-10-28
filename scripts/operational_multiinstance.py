@@ -143,7 +143,7 @@ def main() -> int:
     app_a = f"{prefix}-app-a"
     app_b = f"{prefix}-app-b"
     image = f"{prefix}:test"
-    dsn = "postgresql://bitora:operational-temporary@postgres:5432/bitora?connect_timeout=3"
+    dsn = "postgresql://bitora:operational-temporary@postgres:5432/bitora?connect_timeout=1"
     env = [
         "-e", "APP_ENV=development",
         "-e", "BITORA_ENV=development",
@@ -157,7 +157,7 @@ def main() -> int:
         "-e", "QR_PORT=8787",
         "-e", "BITORA_DISABLE_EMBEDDED_WORKER=1",
         "-e", "QR_AUTO_BACKUP_MINUTES=0",
-        "-e", "DB_CONNECTION_TIMEOUT=3",
+        "-e", "DB_CONNECTION_TIMEOUT=1",
     ]
     report: dict = {
         "ok": False,
