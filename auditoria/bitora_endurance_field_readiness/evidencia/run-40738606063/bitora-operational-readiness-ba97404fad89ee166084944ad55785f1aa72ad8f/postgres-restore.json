@@ -1,0 +1,38 @@
+{
+  "backup": {
+    "bytes": 927801,
+    "seconds": 0.347,
+    "sha256": "2e81a1ce938d18dd51dfc8b483567e9c80991a130a589b4be687f07269329ea1"
+  },
+  "checks": {
+    "checksum_created": true,
+    "constraints_present": true,
+    "content_equal": true,
+    "controlled_marker_restored": true,
+    "nonempty_backup": true
+  },
+  "constraints_after_restore": 988,
+  "finished_at": "2026-10-28T17:45:38.041757+00:00",
+  "observed_rpo_seconds": 0,
+  "observed_rto_seconds": 1.844,
+  "ok": true,
+  "restore": {
+    "seconds": 1.844
+  },
+  "restored_summary": {
+    "events": 1,
+    "marker": 1,
+    "migrations": 51,
+    "users": 8
+  },
+  "rpo_qualification": "Observed only for a quiesced controlled dataset; not a production RPO objective and not evidence of continuous replication.",
+  "run_id": "19fc65dec6",
+  "sha": "ba97404fad89ee166084944ad55785f1aa72ad8f",
+  "source_summary": {
+    "events": 1,
+    "marker": 1,
+    "migrations": 51,
+    "users": 8
+  },
+  "started_at": "2026-10-28T17:45:12.435303+00:00"
+}

@@ -1,12 +1,14 @@
 # Informe ejecutivo
 
-El SHA local `3fa5c7da55677b32d9babc2aeb49a3e72bf66e7d` contiene la corrección fail-fast de readiness, endurecimiento del cliente Edge, perfiles y runner de endurance, observabilidad mínima, workflow progresivo y protocolos de campo. La revisión independiente concluyó PASS local parcial y secret scan limpio.
+El SHA remoto `ba97404fad89ee166084944ad55785f1aa72ad8f` contiene la corrección fail-fast de readiness, endurecimiento del cliente Edge, perfiles y runner de endurance, observabilidad mínima, workflow progresivo y protocolos de campo. La revisión independiente y el secret scan aprobaron.
 
-Todavía no existe evidencia del nuevo SHA ejecutándose con HTTP + PostgreSQL 16 + dos instancias: Docker local no respondió y la rama no fue publicada. Por eso las etapas reales de 15 minutos, 60 minutos y 6 horas son NOT RUN. El software está listo para la siguiente puerta de certificación, no para producción.
+Los runs remotos `40735837313` y `40738606063` demostraron HTTP + PostgreSQL 16 + dos instancias durante 15 y 60 minutos reales. La etapa de 60 minutos procesó 321.488/321.488 operaciones sin fallos técnicos, con p95 13,056 ms y p99 14,016 ms. Backup/restore, recuperación, Docker, dependencias y escaneo de imagen aprobaron.
+
+La endurance de seis horas no puede ejecutarse honestamente en el recurso disponible: no hay runner self-hosted y el límite del runner hospedado es seis horas, sin margen para preparar o cerrar evidencia. Permanece BLOCKED, no PASS.
 
 Decisiones vigentes:
 
-- Software local: GO para publicar una rama de certificación y ejecutar CI/endurance controlada.
-- Laboratorio Nivel 2: BLOCKED hasta obtener artefactos remotos del SHA exacto.
+- Software: GO.
+- Laboratorio Nivel 2: PASS para 15/60 minutos; BLOCKED para seis horas.
 - Simulacro físico: NO-GO hasta endurance, red y dispositivos reales.
 - Producción: NO-GO.

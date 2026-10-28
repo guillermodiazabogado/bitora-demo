@@ -1,0 +1,71 @@
+{
+  "checks": {
+    "concurrent_entry_anti_passback": true,
+    "cross_instance_idempotent_replay": true,
+    "database_disconnect_observable": true,
+    "database_reconnect_recovers": true,
+    "database_state_consistent": true,
+    "idempotency_preserved_event_count": true,
+    "integrated_http_postgres_endurance": true,
+    "logout_cross_instance_revokes": true,
+    "multievent_isolation": true,
+    "postgres_restart_recovers": true,
+    "restart_preserves_shared_session": true,
+    "role_change_invalidates_session": true,
+    "session_cross_instance": true,
+    "two_distinct_instances_ready": true
+  },
+  "endurance": {
+    "attempted": 321488,
+    "elapsed_seconds": 3600.061,
+    "failures": [],
+    "latency_ms": {
+      "mean": 11.195,
+      "p50": 10.884,
+      "p95": 13.056,
+      "p99": 14.016
+    },
+    "requested_seconds": 3600,
+    "succeeded": 321488
+  },
+  "finished_at": "2026-10-28T18:46:01.765018+00:00",
+  "limitations": [
+    "Docker loopback networking is simulated infrastructure, not an event venue network."
+  ],
+  "observed": {
+    "access_events": [
+      {
+        "count": 321489,
+        "decision": "ALLOW",
+        "reason_code": "VALID"
+      },
+      {
+        "count": 29,
+        "decision": "DENY",
+        "reason_code": "ANTI_PASSBACK"
+      }
+    ],
+    "entry_allowed": 1,
+    "entry_anti_passback": 29,
+    "entry_attempts": 30,
+    "instances": 2,
+    "revoked_sessions": 2,
+    "session_rows": 5,
+    "snapshots": [
+      {
+        "count": 1,
+        "current_state": "INSIDE"
+      }
+    ]
+  },
+  "observed_failures": {
+    "database_disconnect": {
+      "app_a_ready_status": 503,
+      "app_b_ready_status": 503
+    }
+  },
+  "ok": true,
+  "resources_removed": true,
+  "run_id": "45e1dcda45",
+  "started_at": "2026-10-28T17:45:38.169529+00:00"
+}
