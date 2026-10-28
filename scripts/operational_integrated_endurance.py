@@ -31,23 +31,31 @@ def run(args)->dict:
     duration=args.seconds if args.seconds is not None else STAGES[args.stage]
     if duration < 1 or args.sample_seconds <= 0: raise ValueError("invalid duration")
     child_report=args.report.with_suffix(".harness.json")
-    command=[sys.executable,str(args.harness),"--endurance-seconds",str(duration),"--report",str(child_report)]
+    child_checkpoint=args.checkpoint.with_suffix(".harness.json")
+    child_stdout=args.report.with_suffix(".harness.stdout.log")
+    child_stderr=args.report.with_suffix(".harness.stderr.log")
+    command=[sys.executable,str(args.harness),"--endurance-seconds",str(duration),"--sample-seconds",str(args.sample_seconds),"--checkpoint",str(child_checkpoint),"--report",str(child_report)]
     started=time.monotonic();started_at=utc_now();samples=[]
-    process=subprocess.Popen(command,cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    try:
-        while process.poll() is None:
-            elapsed=time.monotonic()-started
-            sample={"timestamp":utc_now(),"elapsed_seconds":round(elapsed,3),"runner_rss_bytes":process_rss(process.pid),"harness_running":True}
-            samples.append(sample)
-            atomic(args.checkpoint,{"status":"running","stage":args.stage,"nominal_seconds":STAGES[args.stage],"duration_seconds":duration,"last_sample":sample,"samples_collected":len(samples)})
-            time.sleep(min(args.sample_seconds,max(.05,duration/20)))
-        stdout,stderr=process.communicate(timeout=30)
-    finally:
-        if process.poll() is None: process.kill()
-    if process.returncode != 0 or not child_report.exists(): raise RuntimeError(f"integrated harness failed: {stderr[-1500:]}")
+    child_stdout.parent.mkdir(parents=True,exist_ok=True)
+    with child_stdout.open("w",encoding="utf-8") as stdout_handle, child_stderr.open("w",encoding="utf-8") as stderr_handle:
+        process=subprocess.Popen(command,cwd=ROOT,text=True,stdout=stdout_handle,stderr=stderr_handle)
+        try:
+            while process.poll() is None:
+                elapsed=time.monotonic()-started
+                sample={"timestamp":utc_now(),"elapsed_seconds":round(elapsed,3),"runner_rss_bytes":process_rss(process.pid),"harness_running":True}
+                samples.append(sample)
+                atomic(args.checkpoint,{"status":"running","stage":args.stage,"nominal_seconds":STAGES[args.stage],"duration_seconds":duration,"last_sample":sample,"samples_collected":len(samples)})
+                time.sleep(min(args.sample_seconds,max(.05,duration/20)))
+            process.wait(timeout=30)
+        finally:
+            if process.poll() is None: process.kill()
+    if process.returncode != 0 or not child_report.exists():
+        stderr=child_stderr.read_text(encoding="utf-8",errors="replace")[-1500:] if child_stderr.exists() else ""
+        raise RuntimeError(f"integrated harness failed: {stderr}")
     harness=json.loads(child_report.read_text(encoding="utf-8")); endurance=harness.get("endurance",{}); elapsed=time.monotonic()-started
     attempted=int(endurance.get("attempted",0)); succeeded=int(endurance.get("succeeded",0))
-    result={"ok":bool(harness.get("ok")),"stage":args.stage,"nominal_duration_seconds":STAGES[args.stage],"duration_override_seconds":args.seconds,"started_at":started_at,"finished_at":utc_now(),"elapsed_seconds":round(elapsed,3),"architecture":"real HTTP + PostgreSQL 16 + two application instances","supported_operation_mix":["authentication and cross-instance session","event visibility read","access ENTRY/EXIT","anti-passback concurrency","idempotent access replay"],"explicitly_not_exercised":["vouchers","lead retrieval","vehicle logistics"],"telemetry":{"samples":samples,"http_attempted":attempted,"http_succeeded":succeeded,"http_throughput_ops_s":round(succeeded/max(float(endurance.get("elapsed_seconds",0) or 0),.001),3),"http_latency_ms":endurance.get("latency_ms"),"postgres_access_events":harness.get("observed",{}).get("access_events"),"postgres_connections":"unavailable: base harness does not expose pg_stat_activity","database_state":harness.get("observed",{}).get("snapshots"),"edge":"not in scope"},"harness_checks":harness.get("checks",{}),"harness_report":str(child_report),"limitations":["CPU/RAM samples cover the orchestrated harness process; container resource telemetry requires a future Docker stats adapter.","No voucher/lead/vehicle traffic is synthesized without a proven HTTP contract."]}
+    harness_telemetry=harness.get("telemetry",{})
+    result={"ok":bool(harness.get("ok")),"stage":args.stage,"nominal_duration_seconds":STAGES[args.stage],"duration_override_seconds":args.seconds,"started_at":started_at,"finished_at":utc_now(),"elapsed_seconds":round(elapsed,3),"architecture":"real HTTP + PostgreSQL 16 + two application instances","supported_operation_mix":["authentication and cross-instance session","event visibility read","access ENTRY/EXIT","anti-passback concurrency","idempotent access replay"],"explicitly_not_exercised":["vouchers","lead retrieval","vehicle logistics"],"telemetry":{"runner_samples":samples,"infrastructure_samples":harness_telemetry.get("samples",[]),"infrastructure_summary":harness_telemetry.get("summary",{}),"http_attempted":attempted,"http_succeeded":succeeded,"http_failures_total":endurance.get("failures_total",len(endurance.get("failures",[]))),"http_throughput_ops_s":round(succeeded/max(float(endurance.get("elapsed_seconds",0) or 0),.001),3),"http_latency_ms":endurance.get("latency_ms"),"postgres_access_events":harness.get("observed",{}).get("access_events"),"database_state":harness.get("observed",{}).get("snapshots"),"edge":"not in scope"},"harness_checks":harness.get("checks",{}),"harness_report":str(child_report),"harness_checkpoint":str(child_checkpoint),"harness_stdout_log":str(child_stdout),"harness_stderr_log":str(child_stderr),"limitations":["Container and PostgreSQL telemetry is sampled and aggregated; no query text, DSN or row content is retained.","No voucher/lead/vehicle traffic is synthesized without a proven HTTP contract.","Edge remains outside this integrated runner and requires separate evidence."]}
     atomic(args.checkpoint,{"status":"complete",**result});atomic(args.report,result);return result
 
 def main():

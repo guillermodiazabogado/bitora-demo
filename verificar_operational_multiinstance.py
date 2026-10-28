@@ -7,6 +7,7 @@ import tempfile
 
 import server
 from scripts import operational_multiinstance_fixture as fixture
+from scripts.operational_multiinstance import telemetry_summary
 
 
 def main() -> None:
@@ -36,6 +37,14 @@ def main() -> None:
         "connect_timeout=1": "bounded PostgreSQL TCP connection",
         "integrated_http_postgres_endurance": "integrated HTTP/PostgreSQL endurance",
         '"p95"': "latency percentiles",
+        "docker(\"stats\", \"--no-stream\"": "container resource telemetry",
+        "pg_stat_activity": "PostgreSQL connection telemetry",
+        "pg_locks": "PostgreSQL lock telemetry",
+        "database_size_bytes": "database growth telemetry",
+        "readiness_metrics": "periodic readiness telemetry",
+        "deque(maxlen=20)": "bounded failure ring buffer",
+        "atomic_json(args.checkpoint": "atomic persistent checkpoint",
+        "telemetry_summary": "telemetry trend summary",
         'docker("rm", "-f"': "isolated cleanup",
     }
     missing = [label for token, label in required_harness.items() if token not in harness]
@@ -60,6 +69,23 @@ def main() -> None:
     present = [token for token in forbidden if token in harness.lower()]
     if present:
         raise AssertionError({"unsafe_multiinstance_harness_tokens": present})
+
+    synthetic = telemetry_summary([
+        {"readiness": [{"status": 200, "latency_ms": 10}, {"status": 200, "latency_ms": 12}],
+         "postgres": {"connections_total": 3, "locks_waiting": 0, "database_size_bytes": 1000},
+         "containers": {"a": {"cpu_percent": 10, "oom_killed": False, "restart_count": 0},
+                         "b": {"cpu_percent": 11, "oom_killed": False, "restart_count": 0},
+                         "postgres": {"cpu_percent": 5, "oom_killed": False, "restart_count": 0}}},
+        {"readiness": [{"status": 200, "latency_ms": 15}, {"status": 503, "latency_ms": 20}],
+         "postgres": {"connections_total": 4, "locks_waiting": 1, "database_size_bytes": 1200},
+         "containers": {"a": {"cpu_percent": 20, "oom_killed": False, "restart_count": 0},
+                         "b": {"cpu_percent": 21, "oom_killed": False, "restart_count": 0},
+                         "postgres": {"cpu_percent": 8, "oom_killed": False, "restart_count": 0}}},
+    ])
+    if synthetic["readiness_200"] != 3 or synthetic["readiness_total"] != 4:
+        raise AssertionError({"bad_readiness_summary": synthetic})
+    if synthetic["postgres_database_size_bytes"]["change_percent"] != 20.0:
+        raise AssertionError({"bad_database_trend": synthetic})
 
     original_db_path = server.DB_PATH
     original_backup_dir = server.BACKUP_DIR

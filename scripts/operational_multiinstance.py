@@ -8,6 +8,7 @@ contains no database or application credentials.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import http.cookiejar
@@ -25,6 +26,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULT_PREFIX = "BITORA_OPERATIONAL_RESULT="
+TELEMETRY_SCHEMA = "bitora.operational.telemetry.v1"
 
 
 class HarnessError(RuntimeError):
@@ -41,6 +43,138 @@ def run(command: list[str], *, check: bool = True, timeout: int = 600) -> subpro
 
 def docker(*args: str, check: bool = True, timeout: int = 600) -> subprocess.CompletedProcess[str]:
     return run(["docker", *args], check=check, timeout=timeout)
+
+
+def atomic_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def _number(value: str) -> float | None:
+    try:
+        return float(value.strip().rstrip("%"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def container_metrics(names: tuple[str, ...]) -> dict:
+    """Return sanitised Docker counters; never container environment/config."""
+    result: dict[str, dict] = {}
+    for name in names:
+        stats = docker("stats", "--no-stream", "--format", "{{json .}}", name, check=False, timeout=15)
+        inspect = docker(
+            "inspect", "--format",
+            "{{.State.Status}}|{{.State.OOMKilled}}|{{.RestartCount}}|{{.State.Pid}}",
+            name, check=False, timeout=15,
+        )
+        item: dict = {"available": False}
+        if stats.returncode == 0:
+            try:
+                raw = json.loads(stats.stdout.strip().splitlines()[-1])
+                item.update({
+                    "available": True,
+                    "cpu_percent": _number(raw.get("CPUPerc", "")),
+                    "memory_usage": raw.get("MemUsage"),
+                    "memory_percent": _number(raw.get("MemPerc", "")),
+                    "pids": int(raw["PIDs"]) if str(raw.get("PIDs", "")).isdigit() else None,
+                    "network_io": raw.get("NetIO"),
+                    "block_io": raw.get("BlockIO"),
+                })
+            except (IndexError, json.JSONDecodeError, ValueError):
+                item["error"] = "DOCKER_STATS_PARSE_FAILED"
+        if inspect.returncode == 0:
+            fields = inspect.stdout.strip().split("|")
+            if len(fields) == 4:
+                item.update({
+                    "state": fields[0],
+                    "oom_killed": fields[1].lower() == "true",
+                    "restart_count": int(fields[2]) if fields[2].isdigit() else None,
+                    "pid_present": fields[3].isdigit() and int(fields[3]) > 0,
+                })
+        result[name.rsplit("-", 1)[-1]] = item
+    return result
+
+
+def postgres_metrics(container: str) -> dict:
+    """Collect one aggregate row. No query text, credentials or row data leave PostgreSQL."""
+    sql = """
+SELECT pg_database_size(current_database()),
+       current_setting('max_connections')::int,
+       (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database()),
+       (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND state='active'),
+       (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event IS NOT NULL),
+       (SELECT count(*) FROM pg_locks WHERE NOT granted),
+       xact_commit,xact_rollback,deadlocks,temp_bytes
+FROM pg_stat_database WHERE datname=current_database();
+"""
+    output = docker(
+        "exec", container, "psql", "-U", "bitora", "-d", "bitora",
+        "-At", "-F", "|", "-c", sql, check=False, timeout=15,
+    )
+    if output.returncode != 0:
+        return {"available": False, "error": "POSTGRES_METRICS_UNAVAILABLE"}
+    fields = output.stdout.strip().splitlines()[-1].split("|")
+    if len(fields) != 10:
+        return {"available": False, "error": "POSTGRES_METRICS_PARSE_FAILED"}
+    keys = (
+        "database_size_bytes", "max_connections", "connections_total", "connections_active",
+        "sessions_waiting", "locks_waiting", "xact_commit", "xact_rollback", "deadlocks", "temp_bytes",
+    )
+    try:
+        return {"available": True, **{key: int(value) for key, value in zip(keys, fields)}}
+    except ValueError:
+        return {"available": False, "error": "POSTGRES_METRICS_PARSE_FAILED"}
+
+
+def readiness_metrics(bases: tuple[str, ...]) -> list[dict]:
+    values = []
+    for base in bases:
+        started = time.perf_counter()
+        status, payload = Client().request(base, "/ready", expected={0, 200, 503}, timeout=3)
+        values.append({
+            "status": status,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+            "database_ready": payload.get("checks", {}).get("database"),
+        })
+    return values
+
+
+def telemetry_summary(samples: list[dict]) -> dict:
+    def series(path: tuple[str, ...]) -> list[float]:
+        values = []
+        for sample in samples:
+            current = sample
+            for key in path:
+                current = current.get(key) if isinstance(current, dict) else None
+            if isinstance(current, (int, float)) and not isinstance(current, bool):
+                values.append(float(current))
+        return values
+
+    def trend(values: list[float]) -> dict:
+        if not values:
+            return {"samples": 0, "first": None, "last": None, "maximum": None, "change_percent": None}
+        change = None if values[0] == 0 else round((values[-1] - values[0]) * 100 / values[0], 3)
+        return {"samples": len(values), "first": values[0], "last": values[-1], "maximum": max(values), "change_percent": change}
+
+    ready = [probe for sample in samples for probe in sample.get("readiness", [])]
+    return {
+        "samples": len(samples),
+        "readiness_200": sum(probe.get("status") == 200 for probe in ready),
+        "readiness_total": len(ready),
+        "readiness_latency_ms": trend([float(probe["latency_ms"]) for probe in ready if isinstance(probe.get("latency_ms"), (int, float))]),
+        "postgres_connections": trend(series(("postgres", "connections_total"))),
+        "postgres_locks_waiting": trend(series(("postgres", "locks_waiting"))),
+        "postgres_database_size_bytes": trend(series(("postgres", "database_size_bytes"))),
+        "app_a_cpu_percent": trend(series(("containers", "a", "cpu_percent"))),
+        "app_b_cpu_percent": trend(series(("containers", "b", "cpu_percent"))),
+        "postgres_cpu_percent": trend(series(("containers", "postgres", "cpu_percent"))),
+        "oom_or_restart_observed": any(
+            item.get("oom_killed") or (item.get("restart_count") or 0) > 0
+            for sample in samples for item in sample.get("containers", {}).values()
+        ),
+    }
 
 
 def parse_fixture(output: str) -> dict:
@@ -136,8 +270,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="BITORA PostgreSQL multi-instance operational harness")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "operational-multiinstance.json")
     parser.add_argument("--endurance-seconds", type=int, default=10, help="Sustained HTTP ENTRY/EXIT duration")
+    parser.add_argument("--checkpoint", type=Path, help="Atomic progress evidence for persistent runners")
+    parser.add_argument("--sample-seconds", type=float, default=30, help="Telemetry interval")
     parser.add_argument("--keep", action="store_true", help="Keep isolated Docker resources for debugging")
     args = parser.parse_args()
+    if args.sample_seconds <= 0:
+        parser.error("--sample-seconds must be positive")
     run_id = uuid.uuid4().hex[:10]
     prefix = f"bitora-op-{run_id}"
     network = prefix
@@ -325,9 +463,36 @@ def main() -> int:
         endurance_latencies: list[float] = []
         endurance_attempted = 0
         endurance_succeeded = 0
-        endurance_failures: list[dict] = []
+        endurance_failures: deque[dict] = deque(maxlen=20)
+        endurance_failures_total = 0
+        telemetry_samples: list[dict] = []
+        next_sample = endurance_started
         direction = "EXIT"
         while time.monotonic() - endurance_started < max(3, args.endurance_seconds):
+            now = time.monotonic()
+            if now >= next_sample:
+                sample = {
+                    "schema": TELEMETRY_SCHEMA,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "elapsed_seconds": round(now - endurance_started, 3),
+                    "containers": container_metrics((app_a, app_b, postgres)),
+                    "postgres": postgres_metrics(postgres),
+                    "readiness": readiness_metrics((base_a, base_b)),
+                    "operations_attempted": endurance_attempted,
+                    "operations_succeeded": endurance_succeeded,
+                    "failures_total": endurance_failures_total,
+                }
+                telemetry_samples.append(sample)
+                if args.checkpoint:
+                    atomic_json(args.checkpoint, {
+                        "status": "running",
+                        "schema": TELEMETRY_SCHEMA,
+                        "run_id": run_id,
+                        "requested_seconds": max(3, args.endurance_seconds),
+                        "last_sample": sample,
+                        "samples_collected": len(telemetry_samples),
+                    })
+                next_sample = now + args.sample_seconds
             index = endurance_attempted
             started = time.perf_counter()
             try:
@@ -344,8 +509,10 @@ def main() -> int:
                     direction = "ENTRY" if direction == "EXIT" else "EXIT"
                 else:
                     endurance_failures.append({"index": index, "reason_code": payload.get("reason_code")})
+                    endurance_failures_total += 1
             except Exception as exc:
                 endurance_failures.append({"index": index, "error": type(exc).__name__})
+                endurance_failures_total += 1
             endurance_latencies.append((time.perf_counter() - started) * 1000)
             endurance_attempted += 1
         ordered = sorted(endurance_latencies)
@@ -355,15 +522,22 @@ def main() -> int:
             "elapsed_seconds": round(time.monotonic() - endurance_started, 3),
             "attempted": endurance_attempted,
             "succeeded": endurance_succeeded,
-            "failures": endurance_failures[:20],
+            "failures_total": endurance_failures_total,
+            "recent_failures": list(endurance_failures),
             "latency_ms": {
                 "p50": percentile(0.50), "p95": percentile(0.95), "p99": percentile(0.99),
                 "mean": round(statistics.fmean(endurance_latencies), 3),
             },
         }
         report["checks"]["integrated_http_postgres_endurance"] = (
-            endurance_attempted > 0 and endurance_succeeded == endurance_attempted and not endurance_failures
+            endurance_attempted > 0 and endurance_succeeded == endurance_attempted and endurance_failures_total == 0
         )
+        report["telemetry"] = {
+            "schema": TELEMETRY_SCHEMA,
+            "sample_interval_seconds": args.sample_seconds,
+            "samples": telemetry_samples,
+            "summary": telemetry_summary(telemetry_samples),
+        }
 
         inspection_result = docker(
             "run", "--rm", "--network", network, *env, image,
@@ -382,6 +556,15 @@ def main() -> int:
         expected_state = "INSIDE" if direction == "EXIT" else "OUTSIDE"
         report["checks"]["database_state_consistent"] = inspection["snapshots"] == [{"count": 1, "current_state": expected_state}]
         report["ok"] = all(report["checks"].values())
+        if args.checkpoint:
+            atomic_json(args.checkpoint, {
+                "status": "complete" if report["ok"] else "failed",
+                "schema": TELEMETRY_SCHEMA,
+                "run_id": run_id,
+                "endurance": report["endurance"],
+                "telemetry_summary": report["telemetry"]["summary"],
+                "checks": report["checks"],
+            })
     except Exception as exc:
         report["error"] = str(exc)
     finally:
@@ -394,6 +577,11 @@ def main() -> int:
         report["resources_removed"] = bool(resources_created and not args.keep)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if args.checkpoint and not report.get("ok"):
+            atomic_json(args.checkpoint, {
+                "status": "failed", "schema": TELEMETRY_SCHEMA, "run_id": run_id,
+                "error": report.get("error", "HARNESS_CHECK_FAILED"),
+            })
         print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report.get("ok") else 2
 
