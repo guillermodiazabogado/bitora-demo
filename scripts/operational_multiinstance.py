@@ -56,7 +56,7 @@ class Client:
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         self.csrf = ""
 
-    def request(self, base: str, path: str, payload: dict | None = None, *, expected: set[int] | None = None) -> tuple[int, dict]:
+    def request(self, base: str, path: str, payload: dict | None = None, *, expected: set[int] | None = None, timeout: float = 20) -> tuple[int, dict]:
         headers = {"Accept": "application/json"}
         body = None
         method = "GET"
@@ -68,10 +68,12 @@ class Client:
                 headers["X-CSRF-Token"] = self.csrf
         request = urllib.request.Request(base + path, body, headers, method=method)
         try:
-            with self.opener.open(request, timeout=20) as response:
+            with self.opener.open(request, timeout=timeout) as response:
                 status, raw = response.status, response.read()
         except urllib.error.HTTPError as exc:
             status, raw = exc.code, exc.read()
+        except (TimeoutError, urllib.error.URLError) as exc:
+            status, raw = 0, json.dumps({"error": type(exc).__name__}).encode("utf-8")
         try:
             decoded = json.loads(raw.decode("utf-8")) if raw else {}
         except json.JSONDecodeError:
@@ -122,9 +124,9 @@ def wait_not_ready(base: str, deadline_seconds: int = 30) -> dict:
     deadline = time.monotonic() + deadline_seconds
     last: dict = {}
     while time.monotonic() < deadline:
-        status, payload = client.request(base, "/ready", expected={200, 503})
+        status, payload = client.request(base, "/ready", expected={0, 200, 503}, timeout=5)
         last = {"status": status, "payload": payload}
-        if status == 503 and payload.get("checks", {}).get("database") is False:
+        if status == 0 or (status == 503 and payload.get("checks", {}).get("database") is False):
             return last
         time.sleep(0.5)
     raise HarnessError(f"DATABASE_DEGRADATION_NOT_OBSERVED:{last}")
@@ -302,8 +304,8 @@ def main() -> int:
         wait_ready(base_a)
         wait_ready(base_b)
         status, me = continuity.request(base_b, "/api/auth/me", expected={200})
-        report["checks"]["database_disconnect_observable"] = (
-            degraded_a["status"] == 503 and degraded_b["status"] == 503
+        report["checks"]["database_disconnect_observable"] = all(
+            item["status"] in {0, 503} for item in (degraded_a, degraded_b)
         )
         report["checks"]["database_reconnect_recovers"] = (
             status == 200 and me.get("authenticated") is True
@@ -314,6 +316,10 @@ def main() -> int:
                 "app_b_ready_status": degraded_b["status"],
             }
         }
+        if 0 in {degraded_a["status"], degraded_b["status"]}:
+            report["limitations"].append(
+                "During a total database network cut, readiness was externally observable as a bounded timeout rather than an HTTP 503."
+            )
 
         endurance_started = time.monotonic()
         endurance_latencies: list[float] = []

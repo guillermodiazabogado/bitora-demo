@@ -29,6 +29,8 @@ def main() -> None:
         "cross_instance_idempotent_replay": "idempotency",
         "postgres_restart_recovers": "PostgreSQL restart recovery",
         "database_disconnect_observable": "database outage readiness signal",
+        'timeout=5': "bounded external outage probe",
+        'item["status"] in {0, 503}': "timeout or explicit not-ready evidence",
         "database_reconnect_recovers": "database reconnect recovery",
         '"DB_CONNECTION_TIMEOUT=1"': "bounded database outage detection",
         "connect_timeout=1": "bounded PostgreSQL TCP connection",
