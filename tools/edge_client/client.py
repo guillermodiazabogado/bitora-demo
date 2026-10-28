@@ -233,7 +233,14 @@ class EdgeClient:
             self._retry([item["operation_id"] for item in operations], type(exc).__name__)
             self.logger.warning("sync retry device_secret=%s error=%s", self._secret, type(exc).__name__)
             return {"ok": False, "sent": len(operations), "acknowledged": 0, "pending": self.queue_depth}
-        acknowledged = {str(item) for item in response.get("acknowledged_operation_ids", [])}
+        sent_operation_ids = {str(item["operation_id"]) for item in operations}
+        # A transport response is untrusted input.  Only acknowledgements for
+        # this exact batch may change the durable queue or its counters.
+        acknowledged = {
+            str(item)
+            for item in response.get("acknowledged_operation_ids", [])
+            if str(item) in sent_operation_ids
+        }
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             for item in operations:
@@ -242,7 +249,13 @@ class EdgeClient:
                 else:
                     self._retry_one(db, item["operation_id"], "NOT_ACKNOWLEDGED")
             db.commit()
-        return {"ok": bool(response.get("ok")), "sent": len(operations), "acknowledged": len(acknowledged), "pending": self.queue_depth}
+        complete = len(acknowledged) == len(operations)
+        return {
+            "ok": bool(response.get("ok")) and complete,
+            "sent": len(operations),
+            "acknowledged": len(acknowledged),
+            "pending": self.queue_depth,
+        }
 
     def heartbeat(self, *, software_version: str = "reference", sync_status: str = "READY") -> Mapping[str, Any]:
         if self.transport is None:

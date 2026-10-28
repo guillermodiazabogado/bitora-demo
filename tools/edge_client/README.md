@@ -30,3 +30,16 @@ C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\pytho
 The verifier uses no sockets or external services. It queues 100 offline
 operations, recreates the client over the same database, reconnects through an
 in-memory transport, checks idempotency and rejects a corrupted dataset.
+
+The extended field-readiness verifier adds deterministic fault scenarios:
+
+```powershell
+C:\Users\Noxie-PC\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m tools.edge_client.verify_offline_resilience
+```
+
+It exercises growing queues of 100, 500 and 2,000 operations, concurrent local
+writes, process restart, bounded backoff, temporary revocation, partial and
+unknown acknowledgements, ordered resynchronization, and growing signed
+datasets up to 10,000 synthetic credential records. These are software
+simulations; they do not certify a physical reader, tablet, network or Edge
+appliance.
