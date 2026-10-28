@@ -215,6 +215,36 @@ const PRODUCER_HOME_MODULES = [
     metric: () => "Modulo habilitado",
   },
   {
+    key: "enterpriseLeads",
+    title: "Expositores / Leads",
+    description: "Captura consentida, consulta y exportacion de leads por empresa.",
+    icon: "LR",
+    tone: "green",
+    route: "/enterprise-leads.html",
+    action: "leads.read",
+    metric: () => "V5.5 conectado",
+  },
+  {
+    key: "enterpriseVouchers",
+    title: "Servicios / Vouchers",
+    description: "Asignacion, consulta y consumo idempotente de beneficios.",
+    icon: "VO",
+    tone: "cyan",
+    route: "/enterprise-vouchers.html",
+    action: "vouchers.read",
+    metric: () => "V5.4 conectado",
+  },
+  {
+    key: "enterpriseVehicles",
+    title: "Logistica vehicular",
+    description: "Control de slots, ingresos, egresos y anti-passback vehicular.",
+    icon: "VH",
+    tone: "orange",
+    route: "/enterprise-vehicles.html",
+    action: "vehicles.read",
+    metric: () => "V5.6 conectado",
+  },
+  {
     key: "certificates",
     title: "Certificados",
     description: "Generacion y gestion de certificados para participantes.",
@@ -355,7 +385,9 @@ function setView(name) {
     commandCenterRefreshTimer = null;
   }
   if (name === "commandCenter" && commandCenterAvailable()) {
-    commandCenterRefreshTimer = setInterval(() => loadCommandCenter(), 15000);
+    commandCenterRefreshTimer = setInterval(() => {
+      if (!document.hidden) loadCommandCenter();
+    }, 15000);
   }
   updateProducerHomeReturn(name);
   if (name === "commandCenter" && commandCenterAvailable() && !state.commandCenter) {
@@ -1231,9 +1263,11 @@ async function loadCommandCenter() {
   }
   commandCenterLoading = true;
   try {
-    state.commandCenter = await api(`/api/events/${state.eventId}/command-center-v5`);
+    state.commandCenter = { ...(await api(`/api/events/${state.eventId}/command-center-v5`)), refresh_error: "", stale: false };
   } catch (err) {
-    state.commandCenter = { ok: false, error: err.message };
+    state.commandCenter = state.commandCenter?.ok
+      ? { ...state.commandCenter, refresh_error: err.message, stale: true }
+      : { ok: false, error: err.message, stale: true };
   } finally {
     commandCenterLoading = false;
   }
@@ -1279,14 +1313,25 @@ function renderCommandCenter() {
     }
     return;
   }
-  notice?.classList.add("hidden");
+  if (payload.stale) {
+    notice?.classList.remove("hidden");
+    if (notice) notice.textContent = `Datos conservados, actualizacion interrumpida: ${payload.refresh_error || "conexion no disponible"}`;
+  } else {
+    notice?.classList.add("hidden");
+  }
   const venue = payload.venue_model || {};
   const system = enterpriseSection("system_health");
   const failed = payload.snapshot?.observability?.failed_sections || [];
+  const health = system.data || {};
+  const unobserved = [health.db, health.storage, health.safe_mode, health.live_mode]
+    .some((value) => ["NOT_CHECKED", "UNAVAILABLE", "UNKNOWN", ""].includes(String(value || "").toUpperCase()));
+  const generatedAt = new Date(payload.generated_at || payload.snapshot?.generated_at || 0).getTime();
+  const expired = !generatedAt || (Date.now() - generatedAt) > 45000;
+  const degraded = failed.length > 0 || unobserved || expired || payload.stale;
   const phase = venue.mode || "UNAVAILABLE";
   $("#enterprisePhaseBadge").textContent = phase;
-  $("#enterpriseHealthBadge").textContent = failed.length ? "DEGRADED" : "HEALTHY";
-  $("#enterpriseHealthBadge").className = `enterprise-badge ${failed.length ? "warning" : "ok"}`;
+  $("#enterpriseHealthBadge").textContent = degraded ? (expired || payload.stale ? "STALE" : "DEGRADED") : "HEALTHY";
+  $("#enterpriseHealthBadge").className = `enterprise-badge ${degraded ? "warning" : "ok"}`;
   $("#enterpriseUpdated").textContent = `Actualizado ${formatEnterpriseTime(payload.generated_at || payload.snapshot?.generated_at)}`;
   renderEnterpriseKpis();
   renderEnterpriseAlerts();

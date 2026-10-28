@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BITORA · Lead Retrieval</title>
+  <link rel="stylesheet" href="/enterprise-leads.css?v=1">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Contexto del módulo">
+      <a class="brand" href="/" aria-label="Volver a BITORA">BITORA</a>
+      <p>Enterprise</p>
+      <strong>Lead Retrieval</strong>
+      <nav aria-label="Secciones"><a href="#capture">Capturar lead</a><a href="#leads">Leads</a><a href="#export">Exportar</a></nav>
+    </aside>
+    <main>
+      <header class="topbar"><div><span class="eyebrow">Operación V5.5</span><h1>Expositores / Leads</h1><p>Captura consentida, trazable e idempotente.</p></div><button id="reloadButton" type="button" class="secondary">Actualizar</button></header>
+      <section class="card scope-card" aria-labelledby="scopeTitle"><div><h2 id="scopeTitle">Alcance operativo</h2><p>Los tres identificadores son obligatorios y se envían en cada solicitud.</p></div><form id="scopeForm" class="scope-grid"><label>Organización<input id="organizationId" name="organization_id" type="number" min="1" required></label><label>Evento<input id="eventId" name="event_id" type="number" min="1" required></label><label>Empresa<input id="companyId" name="company_id" type="number" min="1" required></label><button type="submit">Aplicar alcance</button></form></section>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <section id="capture" class="card" aria-labelledby="captureTitle"><div class="section-head"><div><span class="eyebrow">Nueva interacción</span><h2 id="captureTitle">Capturar lead</h2></div><span class="consent-badge">Consentimiento requerido</span></div><form id="captureForm" class="form-grid"><label class="wide">Token o QR del participante<input name="token" autocomplete="off" required maxlength="512"></label><label>ID de consentimiento<input name="consent_id" type="number" min="1" required></label><label>ID de stand <span>(opcional)</span><input name="stand_id" type="number" min="1"></label><label>Email del operador <span>(opcional)</span><input name="user_email" type="email" maxlength="254"></label><label>ID de dispositivo <span>(opcional)</span><input name="device_id" type="number" min="1"></label><label class="wide">Clave de idempotencia<input id="captureIdempotency" name="idempotency_key" readonly required></label><div class="actions wide"><button id="captureButton" type="submit">Registrar captura</button><button id="renewKeyButton" type="button" class="secondary">Nueva clave</button></div></form></section>
+      <section id="leads" class="card" aria-labelledby="leadsTitle"><div class="section-head"><div><span class="eyebrow">Datos reales</span><h2 id="leadsTitle">Leads capturados</h2></div><span id="leadCount" class="count">0</span></div><div id="leadsLoading" class="state hidden">Cargando leads…</div><div id="leadsEmpty" class="state hidden">Todavía no hay leads para este evento y empresa.</div><div id="leadsError" class="state error hidden"></div><div class="table-wrap"><table id="leadsTable" class="hidden"><thead><tr><th>Participante</th><th>Contacto consentido</th><th>Calificación</th><th>Seguimiento</th><th>Capturado</th></tr></thead><tbody></tbody></table></div></section>
+      <section id="export" class="card" aria-labelledby="exportTitle"><span class="eyebrow">Portabilidad</span><h2 id="exportTitle">Exportar CSV</h2><form id="exportForm" class="export-form"><fieldset><legend>Campos consentidos a solicitar</legend><label><input type="checkbox" name="fields" value="first_name" checked> Nombre</label><label><input type="checkbox" name="fields" value="last_name" checked> Apellido</label><label><input type="checkbox" name="fields" value="company" checked> Empresa</label><label><input type="checkbox" name="fields" value="position"> Cargo</label><label><input type="checkbox" name="fields" value="email" checked> Email</label><label><input type="checkbox" name="fields" value="phone"> Teléfono</label></fieldset><button id="exportButton" type="submit">Generar exportación</button></form></section>
+    </main>
+  </div>
+  <script src="/enterprise-leads.js?v=1" defer></script>
+</body>
+</html>

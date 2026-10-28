@@ -236,7 +236,7 @@ body{{margin:0;font-family:Arial,sans-serif;background:#eef3f3;color:#071b2c}}he
     def _system_health(self, db, org, event):
         jobs_pending = self._count(db, "SELECT COUNT(*) c FROM jobs WHERE status IN ('queued','running','retry')", ()) if self._table_exists(db, "jobs") else 0
         jobs_failed = self._count(db, "SELECT COUNT(*) c FROM jobs WHERE status = 'failed'", ()) if self._table_exists(db, "jobs") else 0
-        return {"db": "OK", "storage": "NOT_CHECKED", "jobs": {"pending": jobs_pending, "failed": jobs_failed}, "safe_mode": "ON", "live_mode": "OFF"}
+        return {"db": "OK", "storage": "NOT_CHECKED", "jobs": {"pending": jobs_pending, "failed": jobs_failed}, "safe_mode": "NOT_CHECKED", "live_mode": "NOT_CHECKED"}
 
     def _alerts(self, db, org, event):
         rows = db.execute("SELECT id, alert_key, alert_type, severity, status, title, detail, metric_value, first_seen_at, last_seen_at FROM enterprise_operational_alerts WHERE organization_id = ? AND event_id = ? AND status IN ('OPEN','ACKNOWLEDGED') ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'WARNING' THEN 1 ELSE 2 END, id", (org, event)).fetchall()
