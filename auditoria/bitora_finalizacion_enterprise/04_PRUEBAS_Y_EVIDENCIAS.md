@@ -9,6 +9,7 @@
 | 2026-10-27 | working tree `5.8.2-rc.1` | Edge offline/restart/reconnect | PASS | 100 operaciones, 100 ACK, cero pérdidas |
 | 2026-10-27 | working tree `5.8.2-rc.1` | Sesiones persistentes + E2E auth HTTP | PASS | restart, expiry, revoke, CSRF y cookie segura |
 | 2026-10-27 | working tree `5.8.2-rc.1` | Leads/Vehículos DB real temporal | PASS | aislamiento, consentimiento, idempotencia, anti-passback |
+| 2026-10-28 | `1eca93e` | Endurance smoke RC | PASS | 3,015 s; 113 operaciones y 113 persistidas; integridad ok; cero fallos |
 
 La evidencia histórica se usa como baseline, no como sustituto de pruebas sobre la RC.
 
