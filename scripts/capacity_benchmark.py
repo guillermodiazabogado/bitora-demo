@@ -235,6 +235,7 @@ def registration_flow(
             "latency_ms": (time.perf_counter() - started) * 1000,
             "steps_ms": steps,
             "error": type(exc).__name__,
+            "error_detail": str(exc)[:240],
         }
 
 
@@ -340,6 +341,7 @@ def run_registration_level(
         "unique_tokens": len(set(tokens)),
         "unique_qr_payloads": len(set(qr_hashes)),
         "recent_failure_types": sorted({str(item.get("error")) for item in failed})[:20],
+        "recent_failure_details": sorted({str(item.get("error_detail")) for item in failed})[:20],
         "qr_requests_completed": len(succeeded),
         "telemetry_samples": telemetry,
         "telemetry_peaks": {
