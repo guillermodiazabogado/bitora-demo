@@ -620,6 +620,14 @@ def main() -> int:
             "python", "scripts/operational_multiinstance_fixture.py", "setup", timeout=300,
         )
         setup = parse_fixture(fixture.stdout)
+        # The operational fixture models a 3,000-person event. Capacity tests
+        # must not turn that business limit into a false infrastructure error,
+        # so only the disposable synthetic event is expanded.
+        docker(
+            "exec", postgres, "psql", "-U", "bitora", "-d", "bitora",
+            "-v", "ON_ERROR_STOP=1", "-c",
+            f"UPDATE events SET capacity = 100000 WHERE id = {int(setup['event_id'])};",
+        )
         initial_participants = sql_scalar(postgres, "SELECT count(*) FROM accreditations;")
 
         for level in levels:

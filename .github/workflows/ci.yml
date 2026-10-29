@@ -46,6 +46,7 @@ jobs:
           python verificar_p0_access_event_scope.py
           python verificar_p0_access_authority.py
           python verificar_p0_access_activation.py
+          python verificar_p0_access_registration_projection.py
           python verificar_p0_edge_admin_api.py
           python verificar_p0_device_api_security.py
           python verificar_p0_device_http_api.py
