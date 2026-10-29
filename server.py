@@ -1684,6 +1684,7 @@ def init_db() -> None:
         ensure_v5_7_1_schema(db)
         ensure_v5_8_schema(db)
         ensure_security_schema(db)
+        ensure_performance_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -2332,6 +2333,11 @@ def ensure_security_schema(db: sqlite3.Connection) -> None:
     for name in ("048_auth_login_rate_limits.sql", "049_persistent_auth_sessions.sql"):
         migration = ROOT / "backend" / "migrations" / name
         db.executescript(migration.read_text(encoding="utf-8"))
+
+
+def ensure_performance_schema(db: sqlite3.Connection) -> None:
+    migration = ROOT / "backend" / "migrations" / "050_access_lookup_indexes.sql"
+    db.executescript(migration.read_text(encoding="utf-8"))
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
