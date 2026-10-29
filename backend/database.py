@@ -350,13 +350,19 @@ def _postgres_connection(config: DatabaseConfig):
                     max_size=max(config.postgres_pool_min, config.postgres_pool_max),
                     timeout=config.connection_timeout,
                     reconnect_timeout=config.connection_timeout,
-                    kwargs={"autocommit": True, "row_factory": dict_row},
+                    # Apply the statement timeout once when psycopg creates a
+                    # physical connection. The pool's check callback already
+                    # validates a connection before checkout, so per-request
+                    # ``SELECT 1`` and ``set_config`` round-trips are redundant.
+                    kwargs={
+                        "autocommit": True,
+                        "row_factory": dict_row,
+                        "options": f"-c statement_timeout={config.statement_timeout_ms}",
+                    },
                     open=True,
                     check=ConnectionPool.check_connection,
                 )
             raw = _POSTGRES_POOL.getconn(timeout=config.connection_timeout)
-            raw.execute("SELECT 1")
-            raw.execute("SELECT set_config('statement_timeout', %s, false)", (str(config.statement_timeout_ms),))
             return PostgresConnection(raw, _POSTGRES_POOL)
         except Exception as exc:
             last_error = exc
