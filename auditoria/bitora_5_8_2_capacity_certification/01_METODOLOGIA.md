@@ -17,3 +17,12 @@ SLO previos:
 - Integridad: cero operaciones aceptadas perdidas, duplicadas indebidamente o fuera de evento.
 
 Escalones se detienen ante fallo crítico, agotamiento del host o dos incumplimientos consecutivos.
+
+## Ejecución efectiva
+
+La exploración usó ventanas de 10 segundos por celda. Los puntos frontera se
+repitieron tres veces con 15 segundos de medición. Después se ejecutaron cuatro
+ensayos de 120 segundos: 4×50/QR24 y 2×25 con QR24, QR12 y QR8. El evento
+sintético se configuró con cupo 100.000 para evitar convertir `409 Cupo completo`
+en un falso límite de infraestructura. La endurance de seis horas sigue siendo
+evidencia separada: su mezcla y throughput no equivale a este benchmark.

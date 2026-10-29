@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "auditoria/bitora_5_8_2_capacity_certification/evidencia/sustained120-i2-w25-qr12-6ba0aeb.json",
+  "run_id": "d898005dd2",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "6ba0aebb92fe0a7a21ede00eb2b515d277fe5eb1",
+  "status": "complete"
+}

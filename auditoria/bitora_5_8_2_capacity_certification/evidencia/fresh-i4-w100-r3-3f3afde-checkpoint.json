@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "auditoria/bitora_5_8_2_capacity_certification/evidencia/fresh-i4-w100-r3-3f3afde.json",
+  "run_id": "4a471cabf1",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "3f3afde96558414b4af23c1c100a77f3d90a0111",
+  "status": "complete"
+}

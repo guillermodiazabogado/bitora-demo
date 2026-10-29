@@ -1,0 +1,7 @@
+configuration,repetitions,closed_workers,registration_tps_min,registration_tps_avg,registration_p95_ms_max,registration_p99_ms_max,qr_workers,qr_rps_min,qr_rps_avg,qr_p95_ms_max,qr_p99_ms_max,technical_errors,result
+1-instance,3,25,27.817,28.095,901.430,1246.429,24,49.972,58.784,538.503,563.377,0,REGISTRATION_PASS_QR_SLO_VARIABLE
+2-instances,3,50,41.773,41.832,1855.103,2121.688,24,87.558,101.709,396.841,452.654,0,PASS
+4-instances,3,50,52.412,52.553,1162.873,1209.812,24,118.544,141.933,393.106,454.197,0,PASS
+4-instances-maximum-observed,3,100,72.019,76.663,2421.011,2486.329,24,111.004,159.700,542.073,751.356,0,SLO_VARIABLE_NOT_CERTIFIED
+2-instances-sustained120,3,25,38.045,39.748,1350.353,1438.529,8,76.983,76.983,162.662,183.003,0,REGISTRATION_PASS_QR8_OBSERVED_ONCE
+4-instances-sustained120,1,50,55.983,55.983,2258.187,2416.901,24,93.401,93.401,622.904,774.939,0,SLO_FAIL_INTEGRITY_PASS

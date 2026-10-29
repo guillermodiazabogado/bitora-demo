@@ -9,4 +9,4 @@
 | Aplicación | 1/2/4 instancias; pool por proceso min 1/max 10 |
 | Red | Loopback/bridge Docker; no representa red de evento |
 
-Estado de ejecución: **PENDIENTE**.
+Estado de ejecución: **PASS de laboratorio**. No representa infraestructura productiva ni red de evento.
