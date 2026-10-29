@@ -1,0 +1,1039 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "tokens_and_qr_unique": true
+  },
+  "configuration": {
+    "access_concurrency": 12,
+    "duration_seconds_per_cell": 120.0,
+    "levels": [
+      2
+    ],
+    "matrix_cells": 1,
+    "max_operations_per_cell": 0,
+    "postgres": "16-alpine",
+    "smoke": false,
+    "telemetry_sample_seconds": 5.0,
+    "warmup_seconds_per_cell": 5.0,
+    "worker_levels": [
+      25
+    ]
+  },
+  "finished_at": "2026-10-29T20:45:45.907071+00:00",
+  "integrity": {
+    "duplicate_emails_within_event": 0,
+    "duplicate_tokens": 0,
+    "expected_added": 5235,
+    "final_participants": 5236,
+    "initial_participants": 1,
+    "observed_added": 5235,
+    "postgres": {
+      "available": true,
+      "connections_active": 1,
+      "connections_total": 13,
+      "database_size_bytes": 71072791,
+      "deadlocks": 0,
+      "locks_waiting": 0,
+      "max_connections": 100,
+      "sessions_waiting": 12,
+      "temp_bytes": 0,
+      "xact_commit": 677808,
+      "xact_rollback": 0
+    }
+  },
+  "levels": [
+    {
+      "access": {
+        "distinct_credentials": {
+          "attempted": 12,
+          "authorized": 12,
+          "errors": 0,
+          "latency_ms": {
+            "max": 275.413,
+            "mean": 191.821,
+            "p50": 188.668,
+            "p95": 275.413,
+            "p99": 275.413,
+            "samples": 12
+          },
+          "outcomes": {
+            "granted:VALID": 12
+          },
+          "throughput_per_second": 42.132
+        },
+        "idempotent_replay_pass": true,
+        "same_credential": {
+          "anti_passback": 11,
+          "attempted": 12,
+          "authorized": 1,
+          "errors": 0,
+          "invariant_pass": true,
+          "latency_ms": {
+            "max": 241.135,
+            "mean": 164.552,
+            "p50": 157.096,
+            "p95": 241.135,
+            "p99": 241.135,
+            "samples": 12
+          },
+          "outcomes": {
+            "granted:VALID": 1,
+            "rejected:ANTI_PASSBACK": 11
+          },
+          "throughput_per_second": 47.949
+        },
+        "sustained_qr_validation": {
+          "attempted": 9496,
+          "authorized": 791,
+          "business_rejected": 8705,
+          "closed_workers": 12,
+          "duration_seconds": 120.15,
+          "latency_ms": {
+            "max": 372.808,
+            "mean": 151.724,
+            "p50": 141.273,
+            "p95": 267.013,
+            "p99": 301.251,
+            "samples": 9496
+          },
+          "model": "closed",
+          "outcomes": {
+            "granted:VALID": 791,
+            "rejected:ANTI_PASSBACK": 8705
+          },
+          "responses_per_second": 79.034,
+          "technical_errors": 0
+        }
+      },
+      "attempted": 4972,
+      "cell_id": "i2-w25",
+      "closed_workers": 25,
+      "completed": 4972,
+      "completed_per_second": 40.989,
+      "database_rows_added": 5234,
+      "duration_seconds": 121.3,
+      "failed": 0,
+      "instances": 2,
+      "integrity_pass": true,
+      "latency_ms": {
+        "max": 1525.645,
+        "mean": 606.404,
+        "p50": 748.885,
+        "p95": 1381.278,
+        "p99": 1468.173,
+        "samples": 4972
+      },
+      "model": "closed",
+      "peak_active_operations": 25,
+      "qr_requests_completed": 4972,
+      "recent_failure_details": [],
+      "recent_failure_types": [],
+      "step_latency_ms": {
+        "event_get_ms": {
+          "max": 423.475,
+          "mean": 26.578,
+          "p50": 25.177,
+          "p95": 34.444,
+          "p99": 48.106,
+          "samples": 4972
+        },
+        "portal_get_ms": {
+          "max": 92.691,
+          "mean": 12.576,
+          "p50": 11.947,
+          "p95": 19.733,
+          "p99": 29.026,
+          "samples": 4972
+        },
+        "qr_get_ms": {
+          "max": 71.624,
+          "mean": 11.969,
+          "p50": 10.665,
+          "p95": 19.645,
+          "p99": 26.393,
+          "samples": 4972
+        },
+        "register_post_ms": {
+          "max": 1466.559,
+          "mean": 555.264,
+          "p50": 520.738,
+          "p95": 1327.602,
+          "p99": 1417.297,
+          "samples": 4972
+        }
+      },
+      "success_rate": 100.0,
+      "telemetry_after": {
+        "containers": {
+          "1": {
+            "available": true,
+            "block_io": "0B / 0B",
+            "cpu_percent": 0.01,
+            "memory_percent": 2.11,
+            "memory_usage": "145MiB / 6.715GiB",
+            "network_io": "2.1GB / 163MB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 6,
+            "restart_count": 0,
+            "state": "running"
+          },
+          "2": {
+            "available": true,
+            "block_io": "0B / 0B",
+            "cpu_percent": 0.01,
+            "memory_percent": 1.32,
+            "memory_usage": "90.85MiB / 6.715GiB",
+            "network_io": "2.07GB / 162MB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 6,
+            "restart_count": 0,
+            "state": "running"
+          },
+          "postgres": {
+            "available": true,
+            "block_io": "62.3MB / 772MB",
+            "cpu_percent": 0.02,
+            "memory_percent": 4.13,
+            "memory_usage": "283.7MiB / 6.715GiB",
+            "network_io": "213MB / 4.15GB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 26,
+            "restart_count": 0,
+            "state": "running"
+          }
+        },
+        "participants": 5235,
+        "postgres": {
+          "available": true,
+          "connections_active": 1,
+          "connections_total": 21,
+          "database_size_bytes": 71064599,
+          "deadlocks": 0,
+          "locks_waiting": 0,
+          "max_connections": 100,
+          "sessions_waiting": 20,
+          "temp_bytes": 0,
+          "xact_commit": 676718,
+          "xact_rollback": 0
+        }
+      },
+      "telemetry_before": {
+        "containers": {
+          "1": {
+            "available": true,
+            "block_io": "0B / 0B",
+            "cpu_percent": 14.66,
+            "memory_percent": 0.99,
+            "memory_usage": "68.18MiB / 6.715GiB",
+            "network_io": "27.1kB / 31.2kB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 6,
+            "restart_count": 0,
+            "state": "running"
+          },
+          "2": {
+            "available": true,
+            "block_io": "0B / 0B",
+            "cpu_percent": 20.78,
+            "memory_percent": 0.99,
+            "memory_usage": "67.9MiB / 6.715GiB",
+            "network_io": "26.9kB / 31.2kB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 6,
+            "restart_count": 0,
+            "state": "running"
+          },
+          "postgres": {
+            "available": true,
+            "block_io": "62.3MB / 92.1MB",
+            "cpu_percent": 0.16,
+            "memory_percent": 1.11,
+            "memory_usage": "76.43MiB / 6.715GiB",
+            "network_io": "308kB / 130kB",
+            "oom_killed": false,
+            "pid_present": true,
+            "pids": 10,
+            "restart_count": 0,
+            "state": "running"
+          }
+        },
+        "participants": 1,
+        "postgres": {
+          "available": true,
+          "connections_active": 1,
+          "connections_total": 5,
+          "database_size_bytes": 20601879,
+          "deadlocks": 0,
+          "locks_waiting": 0,
+          "max_connections": 100,
+          "sessions_waiting": 4,
+          "temp_bytes": 0,
+          "xact_commit": 190,
+          "xact_rollback": 0
+        }
+      },
+      "telemetry_peaks": {
+        "container_cpu_percent": 131.87,
+        "container_memory_percent": 3.36,
+        "in_flight": 25,
+        "postgres_connections": 22,
+        "postgres_locks_waiting": 0
+      },
+      "telemetry_samples": [
+        {
+          "completed": 0,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 124.29,
+              "memory_percent": 1.07,
+              "memory_usage": "73.66MiB / 6.715GiB",
+              "network_io": "12.8MB / 6.62MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 89.64,
+              "memory_percent": 1.05,
+              "memory_usage": "72.39MiB / 6.715GiB",
+              "network_io": "21.8MB / 9.04MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 9,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 111MB",
+              "cpu_percent": 113.63,
+              "memory_percent": 2.87,
+              "memory_usage": "197.3MiB / 6.715GiB",
+              "network_io": "12MB / 58MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 0.003,
+          "in_flight": 13,
+          "postgres": {
+            "available": true,
+            "connections_active": 2,
+            "connections_total": 21,
+            "database_size_bytes": 25639959,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 20,
+            "temp_bytes": 0,
+            "xact_commit": 40433,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:41:31.765957+00:00"
+        },
+        {
+          "completed": 526,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 106.88,
+              "memory_percent": 1.2,
+              "memory_usage": "82.73MiB / 6.715GiB",
+              "network_io": "68.3MB / 17.6MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 105.05,
+              "memory_percent": 1.08,
+              "memory_usage": "73.99MiB / 6.715GiB",
+              "network_io": "84.7MB / 20MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 9,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 130MB",
+              "cpu_percent": 113.34,
+              "memory_percent": 2.92,
+              "memory_usage": "200.8MiB / 6.715GiB",
+              "network_io": "23.5MB / 198MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 10.54,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 1,
+            "connections_total": 21,
+            "database_size_bytes": 28687383,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 20,
+            "temp_bytes": 0,
+            "xact_commit": 82783,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:41:42.302145+00:00"
+        },
+        {
+          "completed": 1062,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 101.71,
+              "memory_percent": 1.31,
+              "memory_usage": "90.32MiB / 6.715GiB",
+              "network_io": "161MB / 28.5MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 85.44,
+              "memory_percent": 1.12,
+              "memory_usage": "77.04MiB / 6.715GiB",
+              "network_io": "183MB / 30.8MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 166MB",
+              "cpu_percent": 117.68,
+              "memory_percent": 3.0,
+              "memory_usage": "206.6MiB / 6.715GiB",
+              "network_io": "34.6MB / 405MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 21.038,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 2,
+            "connections_total": 21,
+            "database_size_bytes": 31652887,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 19,
+            "temp_bytes": 0,
+            "xact_commit": 123226,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:41:52.800993+00:00"
+        },
+        {
+          "completed": 1563,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 98.35,
+              "memory_percent": 1.42,
+              "memory_usage": "97.65MiB / 6.715GiB",
+              "network_io": "283MB / 38.9MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 28,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 90.48,
+              "memory_percent": 1.15,
+              "memory_usage": "78.73MiB / 6.715GiB",
+              "network_io": "311MB / 41.2MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 196MB",
+              "cpu_percent": 120.36,
+              "memory_percent": 3.04,
+              "memory_usage": "209.2MiB / 6.715GiB",
+              "network_io": "45.7MB / 670MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 31.537,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 3,
+            "connections_total": 21,
+            "database_size_bytes": 34429975,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 20,
+            "temp_bytes": 0,
+            "xact_commit": 162696,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:03.299678+00:00"
+        },
+        {
+          "completed": 2046,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 97.65,
+              "memory_percent": 1.53,
+              "memory_usage": "105.5MiB / 6.715GiB",
+              "network_io": "433MB / 49.1MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 94.63,
+              "memory_percent": 1.17,
+              "memory_usage": "80.52MiB / 6.715GiB",
+              "network_io": "466MB / 51.5MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 9,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 213MB",
+              "cpu_percent": 123.56,
+              "memory_percent": 3.1,
+              "memory_usage": "213.3MiB / 6.715GiB",
+              "network_io": "56.7MB / 988MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 42.032,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 3,
+            "connections_total": 21,
+            "database_size_bytes": 37059607,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 19,
+            "temp_bytes": 0,
+            "xact_commit": 199424,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:13.794588+00:00"
+        },
+        {
+          "completed": 2500,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 93.69,
+              "memory_percent": 1.62,
+              "memory_usage": "111.1MiB / 6.715GiB",
+              "network_io": "601MB / 58.9MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 30,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 83.08,
+              "memory_percent": 1.2,
+              "memory_usage": "82.48MiB / 6.715GiB",
+              "network_io": "638MB / 61.1MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 246MB",
+              "cpu_percent": 124.13,
+              "memory_percent": 3.14,
+              "memory_usage": "216.2MiB / 6.715GiB",
+              "network_io": "67.3MB / 1.34GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 52.516,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 3,
+            "connections_total": 22,
+            "database_size_bytes": 39713815,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 20,
+            "temp_bytes": 0,
+            "xact_commit": 233909,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:24.278456+00:00"
+        },
+        {
+          "completed": 2925,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 87.86,
+              "memory_percent": 1.71,
+              "memory_usage": "117.5MiB / 6.715GiB",
+              "network_io": "787MB / 68.3MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 28,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 86.5,
+              "memory_percent": 1.22,
+              "memory_usage": "83.79MiB / 6.715GiB",
+              "network_io": "824MB / 70.4MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 268MB",
+              "cpu_percent": 126.28,
+              "memory_percent": 3.17,
+              "memory_usage": "218.1MiB / 6.715GiB",
+              "network_io": "77.6MB / 1.71GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 63.031,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 3,
+            "connections_total": 21,
+            "database_size_bytes": 41081879,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 18,
+            "temp_bytes": 0,
+            "xact_commit": 266584,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:34.793129+00:00"
+        },
+        {
+          "completed": 3337,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 87.93,
+              "memory_percent": 1.78,
+              "memory_usage": "122.4MiB / 6.715GiB",
+              "network_io": "989MB / 77.5MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 28,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 84.47,
+              "memory_percent": 1.23,
+              "memory_usage": "84.83MiB / 6.715GiB",
+              "network_io": "1.03GB / 79.6MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 284MB",
+              "cpu_percent": 131.87,
+              "memory_percent": 3.27,
+              "memory_usage": "224.5MiB / 6.715GiB",
+              "network_io": "88MB / 2.13GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 73.515,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 3,
+            "connections_total": 21,
+            "database_size_bytes": 43400215,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 18,
+            "temp_bytes": 0,
+            "xact_commit": 298381,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:45.277293+00:00"
+        },
+        {
+          "completed": 3731,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 84.79,
+              "memory_percent": 1.86,
+              "memory_usage": "127.8MiB / 6.715GiB",
+              "network_io": "1.2GB / 86.4MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 28,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 73.91,
+              "memory_percent": 1.27,
+              "memory_usage": "87.18MiB / 6.715GiB",
+              "network_io": "1.25GB / 88.4MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 315MB",
+              "cpu_percent": 124.34,
+              "memory_percent": 3.25,
+              "memory_usage": "223.4MiB / 6.715GiB",
+              "network_io": "98.1MB / 2.56GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 83.997,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 2,
+            "connections_total": 21,
+            "database_size_bytes": 45267991,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 19,
+            "temp_bytes": 0,
+            "xact_commit": 328145,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:42:55.759414+00:00"
+        },
+        {
+          "completed": 4102,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 85.98,
+              "memory_percent": 1.95,
+              "memory_usage": "133.8MiB / 6.715GiB",
+              "network_io": "1.43GB / 95.2MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 72.11,
+              "memory_percent": 1.27,
+              "memory_usage": "87.49MiB / 6.715GiB",
+              "network_io": "1.47GB / 97MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 7,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 331MB",
+              "cpu_percent": 121.82,
+              "memory_percent": 3.35,
+              "memory_usage": "230.1MiB / 6.715GiB",
+              "network_io": "108MB / 3.01GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 94.479,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 2,
+            "connections_total": 21,
+            "database_size_bytes": 47725591,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 19,
+            "temp_bytes": 0,
+            "xact_commit": 356553,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:43:06.241503+00:00"
+        },
+        {
+          "completed": 4453,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 85.26,
+              "memory_percent": 2.0,
+              "memory_usage": "137.5MiB / 6.715GiB",
+              "network_io": "1.65GB / 104MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 30,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 67.58,
+              "memory_percent": 1.3,
+              "memory_usage": "89.28MiB / 6.715GiB",
+              "network_io": "1.69GB / 105MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 8,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 347MB",
+              "cpu_percent": 125.82,
+              "memory_percent": 3.35,
+              "memory_usage": "230.1MiB / 6.715GiB",
+              "network_io": "118MB / 3.47GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 104.961,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 2,
+            "connections_total": 21,
+            "database_size_bytes": 49601559,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 18,
+            "temp_bytes": 0,
+            "xact_commit": 383300,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:43:16.723141+00:00"
+        },
+        {
+          "completed": 4799,
+          "containers": {
+            "1": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 84.03,
+              "memory_percent": 2.12,
+              "memory_usage": "145.4MiB / 6.715GiB",
+              "network_io": "1.89GB / 112MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 29,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "2": {
+              "available": true,
+              "block_io": "0B / 0B",
+              "cpu_percent": 76.2,
+              "memory_percent": 1.31,
+              "memory_usage": "90.27MiB / 6.715GiB",
+              "network_io": "1.94GB / 114MB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 9,
+              "restart_count": 0,
+              "state": "running"
+            },
+            "postgres": {
+              "available": true,
+              "block_io": "62.3MB / 360MB",
+              "cpu_percent": 93.27,
+              "memory_percent": 3.36,
+              "memory_usage": "231.2MiB / 6.715GiB",
+              "network_io": "128MB / 3.95GB",
+              "oom_killed": false,
+              "pid_present": true,
+              "pids": 26,
+              "restart_count": 0,
+              "state": "running"
+            }
+          },
+          "elapsed_seconds": 115.436,
+          "in_flight": 25,
+          "postgres": {
+            "available": true,
+            "connections_active": 1,
+            "connections_total": 21,
+            "database_size_bytes": 51371031,
+            "deadlocks": 0,
+            "locks_waiting": 0,
+            "max_connections": 100,
+            "sessions_waiting": 20,
+            "temp_bytes": 0,
+            "xact_commit": 409618,
+            "xact_rollback": 0
+          },
+          "timestamp": "2026-10-29T20:43:27.198683+00:00"
+        }
+      ],
+      "unique_qr_payloads": 4972,
+      "unique_tokens": 4972,
+      "warmup_failures": 0,
+      "warmup_operations_attempted": 262,
+      "warmup_operations_excluded": 262,
+      "warmup_seconds_requested": 5.0
+    }
+  ],
+  "limitations": [
+    "Laboratory Docker loopback is not venue networking or production infrastructure.",
+    "Virtual access clients are not certification of physical QR readers or Edge hardware.",
+    "Closed-model workers include application response time and do not establish a maximum arrival rate."
+  ],
+  "ok": true,
+  "recovery": {
+    "instance_restart_seconds": 3.313,
+    "post_restart_complete_registration": true
+  },
+  "resources_removed": true,
+  "run_id": "b0368e0812",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "ddc47d2c3ec729bed0fe2e833702a864cc30ee32",
+  "started_at": "2026-10-29T20:40:54.461236+00:00",
+  "workspace_dirty": true
+}

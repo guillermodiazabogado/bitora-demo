@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "auditoria/bitora_5_8_2_performance_optimization/evidencia/optimized-i2-w25-qr12-r1.json",
+  "run_id": "b62e4202d0",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "7021d78fb95bc5ce9813f20ab4ae872e473dff8a",
+  "status": "complete"
+}
