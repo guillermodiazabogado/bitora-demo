@@ -10,5 +10,7 @@
 | Lectores/tablets/teléfonos | No detectados | BLOCKED |
 | Edge físico | No detectado | BLOCKED |
 | Cámaras/puertas | No detectadas | BLOCKED |
+| Docker de laboratorio | Docker Engine 29.1.3 en Ubuntu WSL | PASS LABORATORIO |
+| PostgreSQL de laboratorio | Contenedor PostgreSQL 16 aislado | PASS LABORATORIO |
 
 Detectar un componente no equivale a probarlo en operación de evento.

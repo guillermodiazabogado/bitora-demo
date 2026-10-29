@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "exit_code": 0,
+  "monotonic_elapsed_seconds": 21726.889,
+  "finished_at_utc": "2026-10-29T04:41:32.5347200+00:00",
+  "job_arguments_sha256": "db753feb0134d3775878a2c6c0c91432f7641a29c593d881e3a31eba6ec77f49",
+  "runner_pid": 8904,
+  "job_pid": 18492,
+  "schema_version": 1,
+  "job_executable": "C:\\WINDOWS\\System32\\wsl.exe",
+  "updated_at_utc": "2026-10-29T04:41:32.5350123+00:00",
+  "expected_sha": "f9dc15e3aa8abe12c72717342fcf260ef7b81bad",
+  "started_at_utc": "2026-10-28T22:39:26.0662496+00:00",
+  "run_directory": "C:\\Users\\Noxie-PC\\.codex\\worktrees\\bitora-persistent-endurance\\qr white label\\auditoria\\bitora_5_8_2_persistent_endurance\\evidencia\\endurance-6h-f9dc15e-r2"
+}

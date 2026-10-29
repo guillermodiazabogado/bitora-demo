@@ -1,0 +1,90 @@
+{
+  "checks": {
+    "concurrent_entry_anti_passback": true,
+    "cross_instance_idempotent_replay": true,
+    "database_disconnect_observable": true,
+    "database_reconnect_recovers": true,
+    "database_state_consistent": true,
+    "idempotency_preserved_event_count": true,
+    "integrated_http_postgres_endurance": true,
+    "logout_cross_instance_revokes": true,
+    "multievent_isolation": true,
+    "postgres_restart_recovers": true,
+    "restart_preserves_shared_session": true,
+    "role_change_invalidates_session": true,
+    "session_cross_instance": true,
+    "two_distinct_instances_ready": true
+  },
+  "endurance": {
+    "attempted": 736461,
+    "elapsed_seconds": 21600.171,
+    "failures_total": 0,
+    "latency_ms": {
+      "mean": 24.123,
+      "p50": 19.876,
+      "p95": 32.565,
+      "p99": 64.835
+    },
+    "recent_failures": [],
+    "requested_seconds": 21600,
+    "succeeded": 736461
+  },
+  "run_id": "262ecaed81",
+  "schema": "bitora.operational.telemetry.v1",
+  "status": "complete",
+  "telemetry_summary": {
+    "app_a_cpu_percent": {
+      "change_percent": 200600.0,
+      "first": 0.01,
+      "last": 20.07,
+      "maximum": 21.11,
+      "samples": 720
+    },
+    "app_b_cpu_percent": {
+      "change_percent": 0.0,
+      "first": 0.01,
+      "last": 0.01,
+      "maximum": 21.88,
+      "samples": 720
+    },
+    "oom_or_restart_observed": false,
+    "postgres_connections": {
+      "change_percent": 40.0,
+      "first": 5.0,
+      "last": 7.0,
+      "maximum": 8.0,
+      "samples": 720
+    },
+    "postgres_cpu_percent": {
+      "change_percent": 333.333,
+      "first": 0.03,
+      "last": 0.13,
+      "maximum": 44.74,
+      "samples": 720
+    },
+    "postgres_database_size_bytes": {
+      "change_percent": 5898.876,
+      "first": 20986903.0,
+      "last": 1258978327.0,
+      "maximum": 1258978327.0,
+      "samples": 720
+    },
+    "postgres_locks_waiting": {
+      "change_percent": null,
+      "first": 0.0,
+      "last": 0.0,
+      "maximum": 0.0,
+      "samples": 720
+    },
+    "readiness_200": 1440,
+    "readiness_latency_ms": {
+      "change_percent": 4.126,
+      "first": 17.014,
+      "last": 17.716,
+      "maximum": 118.979,
+      "samples": 1440
+    },
+    "readiness_total": 1440,
+    "samples": 720
+  }
+}

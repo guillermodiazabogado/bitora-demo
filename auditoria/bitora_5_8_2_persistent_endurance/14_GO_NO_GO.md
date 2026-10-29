@@ -1,6 +1,8 @@
 # GO / NO-GO
 
 - Software certificado: **GO**.
-- Inicio de endurance 6h: **NO-GO temporal** hasta recuperar Docker y autorizar/registrar la tarea persistente; el wrapper ya aprobó localmente.
-- Simulacro físico: **NO-GO** hasta completar 6h y disponer de red/dispositivos.
+- Laboratorio y endurance 6h: **GO / PASS** sobre `f9dc15e`.
+- Simulacro físico: **NO-GO** hasta disponer e inventariar red, lectores, tablets/teléfonos, Edge y responsables, y ejecutar el protocolo presencial.
 - Producción: **NO-GO**.
+
+El PASS de laboratorio permite avanzar a preparar el simulacro, pero no autoriza operar un evento real.

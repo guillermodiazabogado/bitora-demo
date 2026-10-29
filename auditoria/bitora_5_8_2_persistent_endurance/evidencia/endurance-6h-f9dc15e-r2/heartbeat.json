@@ -1,0 +1,9 @@
+{
+  "monotonic_elapsed_seconds": 21696.784,
+  "stop_requested": false,
+  "timestamp_utc": "2026-10-29T04:41:02.4237178+00:00",
+  "job_pid": 18492,
+  "timed_out": false,
+  "runner_pid": 8904,
+  "job_running": true
+}
