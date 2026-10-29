@@ -399,7 +399,7 @@ def access_request(
 
 def access_checks(
     bases: list[str], tokens: list[str], concurrency: int, *, run_id: str,
-    cell_id: str, duration: float,
+    cell_id: str, duration: float, sustained_mode: str = "legacy",
 ) -> dict:
     if not tokens:
         raise HarnessError("ACCESS_TOKENS_MISSING")
@@ -456,6 +456,27 @@ def access_checks(
     barrier = threading.Barrier(concurrency + 1)
     sustained_started = 0.0
     sustained_deadline = 0.0
+    profile_tokens = tokens[concurrency: concurrency * 2]
+    if sustained_mode in {"valid", "antipassback"} and len(profile_tokens) < concurrency:
+        raise HarnessError("ACCESS_PROFILE_REQUIRES_UNIQUE_TOKENS")
+    seed_results: list[dict] = []
+    if sustained_mode == "antipassback":
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = [
+                pool.submit(
+                    access_request,
+                    thread_clients[index],
+                    bases[index % len(bases)],
+                    profile_tokens[index],
+                    250000 + index,
+                    "ENTRY",
+                    f"{run_id}-{cell_id}-antipassback-seed-{index}",
+                )
+                for index in range(concurrency)
+            ]
+            seed_results = [future.result() for future in futures]
+        if any(not item.get("ok") or item.get("result") != "granted" for item in seed_results):
+            raise HarnessError("ACCESS_ANTIPASSBACK_SEED_FAILED")
 
     def sustained_worker(index: int) -> None:
         nonlocal sustained_started, sustained_deadline
@@ -463,10 +484,18 @@ def access_checks(
         local = 0
         barrier.wait()
         while time.monotonic() < sustained_deadline:
-            token = tokens[(index + local) % len(tokens)]
+            if sustained_mode == "valid":
+                token = profile_tokens[index]
+                direction = "ENTRY" if local % 2 == 0 else "EXIT"
+            elif sustained_mode == "antipassback":
+                token = profile_tokens[index]
+                direction = "ENTRY"
+            else:
+                token = tokens[(index + local) % len(tokens)]
+                direction = "ENTRY"
             operation = access_request(
                 client, bases[(index + local) % len(bases)], token,
-                300000 + index * 1000000 + local, "ENTRY",
+                300000 + index * 1000000 + local, direction,
                 f"{run_id}-{cell_id}-sustained-{index}-{local}",
             )
             with sustained_lock:
@@ -481,6 +510,20 @@ def access_checks(
         for future in sustained_futures:
             future.result()
     sustained_elapsed = time.monotonic() - sustained_started
+    sustained_authorized = sum(item.get("result") == "granted" for item in sustained_results)
+    sustained_rejected = sum(item.get("result") == "rejected" for item in sustained_results)
+    sustained_technical_errors = sum(not item.get("ok") for item in sustained_results)
+    sustained_outcomes = outcomes(sustained_results)
+    profile_pass = sustained_technical_errors == 0
+    if sustained_mode == "valid":
+        profile_pass = profile_pass and sustained_authorized == len(sustained_results)
+    elif sustained_mode == "antipassback":
+        profile_pass = (
+            profile_pass
+            and sustained_authorized == 0
+            and sustained_rejected == len(sustained_results)
+            and sustained_outcomes == {"rejected:ANTI_PASSBACK": len(sustained_results)}
+        )
     return {
         "distinct_credentials": {
             "attempted": len(distinct_results),
@@ -503,15 +546,18 @@ def access_checks(
         "idempotent_replay_pass": first.get("result") == "granted" and replay.get("idempotent_replay") is True,
         "sustained_qr_validation": {
             "model": "closed",
+            "profile": sustained_mode,
             "closed_workers": concurrency,
             "duration_seconds": round(sustained_elapsed, 3),
             "attempted": len(sustained_results),
-            "authorized": sum(item.get("result") == "granted" for item in sustained_results),
-            "business_rejected": sum(item.get("result") == "rejected" for item in sustained_results),
-            "technical_errors": sum(not item.get("ok") for item in sustained_results),
+            "authorized": sustained_authorized,
+            "business_rejected": sustained_rejected,
+            "technical_errors": sustained_technical_errors,
             "responses_per_second": round(len(sustained_results) / sustained_elapsed, 3),
             "latency_ms": latency_summary([float(item["latency_ms"]) for item in sustained_results]),
-            "outcomes": outcomes(sustained_results),
+            "outcomes": sustained_outcomes,
+            "seed_operations": len(seed_results),
+            "profile_pass": profile_pass,
         },
     }
 
@@ -527,6 +573,10 @@ def main() -> int:
     parser.add_argument("--sample-seconds", type=float, default=5)
     parser.add_argument("--max-operations", type=int, default=0, help="Per-cell registration safety cap; zero is unlimited")
     parser.add_argument("--access-concurrency", type=int, default=30)
+    parser.add_argument(
+        "--access-mode", choices=("legacy", "valid", "antipassback"), default="legacy",
+        help="Sustained QR profile: historical mixed state, valid ENTRY/EXIT, or anti-passback rejects",
+    )
     parser.add_argument("--smoke", action="store_true", help="Use 1/2 instances, <=4 workers and a short bounded run")
     parser.add_argument("--keep", action="store_true", help="Keep only this run's isolated resources")
     args = parser.parse_args()
@@ -586,6 +636,7 @@ def main() -> int:
             "telemetry_sample_seconds": args.sample_seconds,
             "max_operations_per_cell": args.max_operations,
             "access_concurrency": args.access_concurrency,
+            "access_mode": args.access_mode,
             "smoke": args.smoke,
             "postgres": "16-alpine",
         },
@@ -655,6 +706,7 @@ def main() -> int:
                 access = access_checks(
                     bases, tokens or all_tokens, args.access_concurrency,
                     run_id=run_id, cell_id=cell_id, duration=args.duration_seconds,
+                    sustained_mode=args.access_mode,
                 )
                 after = {
                     "containers": container_metrics(tuple(started_apps[:level] + [postgres])),
@@ -733,6 +785,9 @@ def main() -> int:
             ),
             "idempotency_preserved": all(
                 item["access"]["idempotent_replay_pass"] for item in report["levels"]
+            ),
+            "sustained_access_profile_pass": all(
+                item["access"]["sustained_qr_validation"]["profile_pass"] for item in report["levels"]
             ),
             "restart_recovers": bool(recovery_result.get("ok")),
             "database_integrity": (
