@@ -5065,6 +5065,9 @@ def communication_audience_rows(db: sqlite3.Connection, event_id: int, audience:
         where.append("a.checked_in_at IS NULL")
     elif audience in {"elegibles", "eligible_certificates"}:
         where.append("EXISTS (SELECT 1 FROM certificate_eligibility ce WHERE ce.accreditation_id = a.id AND ce.elegible = 1)")
+    if filters.get("accreditation_id"):
+        where.append("a.id = ?")
+        params.append(int(filters["accreditation_id"]))
     rows = db.execute(
         f"""
         SELECT a.id AS accreditation_id, a.token, a.type, a.status,
@@ -5231,11 +5234,12 @@ def queue_communication(db: sqlite3.Connection, *, event_id: int, actor: str, au
 
 
 def queue_registration_confirmation(db, event_id: int, accreditation_id: int, actor: str = "public") -> dict:
-    rows = [
-        row
-        for row in communication_audience_rows(db, event_id, "all")
-        if int(row["accreditation_id"]) == int(accreditation_id)
-    ]
+    rows = communication_audience_rows(
+        db,
+        event_id,
+        "all",
+        {"accreditation_id": int(accreditation_id)},
+    )
     empty_channel = {"queued": 0, "sent": 0, "skipped": 1, "errors": 0}
     if not rows:
         return {
