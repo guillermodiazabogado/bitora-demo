@@ -15,7 +15,6 @@ import threading
 import time
 import random
 import re
-from contextlib import contextmanager
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -3502,23 +3501,6 @@ ACCESS_STATE_REASON_MESSAGES = {
     "INVALID_STATE_TRANSITION": "Transicion de acceso invalida",
     "V5_ERROR": "No se pudo validar el acceso de forma segura",
 }
-
-
-@contextmanager
-def access_validation_critical_section(db):
-    """Keep SQLite safe without serializing independent PostgreSQL scans.
-
-    SQLite uses one process-wide write lock because its write transaction model
-    requires it. PostgreSQL provides the cross-process critical section inside
-    ``acquire_access_transaction_lock`` with a transaction-scoped advisory lock
-    keyed by accreditation, so an additional process-wide lock would serialize
-    unrelated credentials and defeat horizontal scaling.
-    """
-    if is_postgres_connection(db):
-        yield
-        return
-    with DB_LOCK:
-        yield
 
 
 def acquire_access_transaction_lock(db, event_scope: dict) -> int | None:
@@ -16235,7 +16217,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 direction = str(data.get("direction") or "ENTRY").strip().upper()
                 correlation_id = str(data.get("correlation_id") or "").strip()
                 idempotency_key = str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or "").strip()
-                with connect() as db, access_validation_critical_section(db):
+                with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     event_scope = access_event_scope(db, token)
                     if event_scope:
