@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": false,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": false,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "auditoria/bitora_5_8_2_capacity_certification/evidencia/capacity-smoke.json",
+  "run_id": "357fbda300",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "8be0091874201a57b0675d5ba587aac9556652b0",
+  "status": "failed"
+}
