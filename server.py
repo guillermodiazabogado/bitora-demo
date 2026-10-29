@@ -4697,9 +4697,21 @@ def register_accreditation(db: sqlite3.Connection, event_id: int, data: dict) ->
         """,
         (event_id, person_id, acc_type, token, source, source_detail, device_type, now_iso()),
     )
+    accreditation_id = int(cur.lastrowid)
+    if access_state_engine_enforced_enabled(db, event_id):
+        organization_id = event_organization_id(db, event_id)
+        if not organization_id:
+            raise ValueError("EVENT_SCOPE_NOT_FOUND")
+        enterprise_core_service().sync_accreditation(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            accreditation_id=accreditation_id,
+            actor=str(data.get("actor") or "registration"),
+        )
     upsert_communication_preference(db, person_id, data)
-    upsert_conversation_source(db, event_id, person_id, int(cur.lastrowid), source, data.get("channel") or ("whatsapp" if source == "whatsapp" else "web"), device_type)
-    return {"ok": True, "id": cur.lastrowid, "token": token, "existing": False, "person_id": person_id}
+    upsert_conversation_source(db, event_id, person_id, accreditation_id, source, data.get("channel") or ("whatsapp" if source == "whatsapp" else "web"), device_type)
+    return {"ok": True, "id": accreditation_id, "token": token, "existing": False, "person_id": person_id}
 
 
 def truthy(value: object) -> bool:

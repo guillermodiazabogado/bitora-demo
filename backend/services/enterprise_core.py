@@ -103,6 +103,59 @@ class EnterpriseCoreService:
             self.audit_service.record(db, actor, "enterprise_core.backfilled", "event", event_id, {"organization_id": organization_id, **stats})
         return {"ok": not stats["errors"], "stats": stats, "summary": self.summary(db, organization_id=organization_id, event_id=event_id)}
 
+    def sync_accreditation(self, db, *, organization_id: int, event_id: int, accreditation_id: int, actor: str = "enterprise-core") -> dict:
+        """Create or refresh the enterprise projection for one legacy accreditation."""
+        self._validate_event(db, organization_id, event_id)
+        row = db.execute(
+            """
+            SELECT p.*, a.id AS accreditation_id, a.token, a.status AS accreditation_status
+            FROM accreditations a
+            JOIN people p ON p.id = a.person_id
+            WHERE a.id = ? AND a.event_id = ?
+            """,
+            (accreditation_id, event_id),
+        ).fetchone()
+        if not row:
+            raise EnterpriseCoreError("ACCREDITATION_NOT_FOUND", "Acreditacion fuera de alcance", 404)
+        person = self.ensure_entity(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            entity_type="PERSON",
+            legacy_table="people",
+            legacy_id=int(row["id"]),
+            actor=actor,
+            metadata={"source": "incremental-sync", "accreditation_id": int(row["accreditation_id"])},
+        )
+        self.ensure_identity(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            entity_id=person["id"],
+            display_name=f"{row['first_name']} {row['last_name']}".strip(),
+            identity_hash=self._hash(str(row["email"] or "").strip().lower() or str(row["dni"] or "")),
+        )
+        credential_entity = self.ensure_entity(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            entity_type="CREDENTIAL",
+            legacy_table="accreditations",
+            legacy_id=int(row["accreditation_id"]),
+            actor=actor,
+            metadata={"person_entity_id": person["id"], "source": "incremental-sync"},
+        )
+        credential = self.ensure_credential(
+            db,
+            organization_id=organization_id,
+            event_id=event_id,
+            entity_id=credential_entity["id"],
+            accreditation_id=int(row["accreditation_id"]),
+            token=str(row["token"] or ""),
+            status="ACTIVE" if str(row["accreditation_status"]) == "active" else "INACTIVE",
+        )
+        return {"ok": True, "entity_id": int(credential_entity["id"]), "credential_id": int(credential["id"])}
+
     def ensure_entity(self, db, *, organization_id: int, event_id: int, entity_type: str, legacy_table: str = "", legacy_id: int | None = None, external_key: str = "", actor: str = "", metadata: dict | None = None) -> dict:
         entity_type = self._choice(entity_type, ENTITY_TYPES, "ENTITY_TYPE_INVALID")
         legacy_table = self._clean_key(legacy_table, 80)
