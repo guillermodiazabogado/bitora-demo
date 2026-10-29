@@ -228,7 +228,10 @@ class AccessStateEngine:
             self.record_comparison(db, context, fallback, v4_result, comparison_override="V5_ERROR")
             return {"ok": False, "decision": fallback.as_dict(), "comparison": {"comparison": "V5_ERROR"}, "error": str(exc)}
 
-    def record_access_event(self, db, context: AccessStateContext, decision: AccessStateDecision) -> dict:
+    def record_access_event(
+        self, db, context: AccessStateContext, decision: AccessStateDecision, *,
+        check_idempotency: bool = True,
+    ) -> dict:
         metadata = {
             "checkpoint": context.checkpoint,
             "activity_id": context.activity_id,
@@ -240,7 +243,7 @@ class AccessStateEngine:
             "capacity_status": decision.capacity_status,
             **(context.metadata or {}),
         }
-        if context.idempotency_key:
+        if check_idempotency and context.idempotency_key:
             row = db.execute("SELECT * FROM enterprise_access_events WHERE organization_id = ? AND idempotency_key = ?", (context.organization_id, context.idempotency_key)).fetchone()
             if row:
                 return dict(row)

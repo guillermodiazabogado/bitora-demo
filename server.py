@@ -3575,7 +3575,10 @@ def enforced_access_validation(
     )
     engine = access_state_engine_service()
     decision = engine.evaluate(db, context)
-    event = engine.record_access_event(db, context, decision)
+    # This path already checked the authoritative idempotency key above while
+    # holding the accreditation transaction lock. Avoid repeating the same
+    # indexed lookup inside ``record_access_event``.
+    event = engine.record_access_event(db, context, decision, check_idempotency=False)
     allowed = decision.decision == "ALLOW"
     reason = ACCESS_STATE_REASON_MESSAGES.get(decision.reason_code, decision.reason_code)
     result = access_validation_service().record_authoritative_decision(
@@ -16220,6 +16223,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     event_scope = access_event_scope(db, token)
+                    permission_authorized = False
                     if event_scope:
                         ok, allowed_session = self.require_event_permission(
                             db,
@@ -16232,11 +16236,21 @@ class AppHandler(SimpleHTTPRequestHandler):
                             db.execute("ROLLBACK")
                             return
                         operator = str((allowed_session or {}).get("name") or operator)
-                    if not can_actor(db, operator, ACCESS_ROLES):
+                        permission_authorized = bool(self.login_required() and allowed_session)
+                    # A logged-in session that passed the event-scoped
+                    # ``scan_qr`` permission is already more specific than the
+                    # legacy role check. Keep that check for local/no-login and
+                    # unknown-credential paths.
+                    if not permission_authorized and not can_actor(db, operator, ACCESS_ROLES):
                         db.execute("ROLLBACK")
                         self.send_json(deny_message(operator), 403)
                         return
-                    enforced = bool(event_scope and access_state_engine_enforced_enabled(db, int(event_scope["event_id"])))
+                    enforced = bool(event_scope and feature_flag_enabled(
+                        db,
+                        "access_state_engine_enforced",
+                        organization_id=int(event_scope["organization_id"]),
+                        event_id=int(event_scope["event_id"]),
+                    ))
                     if enforced:
                         try:
                             validation = enforced_access_validation(
