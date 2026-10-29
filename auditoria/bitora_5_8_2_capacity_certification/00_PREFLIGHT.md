@@ -11,6 +11,7 @@
 - PostgreSQL objetivo: 16, aislado y desechable.
 - SHA de código/harness evaluado: `3f3afde96558414b4af23c1c100a77f3d90a0111`.
 - Commit que introdujo la corrección funcional: `7b6079951d9cbffa6770ef6e52c6f42eb03030d7`.
+- SHA de ensayos sostenidos finales: `6ba0aebb92fe0a7a21ede00eb2b515d277fe5eb1`.
 
 No se utilizarán producción, datos reales, secretos productivos ni infraestructura externa.
 
