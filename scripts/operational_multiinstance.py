@@ -190,17 +190,26 @@ class Client:
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         self.csrf = ""
 
-    def request(self, base: str, path: str, payload: dict | None = None, *, expected: set[int] | None = None, timeout: float = 20) -> tuple[int, dict]:
-        headers = {"Accept": "application/json"}
+    def request(
+        self,
+        base: str,
+        path: str,
+        payload: dict | None = None,
+        *,
+        expected: set[int] | None = None,
+        timeout: float = 20,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict]:
+        request_headers = {"Accept": "application/json", **(headers or {})}
         body = None
         method = "GET"
         if payload is not None:
             method = "POST"
             body = json.dumps(payload).encode("utf-8")
-            headers["Content-Type"] = "application/json"
+            request_headers["Content-Type"] = "application/json"
             if self.csrf:
-                headers["X-CSRF-Token"] = self.csrf
-        request = urllib.request.Request(base + path, body, headers, method=method)
+                request_headers["X-CSRF-Token"] = self.csrf
+        request = urllib.request.Request(base + path, body, request_headers, method=method)
         try:
             with self.opener.open(request, timeout=timeout) as response:
                 status, raw = response.status, response.read()
@@ -334,6 +343,60 @@ def main() -> int:
         wait_ready(base_a)
         wait_ready(base_b)
         report["checks"]["two_distinct_instances_ready"] = base_a != base_b
+
+        registration_email = f"multi-idempotency-{run_id}@bitora.test"
+        registration_key = f"registration-multi-{run_id}-0001"
+        registration_payload = {
+            "event_id": int(setup["event_id"]),
+            "first_name": "Multi",
+            "last_name": "Idempotency",
+            "email": registration_email,
+            "type": "General",
+            "actor": "public",
+            "source": "landing",
+            "device_type": "desktop",
+        }
+
+        def register_once(index: int) -> tuple[int, dict]:
+            return Client().request(
+                (base_a, base_b)[index % 2],
+                "/api/register",
+                registration_payload,
+                expected={200, 201},
+                headers={"Idempotency-Key": registration_key},
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            registration_results = list(pool.map(register_once, range(2)))
+        registration_statuses = sorted(status for status, _ in registration_results)
+        registration_tokens = {payload.get("token") for _, payload in registration_results}
+        report["checks"]["registration_idempotency_cross_instance"] = (
+            registration_statuses == [200, 201]
+            and len(registration_tokens) == 1
+            and None not in registration_tokens
+            and sum(bool(payload.get("idempotent_replay")) for _, payload in registration_results) == 1
+        )
+        conflict_payload = dict(registration_payload, first_name="Changed")
+        conflict_status, conflict = Client().request(
+            base_b,
+            "/api/register",
+            conflict_payload,
+            expected={409},
+            headers={"Idempotency-Key": registration_key},
+        )
+        report["checks"]["registration_idempotency_payload_conflict"] = (
+            conflict_status == 409 and conflict.get("code") == "REGISTRATION_IDEMPOTENCY_CONFLICT"
+        )
+        registration_integrity = docker(
+            "exec", postgres, "psql", "-U", "bitora", "-d", "bitora", "-At", "-F", "|", "-c",
+            (
+                "SELECT "
+                f"(SELECT count(*) FROM accreditations a JOIN people p ON p.id=a.person_id WHERE a.event_id={int(setup['event_id'])} AND lower(p.email)=lower('{registration_email}')),"
+                f"(SELECT count(*) FROM enterprise_credentials ce JOIN accreditations a ON a.id=ce.accreditation_id JOIN people p ON p.id=a.person_id WHERE ce.event_id={int(setup['event_id'])} AND lower(p.email)=lower('{registration_email}')),"
+                f"(SELECT count(*) FROM registration_idempotency WHERE event_id={int(setup['event_id'])});"
+            ),
+        ).stdout.strip().split("|")
+        report["checks"]["registration_idempotency_database_integrity"] = registration_integrity == ["1", "1", "1"]
 
         admin = Client()
         admin.login(base_a, "Admin", "Operational-Admin-582!")

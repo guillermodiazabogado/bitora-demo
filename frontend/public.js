@@ -10,6 +10,20 @@ localStorage.setItem(`waiting_visitor_${eventId}`, waitingVisitorId);
 let currentEvent = null;
 let formStarted = false;
 let waitingTimer = null;
+let registrationSubmitting = false;
+const registrationAttemptStorageKey = `bitora_registration_attempt_${eventId}`;
+const REGISTRATION_TIMEOUT_MS = 15000;
+const REGISTRATION_MAX_ATTEMPTS = 3;
+
+class ApiError extends Error {
+  constructor(message, { status = 0, code = "REQUEST_FAILED", retryable = false } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
 
 const eventThemes = [
   { primary: "#4c2ea3", secondary: "#1b0f4e", accent: "#20c7b5", soft: "#f4f1ff" },
@@ -48,13 +62,140 @@ function deviceType() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Error inesperado");
-  return data;
+  const { timeoutMs = 0, headers: optionHeaders = {}, ...fetchOptions } = options;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(path, {
+      ...fetchOptions,
+      headers: { "Content-Type": "application/json", ...optionHeaders },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const code = data.code || "REQUEST_FAILED";
+      throw new ApiError(data.error || `Solicitud rechazada (${response.status})`, {
+        status: response.status,
+        code,
+        retryable: [502, 503, 504].includes(response.status) || code === "REGISTRATION_IDEMPOTENCY_PENDING",
+      });
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    const timedOut = error?.name === "AbortError";
+    throw new ApiError(
+      timedOut ? "La confirmacion esta demorando mas de lo esperado." : "No se pudo confirmar la respuesta del servidor.",
+      { code: timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR", retryable: true },
+    );
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function payloadHash(payload) {
+  const bytes = new TextEncoder().encode(stableJson(payload));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function newRequestId() {
+  return crypto.randomUUID();
+}
+
+function readRegistrationAttempt() {
+  try {
+    const attempt = JSON.parse(sessionStorage.getItem(registrationAttemptStorageKey) || "null");
+    if (!attempt || attempt.eventId !== eventId || !attempt.key || !attempt.correlationId || !attempt.payloadHash) return null;
+    return attempt;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeRegistrationAttempt(attempt) {
+  try {
+    // Only opaque identifiers and a one-way payload hash are persisted; no form PII is stored.
+    sessionStorage.setItem(registrationAttemptStorageKey, JSON.stringify(attempt));
+  } catch (_) {
+    // The in-memory request still remains stable for retries in this submission.
+  }
+}
+
+function clearRegistrationAttempt() {
+  try {
+    sessionStorage.removeItem(registrationAttemptStorageKey);
+  } catch (_) {
+    // Storage may be unavailable in privacy modes.
+  }
+}
+
+function registrationAttemptFor(hash) {
+  const pending = readRegistrationAttempt();
+  if (pending?.payloadHash === hash) return pending;
+  const attempt = {
+    eventId,
+    key: newRequestId(),
+    correlationId: newRequestId(),
+    payloadHash: hash,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  writeRegistrationAttempt(attempt);
+  return attempt;
+}
+
+function setRegistrationState(state, message = "") {
+  const form = $("#publicRegisterForm");
+  const button = $("#registrationSubmitButton") || form?.querySelector("button");
+  const resultBox = $("#publicResult");
+  const busy = state === "submitting" || state === "recovering";
+  if (form) form.setAttribute("aria-busy", busy ? "true" : "false");
+  if (button) {
+    button.disabled = busy;
+    button.textContent = state === "recovering" ? "Verificando confirmacion..." : state === "submitting" ? "Procesando..." : state === "unknown" ? "Reintentar confirmacion" : "Inscribirme";
+  }
+  if (!resultBox || !message) return;
+  resultBox.setAttribute("role", state === "error" || state === "conflict" ? "alert" : "status");
+  const panelClass = state === "error" || state === "conflict" ? "danger" : "info";
+  resultBox.innerHTML = `<div class="panel ${panelClass}">${message}</div>`;
+}
+
+function retryDelay(attemptNumber) {
+  return new Promise((resolve) => setTimeout(resolve, 600 * (2 ** attemptNumber)));
+}
+
+async function submitRegistration(payload, attempt) {
+  let lastError = null;
+  for (let index = 0; index < REGISTRATION_MAX_ATTEMPTS; index += 1) {
+    if (index > 0) {
+      setRegistrationState("recovering", "La primera respuesta no llego. Estamos verificando la misma inscripcion sin duplicarla.");
+      await retryDelay(index - 1);
+    }
+    try {
+      return await api("/api/register", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        timeoutMs: REGISTRATION_TIMEOUT_MS,
+        headers: {
+          "Idempotency-Key": attempt.key,
+          "X-Correlation-ID": attempt.correlationId,
+        },
+      });
+    } catch (error) {
+      lastError = error;
+      if (!error.retryable || error.status === 409) throw error;
+    }
+  }
+  throw lastError || new ApiError("No se pudo confirmar la inscripcion.", { code: "UNKNOWN_RESULT", retryable: true });
 }
 
 function applyAppConfig(config) {
@@ -176,6 +317,7 @@ async function track(action) {
 
 async function register(event) {
   event.preventDefault();
+  if (registrationSubmitting) return;
   const form = event.currentTarget;
   const data = formData(form);
   data.event_id = eventId;
@@ -185,7 +327,15 @@ async function register(event) {
     if (data.acepta_whatsapp && !String(data.phone || "").replace(/\D/g, "").match(/^\d{10,15}$/)) {
       throw new Error("Ingresa el telefono con codigo de pais y area para recibir WhatsApp.");
     }
-    const result = await api("/api/register", { method: "POST", body: JSON.stringify(data) });
+    const hash = await payloadHash(data);
+    const attempt = registrationAttemptFor(hash);
+    if (attempt.status === "conflict") {
+      throw new ApiError("Esta solicitud cambio despues de iniciarse. Revisa los datos modificados para comenzar un intento nuevo.", { status: 409, code: "IDEMPOTENCY_PAYLOAD_CONFLICT" });
+    }
+    registrationSubmitting = true;
+    setRegistrationState("submitting", "Estamos procesando tu inscripcion. No cierres esta pagina.");
+    const result = await submitRegistration(data, attempt);
+    clearRegistrationAttempt();
     formStarted = false;
     const email = result.communications?.email;
     const whatsapp = result.communications?.whatsapp;
@@ -202,10 +352,29 @@ async function register(event) {
         <a class="button" href="${result.portal_url}">Abrir mi portal y ver QR</a>
       </div>
     `;
+    resultBox.setAttribute("role", "status");
     form.reset();
     setTimeout(() => { location.href = result.portal_url; }, 3500);
   } catch (err) {
-    resultBox.innerHTML = `<div class="panel danger">${err.message}</div>`;
+    const pending = readRegistrationAttempt();
+    if (err.code === "REGISTRATION_IDEMPOTENCY_CONFLICT") {
+      if (pending) writeRegistrationAttempt({ ...pending, status: "conflict" });
+      setRegistrationState("conflict", "No pudimos reutilizar este intento porque los datos no coinciden. Revisa o modifica el formulario antes de volver a enviarlo.");
+    } else if (err.retryable) {
+      setRegistrationState("unknown", "No recibimos la confirmacion final. La solicitud puede haberse procesado; usa Reintentar confirmacion para verificarla sin duplicarla.");
+    } else {
+      clearRegistrationAttempt();
+      setRegistrationState("error", err.message || "No se pudo completar la inscripcion.");
+    }
+  } finally {
+    registrationSubmitting = false;
+    const state = readRegistrationAttempt()?.status === "conflict" ? "conflict" : "idle";
+    const button = $("#registrationSubmitButton") || form.querySelector("button");
+    form.setAttribute("aria-busy", "false");
+    if (button) {
+      button.disabled = false;
+      if (state !== "conflict") button.textContent = readRegistrationAttempt() ? "Reintentar confirmacion" : "Inscribirme";
+    }
   }
 }
 

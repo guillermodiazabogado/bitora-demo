@@ -27,7 +27,7 @@
         <p id="waitingRoomMessage"></p>
         <div id="waitingRoomMetrics" class="summary-grid"></div>
       </section>
-      <form id="publicRegisterForm" class="panel form-grid">
+      <form id="publicRegisterForm" class="panel form-grid" aria-busy="false">
         <h2>Datos de acreditacion</h2>
         <input name="source" id="sourceInput" type="hidden">
         <input name="source_detail" id="sourceDetailInput" type="hidden">
@@ -47,11 +47,11 @@
         <input name="company" placeholder="Empresa / institucion">
         <input name="position" placeholder="Cargo">
         <select name="type" id="publicTypeSelect"></select>
-        <button>Inscribirme</button>
+        <button id="registrationSubmitButton" type="submit">Inscribirme</button>
       </form>
     </section>
 
-    <div id="publicResult" class="result"></div>
+    <div id="publicResult" class="result" role="status" aria-live="polite" aria-atomic="true"></div>
     <footer class="powered-by-bitora" aria-label="Desarrollado por Bitora">
       <span>Desarrollado por</span>
       <strong>BITORA</strong>

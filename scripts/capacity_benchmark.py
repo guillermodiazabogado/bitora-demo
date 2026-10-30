@@ -174,8 +174,10 @@ def registration_flow(
     client: Client, base: str, event_id: int, run_id: str, cell_id: str, sequence: int,
 ) -> dict:
     email = f"capacity-{run_id}-{cell_id}-{sequence}@bitora.test"
+    idempotency_key = f"registration-{run_id}-{cell_id}-{sequence}"
     started = time.perf_counter()
     steps: dict[str, float] = {}
+    transport_timeouts = 0
     try:
         step = time.perf_counter()
         event_status, event = client.request(base, f"/api/event?event_id={event_id}", expected={200})
@@ -184,22 +186,29 @@ def registration_flow(
             raise HarnessError("PUBLIC_EVENT_CONTRACT")
 
         step = time.perf_counter()
-        register_status, registered = client.request(
-            base,
-            "/api/register",
-            {
-                "event_id": event_id,
-                "first_name": "Capacity",
-                "last_name": f"User {sequence}",
-                "email": email,
-                "type": "General",
-                "actor": "public",
-                "source": "capacity-benchmark",
-                "device_type": "desktop",
-                "session_id": f"capacity-{run_id}-{cell_id}-{sequence}",
-            },
-            expected={200, 201},
-        )
+        register_payload = {
+            "event_id": event_id,
+            "first_name": "Capacity",
+            "last_name": f"User {sequence}",
+            "email": email,
+            "type": "General",
+            "actor": "public",
+            "source": "capacity-benchmark",
+            "device_type": "desktop",
+            "session_id": f"capacity-{run_id}-{cell_id}-{sequence}",
+        }
+        register_status, registered = 0, {}
+        for _attempt in range(3):
+            register_status, registered = client.request(
+                base,
+                "/api/register",
+                register_payload,
+                expected={0, 200, 201},
+                headers={"Idempotency-Key": idempotency_key},
+            )
+            if register_status != 0:
+                break
+            transport_timeouts += 1
         steps["register_post_ms"] = (time.perf_counter() - step) * 1000
         token = str(registered.get("token") or "")
         if register_status not in {200, 201} or not registered.get("ok") or not token or registered.get("existing"):
@@ -227,6 +236,8 @@ def registration_flow(
             "steps_ms": steps,
             "token": token,
             "qr_sha256": hashlib.sha256(qr).hexdigest(),
+            "transport_timeouts": transport_timeouts,
+            "idempotent_recovery": bool(registered.get("idempotent_replay")),
         }
     except Exception as exc:
         return {
@@ -236,6 +247,7 @@ def registration_flow(
             "steps_ms": steps,
             "error": type(exc).__name__,
             "error_detail": str(exc)[:240],
+            "transport_timeouts": transport_timeouts,
         }
 
 
@@ -332,6 +344,8 @@ def run_registration_level(
         "failed": len(failed),
         "success_rate": round(len(succeeded) * 100 / len(results), 5) if results else 0,
         "completed_per_second": round(len(succeeded) / elapsed, 3) if elapsed else 0,
+        "transport_timeouts": sum(int(item.get("transport_timeouts") or 0) for item in results),
+        "idempotent_recoveries": sum(bool(item.get("idempotent_recovery")) for item in succeeded),
         "latency_ms": latency_summary([float(item["latency_ms"]) for item in results]),
         "step_latency_ms": {
             step: latency_summary([

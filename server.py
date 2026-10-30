@@ -2336,8 +2336,9 @@ def ensure_security_schema(db: sqlite3.Connection) -> None:
 
 
 def ensure_performance_schema(db: sqlite3.Connection) -> None:
-    migration = ROOT / "backend" / "migrations" / "050_access_lookup_indexes.sql"
-    db.executescript(migration.read_text(encoding="utf-8"))
+    for name in ("050_access_lookup_indexes.sql", "051_registration_idempotency.sql"):
+        migration = ROOT / "backend" / "migrations" / name
+        db.executescript(migration.read_text(encoding="utf-8"))
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -4585,6 +4586,120 @@ def promote_next_waitlisted(db: sqlite3.Connection, event_id: int, activity_id: 
     promoted = dict(row)
     promoted["bag_id"] = bag["id"]
     return promoted
+
+
+REGISTRATION_IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{16,160}")
+
+
+def registration_idempotency_key(value: object) -> str:
+    key = str(value or "").strip()
+    if key and not REGISTRATION_IDEMPOTENCY_KEY_PATTERN.fullmatch(key):
+        raise ValueError("REGISTRATION_IDEMPOTENCY_KEY_INVALID")
+    return key
+
+
+def registration_request_hash(event_id: int, data: dict, activity_ids: list[int]) -> str:
+    """Hash only registration fields that can affect domain state or side effects."""
+    actor = str(data.get("actor") or "public").strip() or "public"
+    source = normalize_source(data.get("source"), "recepcion" if actor != "public" else "landing")
+    source_detail = str(data.get("source_detail") or data.get("utm_campaign") or data.get("qr_source") or "").strip()
+    waiting_room_token = str(data.get("waiting_room_token") or "").strip()
+    payload = {
+        "event_id": int(event_id),
+        "first_name": str(data.get("first_name") or "").strip(),
+        "last_name": str(data.get("last_name") or "").strip(),
+        "email": str(data.get("email") or "").strip().lower(),
+        "phone": str(data.get("phone") or "").strip(),
+        "dni": str(data.get("dni") or "").strip(),
+        "company": str(data.get("company") or "").strip(),
+        "position": str(data.get("position") or "").strip(),
+        "type": str(data.get("type") or "General").strip() or "General",
+        "actor": actor,
+        "source": source,
+        "source_detail": source_detail,
+        "device_type": normalize_device(data.get("device_type")),
+        "channel": str(data.get("channel") or "").strip().lower(),
+        "acepta_email": truthy(data.get("acepta_email")),
+        "acepta_whatsapp": truthy(data.get("acepta_whatsapp")),
+        "canal_preferido": str(data.get("canal_preferido") or "").strip().lower(),
+        "activity_ids": sorted({int(item) for item in activity_ids}),
+        "waiting_room_token_hash": hashlib.sha256(waiting_room_token.encode("utf-8")).hexdigest() if waiting_room_token else "",
+    }
+    encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def registration_idempotency_key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def claim_registration_idempotency(db, event_id: int, key: str, request_hash: str) -> tuple[str, dict | None]:
+    """Atomically claim a key or return its committed result.
+
+    PostgreSQL's unique constraint waits for a concurrent claimant to commit or
+    roll back. SQLite is serialized by its writer lock (and the application
+    lock), so the same statement is safe for both engines.
+    """
+    now = now_iso()
+    key_hash = registration_idempotency_key_hash(key)
+    cursor = db.execute(
+        """
+        INSERT INTO registration_idempotency (
+            event_id, key_hash, request_hash, status, response_json, created_at
+        ) VALUES (?, ?, ?, 'PENDING', '{}', ?)
+        ON CONFLICT(event_id, key_hash) DO NOTHING
+        """,
+        (event_id, key_hash, request_hash, now),
+    )
+    if int(cursor.rowcount or 0) == 1:
+        return "CLAIMED", None
+    row = db.execute(
+        "SELECT * FROM registration_idempotency WHERE event_id = ? AND key_hash = ?",
+        (event_id, key_hash),
+    ).fetchone()
+    if not row:
+        raise RuntimeError("REGISTRATION_IDEMPOTENCY_CLAIM_LOST")
+    item = dict(row)
+    if str(item.get("request_hash") or "") != request_hash:
+        return "CONFLICT", item
+    if str(item.get("status") or "") != "COMPLETED":
+        return "PENDING", item
+    return "REPLAY", item
+
+
+def complete_registration_idempotency(db, event_id: int, key: str, request_hash: str, accreditation_id: int, response: dict) -> None:
+    durable_response = dict(response)
+    durable_response.pop("portal_url", None)
+    key_hash = registration_idempotency_key_hash(key)
+    cursor = db.execute(
+        """
+        UPDATE registration_idempotency
+        SET accreditation_id = ?, status = 'COMPLETED', response_json = ?, completed_at = ?
+        WHERE event_id = ? AND key_hash = ? AND request_hash = ? AND status = 'PENDING'
+        """,
+        (
+            accreditation_id,
+            json.dumps(durable_response, ensure_ascii=True, sort_keys=True, separators=(",", ":")),
+            now_iso(),
+            event_id,
+            key_hash,
+            request_hash,
+        ),
+    )
+    if int(cursor.rowcount or 0) != 1:
+        raise RuntimeError("REGISTRATION_IDEMPOTENCY_COMPLETE_FAILED")
+
+
+def registration_idempotency_response(row: dict, handler=None) -> dict:
+    try:
+        response = json.loads(str(row.get("response_json") or "{}"))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("REGISTRATION_IDEMPOTENCY_RESPONSE_INVALID") from exc
+    if not isinstance(response, dict) or not response.get("token"):
+        raise RuntimeError("REGISTRATION_IDEMPOTENCY_RESPONSE_INVALID")
+    response["portal_url"] = public_link(f"/p.html?token={response['token']}", handler)
+    response["idempotent_replay"] = True
+    return response
 
 
 def register_accreditation(db: sqlite3.Connection, event_id: int, data: dict) -> dict:
@@ -16028,9 +16143,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                 if len(activity_ids) > 1:
                     self.send_json({"error": "Solo se permite inscribirse a una actividad por vez. Repeti el paso para sumar otra actividad."}, 400)
                     return
+                try:
+                    registration_idempotency = registration_idempotency_key(
+                        self.headers.get("Idempotency-Key") or data.get("idempotency_key")
+                    )
+                except ValueError:
+                    self.send_json({"error": "Idempotency-Key invalida", "code": "REGISTRATION_IDEMPOTENCY_KEY_INVALID"}, 400)
+                    return
+                registration_hash = registration_request_hash(event_id, data, activity_ids) if registration_idempotency else ""
                 communication_result = {"queued": 0, "sent": 0, "skipped": 0, "errors": 0, "email": {}, "whatsapp": {}}
                 email_queue_ids: list[int] = []
                 whatsapp_queue_ids: list[int] = []
+                registration_response: dict = {}
                 with DB_LOCK, connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
@@ -16038,6 +16162,32 @@ class AppHandler(SimpleHTTPRequestHandler):
                         db.execute("ROLLBACK")
                         self.send_json({"error": "Evento inexistente"}, 404)
                         return
+                    if registration_idempotency:
+                        claim_state, claim_row = claim_registration_idempotency(
+                            db, event_id, registration_idempotency, registration_hash
+                        )
+                        if claim_state == "CONFLICT":
+                            db.execute("ROLLBACK")
+                            self.send_json(
+                                {
+                                    "error": "Idempotency-Key ya utilizada con otro contenido",
+                                    "code": "REGISTRATION_IDEMPOTENCY_CONFLICT",
+                                },
+                                409,
+                            )
+                            return
+                        if claim_state == "PENDING":
+                            db.execute("ROLLBACK")
+                            self.send_json(
+                                {"error": "Inscripcion idempotente en curso", "code": "REGISTRATION_IDEMPOTENCY_PENDING"},
+                                409,
+                            )
+                            return
+                        if claim_state == "REPLAY":
+                            registration_response = registration_idempotency_response(claim_row or {}, self)
+                            db.execute("COMMIT")
+                            self.send_json(registration_response, 200)
+                            return
                     waiting_row = None
                     if int(event["waiting_room_enabled"] or 0) and data.get("actor") == "public":
                         waiting_token = str(data.get("waiting_room_token") or "").strip()
@@ -16120,6 +16270,46 @@ class AppHandler(SimpleHTTPRequestHandler):
                                 reservation.get("id"),
                                 {"event_id": event_id, "activity_id": activity_id, "accreditation_id": registration["id"], "status": reservation["status"]},
                             )
+                    def channel_status(channel: str, queue_ids: list[int]) -> str:
+                        result = communication_result.get(channel) or {}
+                        if result.get("errors"):
+                            return "error"
+                        if queue_ids:
+                            return "pending"
+                        if result.get("sent"):
+                            return "sent"
+                        return "skipped"
+
+                    registration_response = {
+                        "ok": True,
+                        "token": registration["token"],
+                        "existing": registration.get("existing", False),
+                        "portal_url": public_link(f"/p.html?token={registration['token']}", self),
+                        "reservations": reservations,
+                        "communications": {
+                            "email": {
+                                "status": channel_status("email", email_queue_ids),
+                                "queued": int((communication_result.get("email") or {}).get("queued") or 0),
+                                "sent": int((communication_result.get("email") or {}).get("sent") or 0),
+                                "skipped": int((communication_result.get("email") or {}).get("skipped") or 0),
+                            },
+                            "whatsapp": {
+                                "status": channel_status("whatsapp", whatsapp_queue_ids),
+                                "queued": int((communication_result.get("whatsapp") or {}).get("queued") or 0),
+                                "sent": int((communication_result.get("whatsapp") or {}).get("sent") or 0),
+                                "skipped": int((communication_result.get("whatsapp") or {}).get("skipped") or 0),
+                            },
+                        },
+                    }
+                    if registration_idempotency:
+                        complete_registration_idempotency(
+                            db,
+                            event_id,
+                            registration_idempotency,
+                            registration_hash,
+                            int(registration["id"]),
+                            registration_response,
+                        )
                     db.execute("COMMIT")
                 for queue_id in email_queue_ids:
                     job_queue_service().enqueue(
@@ -16137,42 +16327,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                         actor="public",
                         event_id=event_id,
                     )
-                def registration_channel_status(channel: str, queue_ids: list[int]) -> str:
-                    result = communication_result.get(channel) or {}
-                    if result.get("errors"):
-                        return "error"
-                    if queue_ids:
-                        return "pending"
-                    if result.get("sent"):
-                        return "sent"
-                    return "skipped"
-
-                email_status = registration_channel_status("email", email_queue_ids)
-                whatsapp_status = registration_channel_status("whatsapp", whatsapp_queue_ids)
-                self.send_json(
-                    {
-                        "ok": True,
-                        "token": registration["token"],
-                        "existing": registration.get("existing", False),
-                        "portal_url": public_link(f"/p.html?token={registration['token']}", self),
-                        "reservations": reservations,
-                        "communications": {
-                            "email": {
-                                "status": email_status,
-                                "queued": int((communication_result.get("email") or {}).get("queued") or 0),
-                                "sent": int((communication_result.get("email") or {}).get("sent") or 0),
-                                "skipped": int((communication_result.get("email") or {}).get("skipped") or 0),
-                            },
-                            "whatsapp": {
-                                "status": whatsapp_status,
-                                "queued": int((communication_result.get("whatsapp") or {}).get("queued") or 0),
-                                "sent": int((communication_result.get("whatsapp") or {}).get("sent") or 0),
-                                "skipped": int((communication_result.get("whatsapp") or {}).get("skipped") or 0),
-                            }
-                        },
-                    },
-                    200 if registration.get("existing") else 201,
-                )
+                self.send_json(registration_response, 200 if registration.get("existing") else 201)
                 return
 
             if path == "/api/import-accreditations":
@@ -16359,6 +16514,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
 
             self.send_json({"error": "Ruta no encontrada"}, 404)
+        except (BrokenPipeError, ConnectionResetError):
+            # The business transaction may already be committed. A client that
+            # lost the socket recovers the durable result with the same
+            # Idempotency-Key; do not attempt a second write to the dead socket.
+            return
         except DB_INTEGRITY_ERRORS as exc:
             technical_log("warning", "api.post", "Dato duplicado o invalido", str(exc), path)
             payload = {"error": "Dato duplicado o invalido"}
