@@ -3502,9 +3502,14 @@ def access_event_scope(db: sqlite3.Connection, token: str) -> dict | None:
         return None
     row = db.execute(
         """
-        SELECT a.id AS accreditation_id, a.event_id, e.organization_id
+        SELECT a.id AS accreditation_id, a.event_id, e.organization_id, ec.entity_id
         FROM accreditations a
         JOIN events e ON e.id = a.event_id
+        LEFT JOIN enterprise_credentials ec
+          ON ec.organization_id = e.organization_id
+         AND ec.event_id = a.event_id
+         AND ec.accreditation_id = a.id
+         AND ec.credential_type = 'QR_TOKEN'
         WHERE lower(a.token) = lower(?)
         """,
         (normalized,),
@@ -3540,10 +3545,15 @@ def acquire_access_transaction_lock(db, event_scope: dict) -> int | None:
     """
     if not is_postgres_connection(db):
         return None
-    identity = ":".join(
-        str(int(event_scope[name]))
-        for name in ("organization_id", "event_id", "accreditation_id")
-    )
+    entity_id = int(event_scope.get("entity_id") or 0)
+    identity_kind = "entity" if entity_id else "accreditation"
+    identity_id = entity_id or int(event_scope["accreditation_id"])
+    identity = ":".join((
+        str(int(event_scope["organization_id"])),
+        str(int(event_scope["event_id"])),
+        identity_kind,
+        str(identity_id),
+    ))
     lock_key = int.from_bytes(hashlib.sha256(identity.encode("ascii")).digest()[:8], "big", signed=True)
     db.execute("SELECT pg_advisory_xact_lock(?)", (lock_key,))
     return lock_key
