@@ -1,0 +1,20 @@
+{
+  "attempt_id": "lifecycle-smoke",
+  "campaign_id": "bitora-phase62-smoke",
+  "expected_sha": "02138b5e74ca80c6141ba495c706415acd432bf8",
+  "healthy_apps": [],
+  "history": [
+    {
+      "at": "2026-11-04T20:07:26.018215+00:00",
+      "phase": "STARTING",
+      "reason": "wrapper-started"
+    }
+  ],
+  "phase": "STARTING",
+  "postgres_ready": false,
+  "resource_prefix": null,
+  "schema": "bitora.phase62.lifecycle.v1",
+  "started_at": "2026-11-04T20:07:26.018180+00:00",
+  "updated_at": "2026-11-04T20:07:26.018215+00:00",
+  "wrapper_pid": 623
+}

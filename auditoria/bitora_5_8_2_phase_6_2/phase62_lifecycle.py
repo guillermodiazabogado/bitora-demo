@@ -86,7 +86,7 @@ def main() -> int:
     original_docker: Callable[..., Any] = benchmark.docker
     original_wait_postgres: Callable[..., Any] = benchmark.wait_postgres
     original_start_application: Callable[..., Any] = benchmark.start_application
-    original_access: Callable[..., Any] = benchmark.run_access_concurrency
+    original_access: Callable[..., Any] = benchmark.access_checks
 
     def docker_instrumented(*args: Any, **kwargs: Any):
         if len(args) >= 3 and args[0] == "network" and args[1] == "create":
@@ -135,7 +135,7 @@ def main() -> int:
     benchmark.docker = docker_instrumented
     benchmark.wait_postgres = wait_postgres_instrumented
     benchmark.start_application = start_application_instrumented
-    benchmark.run_access_concurrency = access_instrumented
+    benchmark.access_checks = access_instrumented
     sys.argv = [str(benchmark_path), *remaining]
     return_code = 1
     try:

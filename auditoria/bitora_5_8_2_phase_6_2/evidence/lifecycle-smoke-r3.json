@@ -1,0 +1,64 @@
+{
+  "attempt_id": "lifecycle-smoke-r3",
+  "campaign_id": "bitora-phase62-smoke",
+  "exit_code": 0,
+  "expected_sha": "02138b5e74ca80c6141ba495c706415acd432bf8",
+  "healthy_apps": [
+    "bitora-cap-bac44f5597-app-1",
+    "bitora-cap-bac44f5597-app-2"
+  ],
+  "history": [
+    {
+      "at": "2026-11-04T20:09:49.412822+00:00",
+      "phase": "STARTING",
+      "reason": "wrapper-started"
+    },
+    {
+      "at": "2026-11-04T20:09:50.551824+00:00",
+      "phase": "STARTING",
+      "reason": "docker-project-created",
+      "resource_prefix": "bitora-cap-bac44f5597"
+    },
+    {
+      "at": "2026-11-04T20:09:53.884757+00:00",
+      "phase": "STARTING",
+      "postgres_ready": true,
+      "reason": "postgres-ready"
+    },
+    {
+      "at": "2026-11-04T20:11:00.055749+00:00",
+      "healthy_apps": [
+        "bitora-cap-bac44f5597-app-1"
+      ],
+      "phase": "STARTING",
+      "reason": "application-ready"
+    },
+    {
+      "at": "2026-11-04T20:11:06.187594+00:00",
+      "healthy_apps": [
+        "bitora-cap-bac44f5597-app-1",
+        "bitora-cap-bac44f5597-app-2"
+      ],
+      "phase": "READY",
+      "reason": "application-ready"
+    },
+    {
+      "at": "2026-11-04T20:11:19.038975+00:00",
+      "phase": "RUNNING",
+      "reason": "measured-access-load-started"
+    },
+    {
+      "at": "2026-11-04T20:11:41.980043+00:00",
+      "exit_code": 0,
+      "phase": "FINISHED",
+      "reason": "harness-exited"
+    }
+  ],
+  "phase": "FINISHED",
+  "postgres_ready": true,
+  "resource_prefix": "bitora-cap-bac44f5597",
+  "schema": "bitora.phase62.lifecycle.v1",
+  "started_at": "2026-11-04T20:09:49.412791+00:00",
+  "updated_at": "2026-11-04T20:11:41.980043+00:00",
+  "wrapper_pid": 628
+}

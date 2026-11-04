@@ -1,0 +1,8 @@
+{
+  "checks": {},
+  "report": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/lifecycle-smoke-r2-report.json",
+  "run_id": "4d300d458f",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "02138b5e74ca80c6141ba495c706415acd432bf8",
+  "status": "failed"
+}

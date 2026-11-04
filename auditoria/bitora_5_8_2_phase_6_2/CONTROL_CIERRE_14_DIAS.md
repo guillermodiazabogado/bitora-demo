@@ -27,7 +27,7 @@
 | Suite de regresión mínima | PASS | Docker: autoridad, scope, concurrencia, state engine, zonas, multiinstancia y matriz HTTP |
 | Baseline breve comparable | PASS | 24 lectores/60 s: 7.394/7.394; p95 312,014 ms; p99 439,515 ms; 122,733/s |
 | Optimización ciclo 1 | KEEP | Sin introspección por auditoría; 180 s: p95 377,086 ms; p99 406,212 ms; 119,429/s |
-| Runner autónomo | PREPARED | 9 gates, checkpoint atómico, lock, lifecycle y stop-on-FAIL; bloqueado hasta congelar SHA |
+| Runner autónomo | PASS SMOKE | Lifecycle `STARTING→READY→RUNNING→FINISHED`; SHA limpio; 1.192/1.192; p95 286,388 ms; cero errores |
 | QR válido 3×600 s | NOT_RUN | Requiere candidato congelado |
 | Anti-passback 16 lectores 3×600 s | NOT_RUN | Gate QR previo |
 | Anti-passback 24 lectores 3×600 s | NOT_RUN | Gate APB-16 previo |

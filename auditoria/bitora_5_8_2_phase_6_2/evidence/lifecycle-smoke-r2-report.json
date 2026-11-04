@@ -1,0 +1,35 @@
+{
+  "checks": {},
+  "configuration": {
+    "access_concurrency": 24,
+    "access_mode": "valid",
+    "duration_seconds_per_cell": 10.0,
+    "levels": [
+      2
+    ],
+    "matrix_cells": 1,
+    "max_operations_per_cell": 25,
+    "postgres": "16-alpine",
+    "smoke": false,
+    "telemetry_sample_seconds": 2.0,
+    "warmup_seconds_per_cell": 1.0,
+    "worker_levels": [
+      25
+    ]
+  },
+  "error": "HarnessError:ACCESS_PROFILE_REQUIRES_UNIQUE_TOKENS",
+  "finished_at": "2026-11-04T20:09:28.232727+00:00",
+  "levels": [],
+  "limitations": [
+    "Laboratory Docker loopback is not venue networking or production infrastructure.",
+    "Virtual access clients are not certification of physical QR readers or Edge hardware.",
+    "Closed-model workers include application response time and do not establish a maximum arrival rate."
+  ],
+  "ok": false,
+  "resources_removed": true,
+  "run_id": "4d300d458f",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "02138b5e74ca80c6141ba495c706415acd432bf8",
+  "started_at": "2026-11-04T20:08:19.300742+00:00",
+  "workspace_dirty": false
+}
