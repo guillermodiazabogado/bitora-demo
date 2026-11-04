@@ -123,6 +123,27 @@ DB_PROBE_TIMEOUT_SECONDS = max(1, int(os.environ.get("BITORA_DB_PROBE_TIMEOUT_SE
 DB_PROBE_LOCK = threading.Lock()
 DB_PROBE_CACHE: dict[str, object] = {"at": 0.0, "value": None}
 DB_LOCK = threading.Lock()
+
+
+def postgres_access_concurrency_limit(raw_value: str | None = None) -> int:
+    """Return the bounded per-process concurrency for PostgreSQL QR validation."""
+    value = raw_value if raw_value is not None else os.environ.get("QR_POSTGRES_ACCESS_CONCURRENCY", "1")
+    try:
+        configured = int(value)
+    except (TypeError, ValueError):
+        configured = 1
+    return max(1, min(configured, 32))
+
+
+QR_POSTGRES_ACCESS_CONCURRENCY = postgres_access_concurrency_limit()
+QR_POSTGRES_ACCESS_GATE = threading.BoundedSemaphore(QR_POSTGRES_ACCESS_CONCURRENCY)
+
+
+def access_validation_concurrency_gate():
+    """Keep SQLite serialized and bound only PostgreSQL ``/api/validate`` work."""
+    return QR_POSTGRES_ACCESS_GATE if DB_CONFIG.engine == "postgres" else DB_LOCK
+
+
 BACKUP_STOP = threading.Event()
 WORKER: JobWorker | None = None
 SIMULATOR_STOP = threading.Event()
@@ -16382,7 +16403,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 direction = str(data.get("direction") or "ENTRY").strip().upper()
                 correlation_id = str(data.get("correlation_id") or "").strip()
                 idempotency_key = str(data.get("idempotency_key") or self.headers.get("Idempotency-Key") or "").strip()
-                with DB_LOCK, connect() as db:
+                with access_validation_concurrency_gate(), connect() as db:
                     db.execute("BEGIN IMMEDIATE")
                     event_scope = access_event_scope(db, token)
                     if event_scope:

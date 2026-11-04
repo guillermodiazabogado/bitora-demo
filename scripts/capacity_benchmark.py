@@ -662,6 +662,13 @@ def main() -> int:
     parser.add_argument("--max-operations", type=int, default=0, help="Per-cell registration safety cap; zero is unlimited")
     parser.add_argument("--access-concurrency", type=int, default=30)
     parser.add_argument(
+        "--postgres-access-concurrency",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="Per-instance PostgreSQL /api/validate gate; phase 6.3 bounds experiments to 1 or 2",
+    )
+    parser.add_argument(
         "--access-mode", choices=("legacy", "valid", "antipassback"), default="legacy",
         help="Sustained QR profile: historical mixed state, valid ENTRY/EXIT, or anti-passback rejects",
     )
@@ -707,6 +714,7 @@ def main() -> int:
         "-e", "QR_HOST=0.0.0.0", "-e", "QR_PORT=8787",
         "-e", "BITORA_DISABLE_EMBEDDED_WORKER=1", "-e", "QR_AUTO_BACKUP_MINUTES=0",
         "-e", "DB_CONNECTION_TIMEOUT=2", "-e", "EMAIL_ENABLED=false",
+        "-e", f"QR_POSTGRES_ACCESS_CONCURRENCY={args.postgres_access_concurrency}",
         "-e", "WHATSAPP_ENABLED=false",
     ]
     report: dict = {
@@ -724,6 +732,7 @@ def main() -> int:
             "telemetry_sample_seconds": args.sample_seconds,
             "max_operations_per_cell": args.max_operations,
             "access_concurrency": args.access_concurrency,
+            "postgres_access_concurrency_per_instance": args.postgres_access_concurrency,
             "access_mode": args.access_mode,
             "smoke": args.smoke,
             "postgres": "16-alpine",
