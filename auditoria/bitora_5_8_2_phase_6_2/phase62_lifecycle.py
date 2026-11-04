@@ -130,7 +130,14 @@ def main() -> int:
         if not access_started:
             access_started = True
             transition("RUNNING", "measured-access-load-started")
-        return original_access(*args, **kwargs)
+        try:
+            return original_access(*args, **kwargs)
+        finally:
+            # The benchmark intentionally restarts one application after the
+            # measured access profile.  Mark the measured window closed before
+            # that controlled recovery so the supervisor only treats container
+            # loss as fatal while load is actually RUNNING.
+            transition("STOPPING", "measured-access-load-finished")
 
     benchmark.docker = docker_instrumented
     benchmark.wait_postgres = wait_postgres_instrumented

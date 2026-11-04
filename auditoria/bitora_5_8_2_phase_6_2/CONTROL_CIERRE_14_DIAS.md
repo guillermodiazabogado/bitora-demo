@@ -2,9 +2,9 @@
 
 - Inicio: 2026-11-04 16:48 ART
 - Día de ejecución: 1/14
-- Etapa actual: congelación del candidato y validación del runner autónomo
+- Etapa actual: corrección del gate de lifecycle después de QR R1 incompleto
 - Rama: `optimization/5.8.2-qr-latency-phase-6-2`
-- Último SHA: `1aa5e1df5a30117aef2b1d47e9cd50c4d792e22a`
+- Último SHA: `037cf900946cda4a2755cd72ae6e4da8f384cc27`
 - Working tree inicial: limpio
 - Campaña histórica: `FAIL` terminal, preservada y no reanudable automáticamente
 - Procesos/campañas activos al inicio: ninguno
@@ -12,7 +12,7 @@
 - Última prueba: exploratoria QR válido, 24 lectores, 180,291 s, 21.532/21.532, p95 377,086 ms, p99 406,212 ms, 119,429/s
 - Resultado: `PASS` exploratorio; cero errores, timeouts, deadlocks, reinicios u OOM; integridad y reconciliación PASS
 - Agentes: backend QR; PostgreSQL/concurrencia; QA/seguridad; coordinador DevOps/certificación
-- Próximo paso: congelar SHA limpio, validar el supervisor con el candidato y lanzar QR válido R1–R3
+- Próximo paso: validar el lifecycle corregido y lanzar una campaña nueva; el intento incompleto no se reutiliza
 - Bloqueos: ninguno
 - Tiempo consumido: día 1; diagnóstico, ciclo 1, regresiones y exploratoria de 180 s completados
 - Estado global: `EN_EJECUCION`
@@ -28,7 +28,7 @@
 | Baseline breve comparable | PASS | 24 lectores/60 s: 7.394/7.394; p95 312,014 ms; p99 439,515 ms; 122,733/s |
 | Optimización ciclo 1 | KEEP | Sin introspección por auditoría; 180 s: p95 377,086 ms; p99 406,212 ms; 119,429/s |
 | Runner autónomo | PASS SMOKE | Lifecycle `STARTING→READY→RUNNING→FINISHED`; SHA limpio; 1.192/1.192; p95 286,388 ms; cero errores |
-| QR válido 3×600 s | NOT_RUN | Requiere candidato congelado |
+| QR válido 3×600 s | NOT_RUN | Campaña `...037cf90...` terminó FAIL por falso positivo del supervisor durante el reinicio controlado posterior a la carga; sin reporte final, no certificable |
 | Anti-passback 16 lectores 3×600 s | NOT_RUN | Gate QR previo |
 | Anti-passback 24 lectores 3×600 s | NOT_RUN | Gate APB-16 previo |
 | GO-LAB | NOT_RUN | Requiere todos los gates críticos |
