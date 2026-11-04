@@ -53,9 +53,25 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def run_text(*command: str, cwd: pathlib.Path | None = None) -> str:
-    return subprocess.run(
-        command, cwd=cwd, check=True, text=True, capture_output=True, timeout=60
-    ).stdout.strip()
+    commands = [command]
+    if command and command[0] == "git":
+        # Worktrees created by native Windows Git store a Windows gitdir path.
+        # Linux Git inside WSL cannot resolve that pointer, while git.exe can.
+        commands = [command, ("git.exe", *command[1:])]
+    failures: list[str] = []
+    for candidate in commands:
+        try:
+            result = subprocess.run(
+                candidate, cwd=cwd, check=False, text=True,
+                capture_output=True, timeout=60,
+            )
+        except FileNotFoundError:
+            failures.append(f"{candidate[0]}:not-found")
+            continue
+        if result.returncode == 0:
+            return result.stdout.strip()
+        failures.append(f"{candidate[0]}:exit-{result.returncode}")
+    raise RuntimeError("COMMAND_FAILED:" + ",".join(failures))
 
 
 def verify_frozen_source(config: dict[str, Any]) -> pathlib.Path:
