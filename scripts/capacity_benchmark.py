@@ -414,6 +414,7 @@ def access_request(
 def access_checks(
     bases: list[str], tokens: list[str], concurrency: int, *, run_id: str,
     cell_id: str, duration: float, sustained_mode: str = "legacy",
+    app_names: list[str] | None = None, postgres: str = "", sample_seconds: float = 10.0,
 ) -> dict:
     if not tokens:
         raise HarnessError("ACCESS_TOKENS_MISSING")
@@ -467,6 +468,8 @@ def access_checks(
     # technical failures; repeated ENTRY attempts can legitimately anti-passback.
     sustained_results: list[dict] = []
     sustained_lock = threading.Lock()
+    sustained_telemetry: list[dict] = []
+    sustained_telemetry_stop = threading.Event()
     barrier = threading.Barrier(concurrency + 1)
     sustained_started = 0.0
     sustained_deadline = 0.0
@@ -512,6 +515,9 @@ def access_checks(
                 300000 + index * 1000000 + local, direction,
                 f"{run_id}-{cell_id}-sustained-{index}-{local}",
             )
+            operation["completed_offset_seconds"] = max(
+                0.0, time.monotonic() - sustained_started
+            )
             with sustained_lock:
                 sustained_results.append(operation)
             local += 1
@@ -520,14 +526,59 @@ def access_checks(
         sustained_futures = [pool.submit(sustained_worker, index) for index in range(concurrency)]
         sustained_started = time.monotonic()
         sustained_deadline = sustained_started + duration
+
+        def sample_sustained() -> None:
+            if not app_names or not postgres:
+                return
+            while not sustained_telemetry_stop.is_set():
+                sustained_telemetry.append({
+                    "timestamp": utc_now(),
+                    "elapsed_seconds": round(time.monotonic() - sustained_started, 3),
+                    "containers": container_metrics(tuple(app_names + [postgres])),
+                    "postgres": postgres_metrics(postgres),
+                })
+                sustained_telemetry_stop.wait(sample_seconds)
+
+        sampler = threading.Thread(
+            target=sample_sustained,
+            name=f"access-telemetry-{cell_id}",
+            daemon=True,
+        )
+        sampler.start()
         barrier.wait()
         for future in sustained_futures:
             future.result()
+        sustained_telemetry_stop.set()
+        sampler.join(timeout=sample_seconds + 5)
     sustained_elapsed = time.monotonic() - sustained_started
     sustained_authorized = sum(item.get("result") == "granted" for item in sustained_results)
     sustained_rejected = sum(item.get("result") == "rejected" for item in sustained_results)
     sustained_technical_errors = sum(not item.get("ok") for item in sustained_results)
     sustained_outcomes = outcomes(sustained_results)
+    interval_seconds = 30.0
+    sustained_intervals: list[dict] = []
+    interval_count = max(
+        1,
+        int((sustained_elapsed + interval_seconds - 0.000001) // interval_seconds),
+    )
+    for interval_index in range(interval_count):
+        start_offset = interval_index * interval_seconds
+        end_offset = min(sustained_elapsed, start_offset + interval_seconds)
+        items = [
+            item for item in sustained_results
+            if start_offset <= float(item.get("completed_offset_seconds") or 0) < end_offset
+        ]
+        width = max(0.001, end_offset - start_offset)
+        sustained_intervals.append({
+            "start_seconds": round(start_offset, 3),
+            "end_seconds": round(end_offset, 3),
+            "attempted": len(items),
+            "authorized": sum(item.get("result") == "granted" for item in items),
+            "business_rejected": sum(item.get("result") == "rejected" for item in items),
+            "technical_errors": sum(not item.get("ok") for item in items),
+            "responses_per_second": round(len(items) / width, 3),
+            "latency_ms": latency_summary([float(item["latency_ms"]) for item in items]),
+        })
     profile_pass = sustained_technical_errors == 0
     if sustained_mode == "valid":
         profile_pass = profile_pass and sustained_authorized == len(sustained_results)
@@ -572,6 +623,29 @@ def access_checks(
             "outcomes": sustained_outcomes,
             "seed_operations": len(seed_results),
             "profile_pass": profile_pass,
+            "interval_seconds": interval_seconds,
+            "intervals": sustained_intervals,
+            "telemetry_samples": sustained_telemetry,
+            "telemetry_peaks": {
+                "postgres_connections": max((
+                    int(item["postgres"].get("connections_total") or 0)
+                    for item in sustained_telemetry
+                ), default=0),
+                "postgres_locks_waiting": max((
+                    int(item["postgres"].get("locks_waiting") or 0)
+                    for item in sustained_telemetry
+                ), default=0),
+                "container_cpu_percent": max((
+                    float(metric.get("cpu_percent") or 0)
+                    for item in sustained_telemetry
+                    for metric in item["containers"].values()
+                ), default=0),
+                "container_memory_percent": max((
+                    float(metric.get("memory_percent") or 0)
+                    for item in sustained_telemetry
+                    for metric in item["containers"].values()
+                ), default=0),
+            },
         },
     }
 
@@ -721,6 +795,8 @@ def main() -> int:
                     bases, tokens or all_tokens, args.access_concurrency,
                     run_id=run_id, cell_id=cell_id, duration=args.duration_seconds,
                     sustained_mode=args.access_mode,
+                    app_names=started_apps[:level], postgres=postgres,
+                    sample_seconds=args.sample_seconds,
                 )
                 after = {
                     "containers": container_metrics(tuple(started_apps[:level] + [postgres])),

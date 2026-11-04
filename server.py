@@ -3582,7 +3582,7 @@ def enforced_access_validation(
     )
     engine = access_state_engine_service()
     decision = engine.evaluate(db, context)
-    event = engine.record_access_event(db, context, decision)
+    event = engine.record_access_event(db, context, decision, read_back=False)
     allowed = decision.decision == "ALLOW"
     reason = ACCESS_STATE_REASON_MESSAGES.get(decision.reason_code, decision.reason_code)
     result = access_validation_service().record_authoritative_decision(
@@ -3596,7 +3596,7 @@ def enforced_access_validation(
         color="green" if allowed else "red",
         status_code=200,
     )
-    engine.record_comparison(db, context, decision, result)
+    engine.record_comparison(db, context, decision, result, read_back=False)
     result.update({
         "authority": "v5",
         "access_event_id": int(event["id"]),

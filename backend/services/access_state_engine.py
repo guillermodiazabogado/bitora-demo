@@ -228,7 +228,14 @@ class AccessStateEngine:
             self.record_comparison(db, context, fallback, v4_result, comparison_override="V5_ERROR")
             return {"ok": False, "decision": fallback.as_dict(), "comparison": {"comparison": "V5_ERROR"}, "error": str(exc)}
 
-    def record_access_event(self, db, context: AccessStateContext, decision: AccessStateDecision) -> dict:
+    def record_access_event(
+        self,
+        db,
+        context: AccessStateContext,
+        decision: AccessStateDecision,
+        *,
+        read_back: bool = True,
+    ) -> dict:
         metadata = {
             "checkpoint": context.checkpoint,
             "activity_id": context.activity_id,
@@ -263,9 +270,20 @@ class AccessStateEngine:
         event_id = int(getattr(cur, "lastrowid", 0) or 0)
         if decision.decision == ALLOW and decision.entity_id:
             self._upsert_snapshot(db, context, decision, event_id)
+        if not read_back:
+            return {"id": event_id}
         return dict(db.execute("SELECT * FROM enterprise_access_events WHERE id = ?", (event_id,)).fetchone())
 
-    def record_comparison(self, db, context: AccessStateContext, decision: AccessStateDecision, v4_result: dict, comparison_override: str = "") -> dict:
+    def record_comparison(
+        self,
+        db,
+        context: AccessStateContext,
+        decision: AccessStateDecision,
+        v4_result: dict,
+        comparison_override: str = "",
+        *,
+        read_back: bool = True,
+    ) -> dict:
         v4 = "ALLOW" if str(v4_result.get("result")) == "granted" else "DENY"
         if comparison_override:
             comparison = comparison_override
@@ -299,7 +317,10 @@ class AccessStateEngine:
                 self.now(),
             ),
         )
-        return dict(db.execute("SELECT * FROM enterprise_access_comparisons WHERE id = ?", (int(getattr(cur, "lastrowid", 0) or 0),)).fetchone())
+        comparison_id = int(getattr(cur, "lastrowid", 0) or 0)
+        if not read_back:
+            return {"id": comparison_id, "comparison": comparison, "classification": classification}
+        return dict(db.execute("SELECT * FROM enterprise_access_comparisons WHERE id = ?", (comparison_id,)).fetchone())
 
     def revoke_credential(self, db, *, organization_id: int, event_id: int, credential_id: int, actor: str = "", reason: str = "", reason_code: str = "REVOKED") -> dict:
         credential = db.execute("SELECT * FROM enterprise_credentials WHERE id = ? AND organization_id = ? AND event_id = ?", (credential_id, organization_id, event_id)).fetchone()
