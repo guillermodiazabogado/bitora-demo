@@ -1,8 +1,11 @@
 # BITORA 5.8.2 — Cierre técnico de 14 días
 
-Fecha: 2026-11-04  
-Rama: `optimization/5.8.2-qr-latency-phase-6-2`  
-SHA evaluado: `845a0a8dfbc0b5e74e1a3abb6c04b6f0ad508c26`  
+Fecha: 2026-11-04
+
+Rama: `optimization/5.8.2-qr-latency-phase-6-2`
+
+SHA evaluado: `845a0a8dfbc0b5e74e1a3abb6c04b6f0ad508c26`
+
 Decisión: **NO-GO-LAB**
 
 ## Resultado ejecutivo
