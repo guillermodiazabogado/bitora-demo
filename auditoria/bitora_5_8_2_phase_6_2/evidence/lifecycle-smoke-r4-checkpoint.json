@@ -1,0 +1,18 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "sustained_access_profile_pass": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/lifecycle-smoke-r4-report.json",
+  "run_id": "5985e60551",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "845a0a8dfbc0b5e74e1a3abb6c04b6f0ad508c26",
+  "status": "complete"
+}

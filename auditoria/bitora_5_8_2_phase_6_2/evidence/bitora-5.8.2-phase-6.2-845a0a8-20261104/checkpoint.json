@@ -1,0 +1,64 @@
+{
+  "campaign_id": "bitora-5.8.2-phase-6.2-845a0a8-20261104",
+  "completed": [
+    {
+      "checks": {
+        "attempted_positive": true,
+        "database_integrity": true,
+        "duration_at_least_600s": true,
+        "no_oom_or_restart": true,
+        "p95_under_500ms": true,
+        "profile_exact": true,
+        "profile_integrity": true,
+        "readers_exact": true,
+        "report_ok": true,
+        "semantic_integrity": true,
+        "sha_exact": true,
+        "workspace_clean": true,
+        "zero_deadlocks": true,
+        "zero_technical_errors": true
+      },
+      "finished_at": "2026-11-04T20:52:56.452435+00:00",
+      "id": "qr-valid-24-r1",
+      "lifecycle": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/bitora-5.8.2-phase-6.2-845a0a8-20261104/qr-valid-24-r1/lifecycle.json",
+      "lifecycle_sha256": "14468a315795702e350a372c70c21ac1715e872eda14d59fcb5a59722b0fc577",
+      "report": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/bitora-5.8.2-phase-6.2-845a0a8-20261104/qr-valid-24-r1/report.json",
+      "report_sha256": "8b0eac21fd2eed2ec16db1fd014ec3e49b1b1434f80fdc2c0fef0e6f8ee92f2f",
+      "status": "PASS"
+    }
+  ],
+  "current": {
+    "checks": {
+      "attempted_positive": true,
+      "database_integrity": true,
+      "duration_at_least_600s": true,
+      "no_oom_or_restart": true,
+      "p95_under_500ms": false,
+      "profile_exact": true,
+      "profile_integrity": true,
+      "readers_exact": true,
+      "report_ok": true,
+      "semantic_integrity": true,
+      "sha_exact": true,
+      "workspace_clean": true,
+      "zero_deadlocks": true,
+      "zero_technical_errors": true
+    },
+    "finished_at": "2026-11-04T21:04:53.691317+00:00",
+    "id": "qr-valid-24-r2",
+    "lifecycle": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/bitora-5.8.2-phase-6.2-845a0a8-20261104/qr-valid-24-r2/lifecycle.json",
+    "lifecycle_sha256": "136a11901d2263383a0941f635737a4f4f359c4872326d494a2b31f4ed75ae69",
+    "report": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-qr-latency-phase-6-2/qr white label/auditoria/bitora_5_8_2_phase_6_2/evidence/bitora-5.8.2-phase-6.2-845a0a8-20261104/qr-valid-24-r2/report.json",
+    "report_sha256": "65991de3b6255cead1460b1ecc4c41e397b98b9a0a3c52bee7a662828d11c28f",
+    "status": "FAIL"
+  },
+  "expected_sha": "845a0a8dfbc0b5e74e1a3abb6c04b6f0ad508c26",
+  "next_authorized_test": "qr-valid-24-r2",
+  "phase": "FINISHED",
+  "schema": "bitora.phase62.campaign.v1",
+  "started_at": "2026-11-04T20:41:03.585071+00:00",
+  "status": "FAIL",
+  "stop_reason": "GATE_FAILED:qr-valid-24-r2",
+  "supervisor_pid": 651,
+  "updated_at": "2026-11-04T21:04:53.695833+00:00"
+}

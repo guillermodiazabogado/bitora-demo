@@ -1,0 +1,6 @@
+{
+  "campaign_id": "bitora-5.8.2-phase-6.2-845a0a8-20261104",
+  "cert_root": "/mnt/c/Users/Noxie-PC/.codex/worktrees/bitora-phase62-candidate/qr white label",
+  "expected_sha": "845a0a8dfbc0b5e74e1a3abb6c04b6f0ad508c26",
+  "schema": "bitora.phase62.campaign-config.v1"
+}
