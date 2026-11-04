@@ -128,22 +128,17 @@ class SQLiteRepository:
         created_at: str,
         event_id: int | None = None,
     ) -> None:
-        columns = {row["name"] for row in db.execute("PRAGMA table_info(audit_logs)").fetchall()}
-        if "event_id" in columns:
-            db.execute(
-                """
-                INSERT INTO audit_logs (event_id, actor, action, entity_type, entity_id, payload, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (event_id, actor, action, entity_type, entity_id, payload_json, created_at),
-            )
-            return
+        # ``event_id`` is part of the canonical schema and is ensured during
+        # application bootstrap for upgraded SQLite databases.  Inspecting
+        # ``PRAGMA table_info`` here translated into an information_schema
+        # query on PostgreSQL for every audited operation, extending the QR
+        # transaction and its process-wide critical section unnecessarily.
         db.execute(
             """
-            INSERT INTO audit_logs (actor, action, entity_type, entity_id, payload, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO audit_logs (event_id, actor, action, entity_type, entity_id, payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (actor, action, entity_type, entity_id, payload_json, created_at),
+            (event_id, actor, action, entity_type, entity_id, payload_json, created_at),
         )
 
     def accreditation_for_reservation(self, db: sqlite3.Connection, event_id: int, accreditation_id: int):

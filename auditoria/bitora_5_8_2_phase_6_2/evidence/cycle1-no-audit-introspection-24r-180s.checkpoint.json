@@ -1,0 +1,18 @@
+{
+  "checks": {
+    "all_registration_levels_succeeded": true,
+    "anti_passback_preserved": true,
+    "containers_no_oom_or_restart": true,
+    "database_integrity": true,
+    "idempotency_preserved": true,
+    "postgres_no_deadlocks": true,
+    "restart_recovers": true,
+    "sustained_access_profile_pass": true,
+    "tokens_and_qr_unique": true
+  },
+  "report": "auditoria/bitora_5_8_2_phase_6_2/evidence/cycle1-no-audit-introspection-24r-180s.json",
+  "run_id": "b5ad8acc4a",
+  "schema": "bitora.capacity.benchmark.v1",
+  "sha": "1aa5e1df5a30117aef2b1d47e9cd50c4d792e22a",
+  "status": "complete"
+}

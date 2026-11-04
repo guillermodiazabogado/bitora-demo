@@ -1,0 +1,6 @@
+{
+  "campaign_id": "bitora-5.8.2-phase-6.2-qr-certification",
+  "cert_root": "/mnt/c/REPLACE_WITH_FROZEN_CANDIDATE_WORKTREE/qr white label",
+  "expected_sha": "__FREEZE_CANDIDATE_SHA__",
+  "schema": "bitora.phase62.campaign-config.v1"
+}
