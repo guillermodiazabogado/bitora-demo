@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -71,7 +72,10 @@ def run(command: list[str], *, timeout: int = 600, check: bool = True) -> subpro
 
 
 def git(*args: str) -> str:
-    return run(["git", *args], timeout=120).stdout.strip()
+    # Windows-created worktrees store a Windows path in their .git pointer.
+    # Native WSL git cannot resolve it, while git.exe can and preserves the same checkout.
+    binary = "git.exe" if os.environ.get("WSL_DISTRO_NAME") and shutil.which("git.exe") else "git"
+    return run([binary, *args], timeout=120).stdout.strip()
 
 
 def compose(*args: str, timeout: int = 600, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -128,7 +132,8 @@ def gate_g0(state: dict) -> dict:
     head = git("rev-parse", "HEAD")
     if branch != EXPECTED_BRANCH:
         raise GateError(f"UNEXPECTED_BRANCH:{branch}")
-    if run(["git", "merge-base", "--is-ancestor", CERTIFIED_CODE_SHA, head], check=False).returncode != 0:
+    git_binary = "git.exe" if os.environ.get("WSL_DISTRO_NAME") and shutil.which("git.exe") else "git"
+    if run([git_binary, "merge-base", "--is-ancestor", CERTIFIED_CODE_SHA, head], check=False).returncode != 0:
         raise GateError("CERTIFIED_SHA_NOT_ANCESTOR")
     changed = [line for line in git("diff", "--name-only", f"{CERTIFIED_CODE_SHA}..{head}").splitlines() if line]
     forbidden = [path for path in changed if not allowed_diff(path)]
