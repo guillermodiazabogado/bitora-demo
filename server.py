@@ -10,6 +10,7 @@ import json
 import secrets
 import signal
 import socket
+import ipaddress
 import sqlite3
 import threading
 import time
@@ -8000,8 +8001,20 @@ def request_bearer_token(handler: SimpleHTTPRequestHandler) -> str:
     return authorization[7:].strip()
 
 
-def pairing_request_fingerprint(handler: SimpleHTTPRequestHandler, event_id: int) -> str:
+def request_client_ip(handler: SimpleHTTPRequestHandler) -> str:
     remote_address = str((handler.client_address or ("", 0))[0] or "unknown")
+    trust_proxy = os.environ.get("BITORA_TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes", "on"}
+    if not trust_proxy:
+        return remote_address
+    candidate = str(handler.headers.get("X-Real-IP") or "").strip()
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return remote_address
+
+
+def pairing_request_fingerprint(handler: SimpleHTTPRequestHandler, event_id: int) -> str:
+    remote_address = request_client_ip(handler)
     salt = os.environ.get("SESSION_SECRET", "").strip() or str(DB_PATH.resolve())
     return hmac.new(salt.encode("utf-8"), f"{event_id}:{remote_address}".encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -8025,7 +8038,7 @@ def csrf_cookie_header(token: str, *, clear: bool = False) -> str:
 
 
 def login_request_fingerprint(handler: SimpleHTTPRequestHandler, name: str) -> str:
-    remote_address = str((handler.client_address or ("", 0))[0] or "unknown")
+    remote_address = request_client_ip(handler)
     salt = os.environ.get("SESSION_SECRET", "").strip() or str(DB_PATH.resolve())
     material = f"{remote_address}:{str(name).strip().lower()}"
     return hmac.new(salt.encode("utf-8"), material.encode("utf-8"), hashlib.sha256).hexdigest()
