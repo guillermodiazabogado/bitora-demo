@@ -168,6 +168,29 @@ def inspect(event_id: int) -> None:
     )
 
 
+def revoke_fixture_credential(event_id: int) -> None:
+    """Deactivate only the synthetic credential created by ``setup``."""
+    with server.DB_LOCK, server.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT ec.id FROM enterprise_credentials ec "
+            "JOIN accreditations a ON a.id = ec.accreditation_id "
+            "JOIN people p ON p.id = a.person_id "
+            "WHERE ec.event_id = ? AND lower(p.email) = 'multi-instance@bitora.test' "
+            "ORDER BY ec.id DESC LIMIT 1",
+            (event_id,),
+        ).fetchone()
+        if not row:
+            db.execute("ROLLBACK")
+            raise RuntimeError("FIXTURE_CREDENTIAL_MISSING")
+        db.execute(
+            "UPDATE enterprise_credentials SET status = 'INACTIVE', updated_at = ? WHERE id = ?",
+            (server.now_iso(), int(row["id"])),
+        )
+        db.execute("COMMIT")
+    emit({"ok": True, "event_id": event_id, "credential_id": int(row["id"])})
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -176,13 +199,17 @@ def main() -> None:
     role_parser.add_argument("role")
     inspect_parser = subparsers.add_parser("inspect")
     inspect_parser.add_argument("event_id", type=int)
+    revoke_parser = subparsers.add_parser("revoke-fixture-credential")
+    revoke_parser.add_argument("event_id", type=int)
     args = parser.parse_args()
     if args.command == "setup":
         setup()
     elif args.command == "set-admin-role":
         set_admin_role(args.role)
-    else:
+    elif args.command == "inspect":
         inspect(args.event_id)
+    else:
+        revoke_fixture_credential(args.event_id)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,152 @@
+name: bitora-phase7
+
+x-app-environment: &app-environment
+  APP_ENV: staging
+  BITORA_ENV: staging
+  BASE_URL: https://bitora.localhost:${BITORA_HTTPS_PORT:-9443}
+  HTTPS_REQUIRED: "true"
+  QR_HOST: 0.0.0.0
+  QR_PORT: "8787"
+  QR_REQUIRE_LOGIN: "1"
+  QR_DB_ENGINE: postgres
+  DATABASE_ENGINE: postgres
+  QR_POSTGRES_DSN: postgresql://bitora_app:${BITORA_APP_DB_PASSWORD:?required}@postgres:5432/bitora_stage_phase7
+  DATABASE_URL: postgresql://bitora_app:${BITORA_APP_DB_PASSWORD:?required}@postgres:5432/bitora_stage_phase7
+  QR_POSTGRES_POOL_MIN: "1"
+  QR_POSTGRES_POOL_MAX: "10"
+  DB_CONNECTION_TIMEOUT: "10"
+  DB_STATEMENT_TIMEOUT_MS: "30000"
+  QR_POSTGRES_ACCESS_CONCURRENCY: "1"
+  SESSION_SECRET: ${BITORA_SESSION_SECRET:?required}
+  SECRET_KEY: ${BITORA_SECRET_KEY:?required}
+  BITORA_SPEAKER_SECRET: ${BITORA_SPEAKER_SECRET:?required}
+  BITORA_SURVEY_SECRET: ${BITORA_SURVEY_SECRET:?required}
+  BITORA_DATASET_SIGNING_KEY: ${BITORA_DATASET_SIGNING_KEY:?required}
+  BITORA_ALLOWED_HOSTS: bitora.localhost,localhost,127.0.0.1
+  BITORA_ADMIN_BOOTSTRAP_USER: ${BITORA_ADMIN_BOOTSTRAP_USER:?required}
+  BITORA_ADMIN_BOOTSTRAP_PASSWORD: ${BITORA_ADMIN_BOOTSTRAP_PASSWORD:?required}
+  BITORA_DATASET_SIGNING_KEY_ID: phase7-local
+  BITORA_SAFE_MODE: "true"
+  BITORA_LIVE_MODE: "false"
+  BITORA_DISABLE_EMBEDDED_WORKER: "1"
+  EMAIL_ENABLED: "false"
+  WHATSAPP_ENABLED: "false"
+  STORAGE_BACKEND: local
+  BITORA_STORAGE_PATH: /bitora/storage
+  BITORA_BACKUP_PATH: /bitora/backups
+  QR_AUTO_BACKUP_MINUTES: "0"
+
+x-app: &app
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  image: bitora:${BITORA_IMAGE_TAG:-5.8.2-phase7-local}
+  init: true
+  restart: "no"
+  stop_signal: SIGTERM
+  stop_grace_period: 30s
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  environment: *app-environment
+  volumes:
+    - app-storage:/bitora/storage
+    - app-backups:/bitora/backups
+    - app-logs:/bitora/logs
+  networks:
+    - edge
+    - data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/ready', timeout=4).read()"]
+    interval: 15s
+    timeout: 5s
+    start_period: 30s
+    retries: 5
+  cpus: 1.50
+  mem_limit: 768m
+  pids_limit: 256
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: "no"
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: bitora_stage_phase7
+      POSTGRES_USER: bitora_admin
+      POSTGRES_PASSWORD: ${BITORA_POSTGRES_ADMIN_PASSWORD:?required}
+      BITORA_APP_DB_PASSWORD: ${BITORA_APP_DB_PASSWORD:?required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-backups:/bitora/pgbackups
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitora_admin -d bitora_stage_phase7"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    cpus: 2.00
+    mem_limit: 1536m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+
+  app-1:
+    <<: *app
+
+  app-2:
+    <<: *app
+
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: "no"
+    stop_signal: SIGTERM
+    stop_grace_period: 20s
+    ports:
+      - 127.0.0.1:${BITORA_HTTPS_PORT:-9443}:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - edge
+    depends_on:
+      app-1:
+        condition: service_healthy
+      app-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    cpus: 0.50
+    mem_limit: 256m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge:
+    internal: true
+  data:
+    internal: true
+
+volumes:
+  postgres-data:
+  postgres-backups:
+  app-storage:
+  app-backups:
+  app-logs:
+  caddy-data:
+  caddy-config:
