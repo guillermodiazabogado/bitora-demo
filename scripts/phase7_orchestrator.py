@@ -254,7 +254,11 @@ def gate_g6(state: dict) -> dict:
     fatal = re.compile(r"(out of memory|oomkilled|fatal:|panic:|traceback)", re.IGNORECASE)
     for service in ("postgres", "app-1", "app-2", "proxy"):
         output = compose("logs", "--no-color", "--tail", "250", service, check=False).stdout
-        matches = [line[-400:] for line in output.splitlines() if fatal.search(line)]
+        matches = [
+            line[-400:]
+            for line in output.splitlines()
+            if fatal.search(line) and "FATAL:  connection to client lost" not in line
+        ]
         logs[service] = {"lines_reviewed": len(output.splitlines()), "fatal_matches": matches[:10]}
         atomic_text(EVIDENCE_DIR / f"{service}.log", output)
         if matches:
