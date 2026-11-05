@@ -209,13 +209,18 @@ def gate_g4(state: dict) -> dict:
         cid = container_id(service)
         details = json.loads(run(["docker", "inspect", cid]).stdout)[0]
         ports = details.get("NetworkSettings", {}).get("Ports") or {}
-        exposure[service] = {"ports": ports, "read_only": details.get("HostConfig", {}).get("ReadonlyRootfs")}
+        port_bindings = details.get("HostConfig", {}).get("PortBindings") or {}
+        exposure[service] = {
+            "ports": ports,
+            "port_bindings": port_bindings,
+            "read_only": details.get("HostConfig", {}).get("ReadonlyRootfs"),
+        }
     if any(
-        any(bindings for bindings in exposure[name]["ports"].values())
+        any(bindings for bindings in exposure[name]["port_bindings"].values())
         for name in ("postgres", "app-1", "app-2")
     ):
         raise GateError("INTERNAL_SERVICE_EXPOSED")
-    proxy_bindings = exposure["proxy"]["ports"].get("443/tcp") or []
+    proxy_bindings = exposure["proxy"]["port_bindings"].get("443/tcp") or []
     if not proxy_bindings or any(item.get("HostIp") != "127.0.0.1" for item in proxy_bindings):
         raise GateError("PROXY_NOT_LOOPBACK_ONLY")
     return {
