@@ -10,7 +10,8 @@ if (-not $repoWsl) { throw "No se pudo resolver la ruta WSL" }
 
 function New-RandomSecret([int]$Bytes = 32) {
     $buffer = New-Object byte[] $Bytes
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($buffer)
+    $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($buffer) } finally { $generator.Dispose() }
     return [Convert]::ToBase64String($buffer).Replace("+", "A").Replace("/", "B")
 }
 
