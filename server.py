@@ -3344,6 +3344,7 @@ def ensure_default_users(db: sqlite3.Connection) -> None:
                 """
                 INSERT INTO users (name, role, pin_hash, active, must_change_password, created_at, updated_at)
                 VALUES (?, 'Super Admin', ?, 1, 1, ?, ?)
+                ON CONFLICT(name) DO NOTHING
                 """,
                 (bootstrap_user, hash_pin(bootstrap_password), now_iso(), now_iso()),
             )

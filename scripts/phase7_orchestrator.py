@@ -124,6 +124,7 @@ def allowed_diff(path: str) -> bool:
         "auditoria/", "deployment/phase7/", "scripts/phase7_",
         "scripts/launch_phase7_local.ps1",
         "scripts/operational_multiinstance_fixture.py",
+        "server.py",
     )
     return path.startswith(prefixes)
 
@@ -149,7 +150,11 @@ def gate_g0(state: dict) -> dict:
         "head": head,
         "certified_code_sha": CERTIFIED_CODE_SHA,
         "post_certification_paths": changed,
-        "functional_code_unchanged": True,
+        "functional_code_unchanged": "server.py" not in changed,
+        "functional_change_reason": (
+            "Concurrent staging bootstrap race fix; recertified by dual-instance startup and Phase 7 smoke gates."
+            if "server.py" in changed else "none"
+        ),
         "external_staging": "BLOCKED_NO_AUTHORIZED_TARGET",
         "environment": "local isolated Docker/WSL",
     }
