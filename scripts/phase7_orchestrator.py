@@ -347,6 +347,8 @@ def main() -> int:
     args = parser.parse_args()
     AUDIT_DIR.mkdir(parents=True, exist_ok=True)
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    branch = git("branch", "--show-current")
+    head = git("rev-parse", "HEAD")
     try:
         descriptor = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(descriptor, f"{os.getpid()}\n".encode())
@@ -358,8 +360,8 @@ def main() -> int:
         "status": "RUNNING",
         "started_at": now(),
         "pid": os.getpid(),
-        "branch": git("branch", "--show-current"),
-        "sha": git("rev-parse", "HEAD"),
+        "branch": branch,
+        "sha": head,
         "certified_code_sha": CERTIFIED_CODE_SHA,
         "gates": {},
         "next_action": "G0",
