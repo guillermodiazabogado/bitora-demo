@@ -1,11 +1,11 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine@sha256:2f83d24758cf1ad4a38975d83bf48e5d10b121499bffec99daf7a07a437207b9
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN adduser --disabled-password --gecos "" --uid 10001 bitora \
+RUN adduser -D -u 10001 bitora \
     && mkdir -p /bitora/storage /bitora/backups /bitora/logs \
     && chown -R bitora:bitora /app /bitora
 
