@@ -122,6 +122,7 @@ def wait_healthy(services: tuple[str, ...], timeout: int = 240) -> dict[str, str
 def allowed_diff(path: str) -> bool:
     prefixes = (
         "auditoria/", "deployment/phase7/", "scripts/phase7_",
+        "scripts/launch_phase7_local.ps1",
         "scripts/operational_multiinstance_fixture.py",
     )
     return path.startswith(prefixes)
@@ -349,6 +350,12 @@ def main() -> int:
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     branch = git("branch", "--show-current")
     head = git("rev-parse", "HEAD")
+    if CHECKPOINT.exists():
+        previous = json.loads(CHECKPOINT.read_text(encoding="utf-8"))
+        if previous.get("status") == "RUNNING":
+            raise SystemExit("PHASE7_PREVIOUS_RUN_STILL_ACTIVE")
+        stamp = str(previous.get("started_at") or "unknown").replace(":", "-").replace("+", "-")
+        atomic_json(EVIDENCE_DIR / f"previous-attempt-{stamp}.json", previous)
     try:
         descriptor = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(descriptor, f"{os.getpid()}\n".encode())
