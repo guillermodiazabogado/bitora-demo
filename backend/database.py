@@ -169,7 +169,6 @@ _ID_TABLES = {
     "attendance_rule_set_versions",
     "attendance_rule_sets",
     "audit_logs",
-    "auth_login_rate_limits",
     "capacity_bags",
     "captation_events",
     "certificate_eligibility",
