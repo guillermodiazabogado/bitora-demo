@@ -80,7 +80,7 @@ class Client:
         headers: dict[str, str] | None = None,
         timeout: float = 30,
     ) -> tuple[int, dict]:
-        request_headers = {"Accept": "application/json", **(headers or {})}
+        request_headers = {"Accept": "application/json", "Host": "bitora.localhost", **(headers or {})}
         body = None
         method = "GET"
         if payload is not None:
@@ -137,7 +137,7 @@ def wait_ready(base: str, seconds: int = 120) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--compose-file", type=Path, required=True)
-    parser.add_argument("--base-url", default="https://bitora.localhost:9443")
+    parser.add_argument("--base-url", default="https://127.0.0.1:9443")
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     compose_file = args.compose_file.resolve()
@@ -157,7 +157,7 @@ def main() -> int:
         context = ssl.create_default_context()
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
-        with socket.create_connection(("bitora.localhost", int(args.base_url.rsplit(":", 1)[1])), timeout=10) as raw:
+        with socket.create_connection(("127.0.0.1", int(args.base_url.rsplit(":", 1)[1])), timeout=10) as raw:
             with context.wrap_socket(raw, server_hostname="bitora.localhost") as wrapped:
                 report["tls_version"] = wrapped.version()
         report["checks"]["tls_1_2_or_newer"] = report["tls_version"] in {"TLSv1.2", "TLSv1.3"}

@@ -28,7 +28,7 @@ Consulta manual, sin mostrar configuración sensible:
 
 ```bash
 docker compose -f deployment/phase7/docker-compose.phase7.yml ps
-curl -k https://bitora.localhost:9443/ready
+curl -k --resolve bitora.localhost:9443:127.0.0.1 https://bitora.localhost:9443/ready
 ```
 
 ## Adaptación a un staging externo autorizado
