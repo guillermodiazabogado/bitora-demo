@@ -20,6 +20,15 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULT_PREFIX = "BITORA_OPERATIONAL_RESULT="
+_SYSTEM_GETADDRINFO = socket.getaddrinfo
+
+
+def _phase7_getaddrinfo(host: str, *args, **kwargs):
+    """Resolve the private lab name without mutating host DNS configuration."""
+    return _SYSTEM_GETADDRINFO("127.0.0.1" if host == "bitora.localhost" else host, *args, **kwargs)
+
+
+socket.getaddrinfo = _phase7_getaddrinfo
 
 
 class SmokeError(RuntimeError):
@@ -64,6 +73,7 @@ class Client:
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
         self.opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}),
             urllib.request.HTTPCookieProcessor(self.cookies),
             urllib.request.HTTPSHandler(context=context),
         )
@@ -137,7 +147,7 @@ def wait_ready(base: str, seconds: int = 120) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--compose-file", type=Path, required=True)
-    parser.add_argument("--base-url", default="https://127.0.0.1:9443")
+    parser.add_argument("--base-url", default="https://bitora.localhost:9443")
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     compose_file = args.compose_file.resolve()

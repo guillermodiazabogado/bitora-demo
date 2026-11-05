@@ -267,7 +267,7 @@ def gate_g7(state: dict) -> dict:
     report = EVIDENCE_DIR / "staging-smoke.json"
     result = run(
         [sys.executable, "scripts/phase7_staging_smoke.py", "--compose-file", str(COMPOSE_FILE),
-         "--base-url", "https://127.0.0.1:9443", "--report", str(report)],
+         "--base-url", "https://bitora.localhost:9443", "--report", str(report)],
         timeout=900,
         check=False,
     )
