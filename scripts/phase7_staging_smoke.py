@@ -172,8 +172,6 @@ def main() -> int:
                 report["tls_version"] = wrapped.version()
         report["checks"]["tls_1_2_or_newer"] = report["tls_version"] in {"TLSv1.2", "TLSv1.3"}
 
-        setup = fixture(compose, "setup")
-        report["synthetic_event_id"] = int(setup["event_id"])
         bootstrap = Client()
         bootstrap.login(
             args.base_url,
@@ -182,8 +180,11 @@ def main() -> int:
         )
         _, bootstrap_me = bootstrap.request(args.base_url, "/api/auth/me", expected={200})
         report["checks"]["bootstrap_authentication"] = bootstrap_me.get("authenticated") is True
+        setup = fixture(compose, "setup")
+        report["synthetic_event_id"] = int(setup["event_id"])
+        admin_name = str(setup["admin_name"])
         admin = Client()
-        admin.login(args.base_url, "Admin", "Operational-Admin-582!")
+        admin.login(args.base_url, admin_name, "Operational-Admin-582!")
         cookie_headers = admin.last_headers.get("set-cookie-all", "").lower()
         report["checks"]["secure_session_cookie"] = all(
             marker in cookie_headers for marker in ("secure", "httponly", "samesite=lax")
@@ -231,13 +232,13 @@ def main() -> int:
 
         def validate(index: int) -> dict:
             access = Client()
-            access.login(args.base_url, "Admin", "Operational-Admin-582!")
+            access.login(args.base_url, admin_name, "Operational-Admin-582!")
             _, payload = access.request(
                 args.base_url,
                 "/api/validate",
                 {
                     "token": setup["access_token"],
-                    "operator": "Admin",
+                    "operator": admin_name,
                     "checkpoint": "Phase7 Gate",
                     "direction": "ENTRY",
                     "correlation_id": f"phase7-concurrent-{index}",
@@ -255,12 +256,12 @@ def main() -> int:
 
         fixture(compose, "revoke-fixture-credential", str(setup["event_id"]))
         revocation_client = Client()
-        revocation_client.login(args.base_url, "Admin", "Operational-Admin-582!")
+        revocation_client.login(args.base_url, admin_name, "Operational-Admin-582!")
         _, revoked = revocation_client.request(
             args.base_url,
             "/api/validate",
             {
-                "token": setup["access_token"], "operator": "Admin", "checkpoint": "Phase7 Gate",
+                "token": setup["access_token"], "operator": admin_name, "checkpoint": "Phase7 Gate",
                 "direction": "EXIT", "correlation_id": "phase7-revoked",
                 "idempotency_key": "phase7-revoked",
             },
@@ -269,7 +270,7 @@ def main() -> int:
         report["checks"]["credential_revocation"] = revoked.get("reason_code") == "REVOKED"
 
         continuity = Client()
-        continuity.login(args.base_url, "Admin", "Operational-Admin-582!")
+        continuity.login(args.base_url, admin_name, "Operational-Admin-582!")
         run([*compose, "stop", "app-1"], timeout=90)
         wait_ready(args.base_url, 60)
         _, after_stop = continuity.request(args.base_url, "/api/auth/me", expected={200})

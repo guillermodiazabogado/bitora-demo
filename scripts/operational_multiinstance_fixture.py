@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -38,7 +39,8 @@ def setup() -> None:
         event_id = int(first["id"])
         now = server.now_iso()
 
-        admin = db.execute("SELECT id FROM users WHERE name = 'Admin'").fetchone()
+        admin_name = os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER", "").strip() or "Admin"
+        admin = db.execute("SELECT id FROM users WHERE name = ?", (admin_name,)).fetchone()
         if not admin:
             raise RuntimeError("ADMIN_USER_MISSING")
         admin_id = int(admin["id"])
@@ -87,7 +89,7 @@ def setup() -> None:
                     "starts_at": now,
                     "ends_at": now,
                 },
-                "Admin",
+                admin_name,
                 status="draft",
             )
             server.ensure_default_types(db, isolated_event_id)
@@ -125,6 +127,7 @@ def setup() -> None:
     emit(
         {
             "organization_id": organization_id,
+            "admin_name": admin_name,
             "event_id": event_id,
             "isolated_event_id": isolated_event_id,
             "access_token": registration["token"],
@@ -138,7 +141,8 @@ def set_admin_role(role: str) -> None:
         raise RuntimeError("ROLE_NOT_ALLOWED_BY_OPERATIONAL_FIXTURE")
     with server.DB_LOCK, server.connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        db.execute("UPDATE users SET role = ?, updated_at = ? WHERE name = 'Admin'", (role, server.now_iso()))
+        admin_name = os.environ.get("BITORA_ADMIN_BOOTSTRAP_USER", "").strip() or "Admin"
+        db.execute("UPDATE users SET role = ?, updated_at = ? WHERE name = ?", (role, server.now_iso(), admin_name))
         db.execute("COMMIT")
     emit({"ok": True, "role": role})
 
