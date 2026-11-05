@@ -187,10 +187,17 @@ def revoke_fixture_credential(event_id: int) -> None:
         if not row:
             db.execute("ROLLBACK")
             raise RuntimeError("FIXTURE_CREDENTIAL_MISSING")
-        db.execute(
-            "UPDATE enterprise_credentials SET status = 'INACTIVE', updated_at = ? WHERE id = ?",
-            (server.now_iso(), int(row["id"])),
+        result = server.access_state_engine_service().revoke_credential(
+            db,
+            organization_id=server.event_organization_id(db, event_id),
+            event_id=event_id,
+            credential_id=int(row["id"]),
+            actor="phase7-smoke",
+            reason="isolated staging revocation check",
         )
+        if not result.get("ok"):
+            db.execute("ROLLBACK")
+            raise RuntimeError(f"FIXTURE_REVOCATION_FAILED:{result}")
         db.execute("COMMIT")
     emit({"ok": True, "event_id": event_id, "credential_id": int(row["id"])})
 
