@@ -210,7 +210,10 @@ def gate_g4(state: dict) -> dict:
         details = json.loads(run(["docker", "inspect", cid]).stdout)[0]
         ports = details.get("NetworkSettings", {}).get("Ports") or {}
         exposure[service] = {"ports": ports, "read_only": details.get("HostConfig", {}).get("ReadonlyRootfs")}
-    if any(exposure[name]["ports"] for name in ("postgres", "app-1", "app-2")):
+    if any(
+        any(bindings for bindings in exposure[name]["ports"].values())
+        for name in ("postgres", "app-1", "app-2")
+    ):
         raise GateError("INTERNAL_SERVICE_EXPOSED")
     proxy_bindings = exposure["proxy"]["ports"].get("443/tcp") or []
     if not proxy_bindings or any(item.get("HostIp") != "127.0.0.1" for item in proxy_bindings):
