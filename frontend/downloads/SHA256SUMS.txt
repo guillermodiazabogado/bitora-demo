@@ -1,0 +1,2 @@
+193a562451eed8b21958f9868fab53c1b5009b476f55b1db8f8c7e65ef0c649a  bitora-display-5.8.2-staging.apk
+ba7417ddebea2bed93e07b2986bc3b9faf966e453d4709257974e6a95d695e3d  bitora-operation-5.8.2-staging.apk

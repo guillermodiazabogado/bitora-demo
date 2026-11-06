@@ -42,3 +42,7 @@ artifacts/
 Thumbs.db
 .idea/
 .vscode/
+
+# Android local build state (published APKs live under frontend/downloads/)
+android/.gradle/
+android/**/build/

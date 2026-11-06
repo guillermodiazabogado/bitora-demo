@@ -16,6 +16,7 @@ import threading
 import time
 import random
 import re
+from contextlib import nullcontext
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -47,6 +48,7 @@ from backend.repositories import create_repository
 from backend.services.access_state_engine import AccessStateContext, AccessStateEngine
 from backend.services.access_validation import AccessValidationService
 from backend.services.analytics_closure import AnalyticsClosureError, AnalyticsClosureService
+from backend.services.android_edge import AndroidEdgeService
 from backend.services.attendance import AttendanceDomainError, AttendanceService
 from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
@@ -515,6 +517,10 @@ def qr_service() -> QRService:
 
 def networking_service() -> NetworkingService:
     return NetworkingService(now=now_iso)
+
+
+def android_edge_service(handler=None) -> AndroidEdgeService:
+    return AndroidEdgeService(configured_base_url(handler))
 
 
 def backup_service():
@@ -1705,6 +1711,7 @@ def init_db() -> None:
         ensure_v5_7_schema(db)
         ensure_v5_7_1_schema(db)
         ensure_v5_8_schema(db)
+        ensure_android_edge_schema(db)
         ensure_security_schema(db)
         ensure_performance_schema(db)
         ensure_v6_1_email_schema(db)
@@ -2245,6 +2252,15 @@ def ensure_v4_10_schema(db: sqlite3.Connection) -> None:
     sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
     sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
     db.executescript(sql)
+
+
+def ensure_android_edge_schema(db: sqlite3.Connection) -> None:
+    for migration_name in ("052_android_edge_devices.sql", "053_android_operational_domains.sql"):
+        migration = ROOT / "backend" / "migrations" / migration_name
+        sql = migration.read_text(encoding="utf-8")
+        sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+        sql = re.sub(r"\bBIGINT\b", "INTEGER", sql)
+        db.executescript(sql)
 
 
 def ensure_v5_0_schema(db: sqlite3.Connection) -> None:
@@ -7946,10 +7962,12 @@ def public_static_path(path: str) -> bool:
         "/app.js",
         "/jsQR.min.js",
         "/html5-qrcode.min.js",
-    } or clean.startswith("/assets/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
+    } or clean.startswith("/assets/") or clean.startswith("/downloads/") or clean.startswith("/p/") or clean.startswith("/n/") or clean.startswith("/api/")
 
 
 def public_api_get(path: str) -> bool:
+    if path in {"/api/device-pairing/status", "/api/edge/dataset"}:
+        return True
     if path.startswith("/api/public/certificates/verify/"):
         return True
     if path.startswith("/api/public/surveys/access/"):
@@ -7969,6 +7987,10 @@ def public_api_post(path: str) -> bool:
     if path.startswith("/api/public/speakers/access/"):
         return True
     return path in {
+        "/api/device-pairing/request",
+        "/api/device-pairing/exchange",
+        "/api/edge/heartbeat",
+        "/api/edge/sync",
         "/api/register",
         "/api/captation/event",
         "/api/auth/login",
@@ -8109,6 +8131,61 @@ def network_info(handler: SimpleHTTPRequestHandler) -> dict:
 
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "AcreditacionesMVP/0.1"
+
+    def serve_download(self, head_only: bool = False) -> None:
+        requested = Path(urlparse(self.path).path).name
+        download_dir = STATIC_DIR / "downloads"
+        target = (download_dir / requested).resolve()
+        if target.parent != download_dir.resolve() or not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, "Descarga no encontrada")
+            return
+
+        size = target.stat().st_size
+        start = 0
+        end = size - 1
+        status = HTTPStatus.OK
+        range_header = self.headers.get("Range", "").strip()
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
+            if not match or (not match.group(1) and not match.group(2)):
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            if match.group(1):
+                start = int(match.group(1))
+                end = int(match.group(2)) if match.group(2) else end
+            else:
+                suffix_length = int(match.group(2))
+                start = max(0, size - suffix_length)
+            if start >= size or end < start:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            end = min(end, size - 1)
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", "application/vnd.android.package-archive")
+        self.send_header("Content-Disposition", f'attachment; filename="{requested}"')
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(content_length))
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if head_only:
+            return
+        with target.open("rb") as source:
+            source.seek(start)
+            remaining = content_length
+            while remaining:
+                chunk = source.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def log_message(self, format: str, *args) -> None:
         if args and isinstance(args[0], str) and "/api/integrations/google/callback?" in args[0]:
@@ -8278,6 +8355,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                 payload, status = readiness_payload()
                 self.send_json(payload, status)
                 return
+            if parsed.path.startswith("/downloads/") and parsed.path.endswith(".apk"):
+                self.serve_download()
+                return
             if should_force_https(self):
                 target = absolute_url(parsed.path + (f"?{parsed.query}" if parsed.query else ""), self)
                 self.send_response(308)
@@ -8295,6 +8375,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             super().do_GET()
         finally:
             RUNTIME_METRICS.finish(started, "GET", parsed.path, getattr(self, "_response_status", 200))
+
+    def do_HEAD(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/downloads/") and parsed.path.endswith(".apk"):
+            self.serve_download(head_only=True)
+            return
+        super().do_HEAD()
 
     def do_POST(self) -> None:
         started = RUNTIME_METRICS.begin()
@@ -8348,6 +8435,55 @@ class AppHandler(SimpleHTTPRequestHandler):
     def handle_api_get(self, path: str, query: dict[str, list[str]]) -> None:
         try:
             if not self.require_api_auth(path, is_post=False):
+                return
+            if path == "/api/device-pairing/status":
+                with connect() as db:
+                    result = android_edge_service(self).pairing_status(
+                        db,
+                        str(query.get("pairingCode", [""])[0]),
+                        str(query.get("nonce", [""])[0]),
+                    )
+                self.send_json(result)
+                return
+            if path == "/api/edge/dataset":
+                device_id = str(self.headers.get("X-Bitora-Device") or query.get("deviceId", [""])[0])
+                token = str(self.headers.get("X-Bitora-Token") or "")
+                with connect() as db:
+                    service = android_edge_service(self)
+                    device = service.authenticate_device(db, device_id, token)
+                    if not device:
+                        self.send_json({"ok": False, "error": "invalid_device_credential"}, 401)
+                        return
+                    result = service.dataset(db, device)
+                self.send_json(result)
+                return
+            if path == "/api/admin/pairing/pending":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with connect() as db:
+                    result = android_edge_service(self).list_pairings(db)
+                self.send_json(result)
+                return
+            if path == "/api/admin/telemetry":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with connect() as db:
+                    result = android_edge_service(self).telemetry(db, str(query.get("deviceId", [""])[0]))
+                self.send_json(result)
+                return
+            if path == "/api/admin/android/resources":
+                session = self.session_user()
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                event_id = int(query.get("eventId", ["0"])[0] or 0)
+                with connect() as db:
+                    result = android_edge_service(self).resources(db, event_id)
+                self.send_json(result, 200 if result.get("ok") else 404)
                 return
             voucher_get_match = re.fullmatch(r"/api/organizations/(\d+)/events/(\d+)/vouchers/(participants/current|report)", path)
             lead_get_match = re.fullmatch(r"/api/v5/organizations/(\d+)/events/(\d+)/companies/(\d+)/leads", path)
@@ -11785,6 +11921,68 @@ class AppHandler(SimpleHTTPRequestHandler):
                     if not session_can_access_event(db, session, event_id_for_access):
                         self.send_json({"error": "No tenes permiso para operar este evento"}, 403)
                         return
+
+            if path == "/api/device-pairing/request":
+                with connect() as db:
+                    result = android_edge_service(self).register_pairing(db, data)
+                self.send_json(result)
+                return
+            if path == "/api/device-pairing/exchange":
+                with connect() as db:
+                    result = android_edge_service(self).exchange(db, data)
+                self.send_json(result)
+                return
+            if path in {"/api/edge/heartbeat", "/api/edge/sync"}:
+                device_id = str(self.headers.get("X-Bitora-Device") or data.get("deviceId") or "")
+                token = str(self.headers.get("X-Bitora-Token") or "")
+                lock = DB_LOCK if path.endswith("sync") else nullcontext()
+                with lock, connect() as db:
+                    service = android_edge_service(self)
+                    device = service.authenticate_device(db, device_id, token)
+                    if not device:
+                        self.send_json({"ok": False, "error": "invalid_device_credential"}, 401)
+                        return
+                    result = service.heartbeat(db, device, data) if path.endswith("heartbeat") else service.sync(db, device, data)
+                self.send_json(result)
+                return
+            if path == "/api/admin/android/resources":
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    result = android_edge_service(self).configure_resource(db, data)
+                    audit(
+                        db,
+                        session["name"],
+                        "android.resource.configure",
+                        "android_resource",
+                        int(data.get("accreditationId") or data.get("permitId") or 0) or None,
+                        {"event_id": data.get("eventId"), "kind": data.get("kind"), "enabled": data.get("enabled")},
+                    )
+                self.send_json(result, 200 if result.get("ok") else 400)
+                return
+            if path in {"/api/admin/pairing/approve", "/api/admin/pairing/reject", "/api/admin/device/revoke"}:
+                if not session or session.get("role") not in ADMIN_ROLES:
+                    self.send_json({"error": "Acceso disponible solo para Super Admin"}, 403)
+                    return
+                with DB_LOCK, connect() as db:
+                    service = android_edge_service(self)
+                    if path.endswith("approve"):
+                        result = service.approve(db, data)
+                    elif path.endswith("reject"):
+                        result = service.reject(db, data)
+                    else:
+                        result = service.revoke(db, data)
+                    audit(
+                        db,
+                        session["name"],
+                        f"android.{path.rsplit('/', 1)[-1]}",
+                        "android_device",
+                        None,
+                        {"pairing_code_suffix": str(data.get("pairingCode") or "")[-4:], "device_id": data.get("deviceId")},
+                    )
+                self.send_json(result)
+                return
 
             attendance_create_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
             attendance_correct_match = re.fullmatch(r"/api/events/(\d+)/attendance/(\d+)/correct", path)
