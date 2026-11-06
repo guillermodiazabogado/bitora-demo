@@ -109,10 +109,10 @@ class JobQueueService:
             )
             self.audit(db, "worker", "job.completed", "job", job_id, {"result": result})
 
-    def fail(self, job: dict[str, Any], error: str) -> None:
+    def fail(self, job: dict[str, Any], error: str, *, retryable: bool = True) -> None:
         retry_count = int(job.get("retry_count") or 0) + 1
         max_retries = int(job.get("max_retries") or 0)
-        retrying = retry_count <= max_retries
+        retrying = retryable and retry_count <= max_retries
         retry_at = (
             datetime.now(timezone.utc) + timedelta(seconds=min(300, 2 ** retry_count))
         ).isoformat(timespec="seconds") if retrying else None
@@ -175,6 +175,10 @@ class JobWorker:
             try:
                 result = handler(job["payload"]) or {}
                 result["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
+                if job["kind"] in {"email.send", "whatsapp.send"} and result.get("ok") is False:
+                    error = str(result.get("error") or f"{job['kind']} no confirmado")
+                    self.queue.fail(job, error, retryable=result.get("status") == "pendiente")
+                    continue
                 self.queue.complete(int(job["id"]), result)
             except Exception as exc:
                 self.queue.fail(job, str(exc))
