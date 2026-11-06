@@ -245,7 +245,19 @@ def normalize_meta_webhook(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def normalize_phone(value: str) -> str:
-    return "".join(character for character in str(value or "") if character.isdigit())
+    phone = "".join(character for character in str(value or "") if character.isdigit())
+    if phone.startswith("00"):
+        phone = phone[2:]
+    region = os.environ.get("WHATSAPP_DEFAULT_REGION", "").strip().upper()
+    if region == "AR":
+        # Accept the local format shown by Argentine registration forms while
+        # keeping the value sent to Meta in E.164 mobile form.  International
+        # numbers are left untouched.
+        if phone.startswith("0") and len(phone) == 11:
+            phone = "549" + phone[1:]
+        elif phone.startswith("54") and not phone.startswith("549") and len(phone) == 12:
+            phone = "549" + phone[2:]
+    return phone
 
 
 def valid_phone(value: str) -> bool:
