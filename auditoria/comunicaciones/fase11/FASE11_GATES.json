@@ -1,0 +1,54 @@
+{
+  "phase": "11",
+  "date": "2026-11-13",
+  "state": "BLOCKED",
+  "authorized_candidate_sha": "06408c96fdc0dab59a101ff85ec1b8849c0b10c6",
+  "deployed_candidate_sha": null,
+  "staging": {
+    "project": "bitora-582-staging",
+    "environment": "staging",
+    "deployment_id": "72cfa30f-33c1-4217-8940-d2f5dcb50ab9",
+    "ready": true,
+    "version": "5.8.2-rc.2",
+    "migrations": "55/55",
+    "postgresql_independent": true
+  },
+  "production": {
+    "project": "loving-nature",
+    "environment": "production",
+    "health": "ok",
+    "version": "1.0.0",
+    "modified": false
+  },
+  "meta": {
+    "isolated": false,
+    "accessible_wabas": 1,
+    "accessible_numbers": 1,
+    "subscribed_apps": 0,
+    "shared_credentials_confirmed_by_hash": true,
+    "secrets_exposed": false
+  },
+  "gates": {
+    "G0_infrastructure_isolation": "BLOCKED",
+    "G1_candidate_deployed": "NOT_RUN",
+    "G2_isolated_meta": "BLOCKED",
+    "G3_signed_webhook_operational": "BLOCKED",
+    "G4_differential_certification": "NOT_RUN",
+    "G5_production_intact": "PASS",
+    "G6_no_unauthorized_costs": "PASS"
+  },
+  "differential_tests": {
+    "T1_signature": "TESTED_LOCAL",
+    "T2_traceability": "STAGING_NOT_RUN",
+    "T3_duplicates": "TESTED_LOCAL",
+    "T4_out_of_order": "TESTED_LOCAL",
+    "T5_ambiguous_result": "TESTED_LOCAL",
+    "T6_reconciliation": "TESTED_LOCAL",
+    "T7_persistence": "PASS_LOCAL_POSTGRESQL_16",
+    "T8_isolation": "PASS_READ_ONLY"
+  },
+  "additional_cost": 0,
+  "remote_changes": false,
+  "messages_sent": 0,
+  "next_action": "Provide zero-cost isolated Meta App, WABA and test number for staging; isolate or explicitly disable the shared email credential before deployment."
+}
