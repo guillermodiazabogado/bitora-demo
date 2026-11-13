@@ -1,0 +1,36 @@
+{
+  "phase": "whatsapp_technical_closure",
+  "date": "2026-11-13",
+  "branch": "fix/5.8.2-whatsapp-traceability-idempotency",
+  "candidate_sha": "06408c96fdc0dab59a101ff85ec1b8849c0b10c6",
+  "state": "IMPLEMENTED_TESTED",
+  "staging_verified": false,
+  "production_modified": false,
+  "new_migrations": [],
+  "tests": {
+    "focused_unit_and_integration": {"passed": 19, "failed": 0},
+    "postgresql_16_multi_process": "PASS",
+    "registration_idempotency_regression": "PASS",
+    "registration_confirmation_targeting": "PASS",
+    "whatsapp_existing_regressions": "PASS"
+  },
+  "gates": {
+    "W0_initial_state": "PASS",
+    "W1_authenticated_webhooks": "TESTED",
+    "W2_persisted_states": "TESTED",
+    "W3_duplicate_events": "TESTED",
+    "W4_out_of_order_events": "TESTED",
+    "W5_safe_ambiguous_retries": "TESTED",
+    "W6_multi_instance_concurrency": "TESTED_POSTGRESQL_16",
+    "W7_restart_recovery": "TESTED",
+    "W8_security_and_audit": "TESTED",
+    "W9_focused_tests": "PASS",
+    "W10_production_intact": "PASS"
+  },
+  "external_blockers": [
+    "Candidate SHA is not deployed to staging because deployment requires explicit authorization.",
+    "The shared Meta WABA has no subscribed webhook app; automated delivery evidence cannot be staging-verified without isolated resources or an explicitly authorized shared-resource change."
+  ],
+  "secrets_recorded": false,
+  "personal_data_recorded": false
+}

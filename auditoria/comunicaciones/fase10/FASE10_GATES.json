@@ -1,0 +1,29 @@
+{
+  "phase": "10",
+  "updated_at": "2026-11-13",
+  "overall": "BLOCKED",
+  "staging_sha": "d90b2b3a8d33c71e08629e18ad202920858e087b",
+  "rejected_retry_experiment_sha": "0bc1a901f94641fe7ba13112c4adc10721ebf959",
+  "retry_experiment_revert_sha": "d1fd74856b564e8d5c892924ba304a5f696cced6",
+  "deployment_id": "72cfa30f-33c1-4217-8940-d2f5dcb50ab9",
+  "image_digest": "sha256:9feffac7bf363ba8b2bf377cf72f1b252b5f6709304596aa76ee5133adcc4e62",
+  "gates": {
+    "C0_infrastructure": "PASS",
+    "C1_oauth_trust": "PASS",
+    "C2_gmail_authorization": "PASS",
+    "C3_gmail_delivery": "PASS",
+    "C4_whatsapp_configuration": "PASS",
+    "C5_whatsapp_delivery": "PASS",
+    "C6_integrated_flow": "PASS",
+    "C7_security": "PASS",
+    "C8_traceability": "BLOCKED",
+    "C9_closure": "BLOCKED"
+  },
+  "blockers": [
+    "La entrega fue confirmada manualmente por el destinatario autorizado; sigue faltando trazabilidad automatica delivered porque la WABA no tiene una app suscripta a webhooks.",
+    "Staging comparte WABA, numero, token y app secret con produccion; no se modificara la suscripcion Meta sin aislar el recurso o autorizar expresamente un cambio con impacto productivo.",
+    "El manejo de reintentos debe distinguir fallos seguros previos al envio de timeouts ambiguos antes de una correccion desplegable."
+  ],
+  "production_modified": false,
+  "secrets_recorded": false
+}
