@@ -139,6 +139,22 @@ class JobQueueService:
                 self.audit(db, actor, "job.cancelled", "job", job_id, {})
             return bool(cursor.rowcount)
 
+    def recover_stale_processing(self, kind: str, *, stale_seconds: int = 300) -> int:
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max(60, stale_seconds))).isoformat(timespec="seconds")
+        now = utc_now()
+        with self.connect() as db:
+            cursor = db.execute(
+                """
+                UPDATE jobs
+                SET status = 'retrying', retry_at = ?, worker_id = '',
+                    error = 'Trabajo interrumpido recuperado por el supervisor', updated_at = ?
+                WHERE kind = ? AND status = 'processing'
+                  AND started_at IS NOT NULL AND started_at < ?
+                """,
+                (now, now, kind, cutoff),
+            )
+            return int(cursor.rowcount or 0)
+
 
 class JobWorker:
     def __init__(self, queue: JobQueueService, handlers: dict[str, Callable[[dict[str, Any]], dict[str, Any]]], worker_id: str = "worker-1") -> None:

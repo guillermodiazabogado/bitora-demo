@@ -5580,18 +5580,154 @@ def process_email_queue_items(queue_ids: list[int]) -> dict:
     return summary
 
 
-def process_whatsapp_queue_item(queue_id: int) -> dict:
-    with connect() as db:
-        row = db.execute("SELECT * FROM communication_queue WHERE id = ? AND channel = 'whatsapp'", (queue_id,)).fetchone()
+def whatsapp_correlation_id(item: dict) -> str:
+    seed = "|".join(
+        [
+            str(item.get("id") or ""),
+            str(item.get("event_id") or ""),
+            str(item.get("idempotency_key") or ""),
+            str(item.get("created_at") or ""),
+        ]
+    )
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:24]
+    return f"bitora-wa:{int(item.get('id') or 0)}:{digest}"
+
+
+def whatsapp_queue_by_correlation(db, correlation_id: str):
+    match = re.fullmatch(r"bitora-wa:(\d+):([0-9a-f]{24})", str(correlation_id or ""))
+    if not match:
+        return None
+    row = db.execute(
+        "SELECT * FROM communication_queue WHERE id = ? AND channel = 'whatsapp'",
+        (int(match.group(1)),),
+    ).fetchone()
     if not row:
-        return {"ok": False, "status": "error", "error": "WhatsApp en cola no encontrado"}
-    item = dict(row)
+        return None
+    return row if hmac.compare_digest(whatsapp_correlation_id(dict(row)), str(correlation_id)) else None
+
+
+def claim_whatsapp_queue_item(queue_id: int) -> tuple[dict | None, dict]:
+    with DB_LOCK, connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT * FROM communication_queue WHERE id = ? AND channel = 'whatsapp'",
+            (queue_id,),
+        ).fetchone()
+        if not row:
+            db.execute("COMMIT")
+            return None, {"ok": False, "status": "error", "error": "WhatsApp en cola no encontrado"}
+        item = dict(row)
+        status = str(item.get("status") or "pendiente")
+        if status in {"enviado", "entregado", "leido"} or item.get("provider_message_id"):
+            db.execute("COMMIT")
+            return None, {
+                "ok": True,
+                "status": status,
+                "message_id": str(item.get("provider_message_id") or ""),
+                "duplicate_prevented": True,
+            }
+        if status in {"enviando", "desconocido"}:
+            db.execute("COMMIT")
+            return None, {
+                "ok": False,
+                "status": status,
+                "error": "Envio en curso" if status == "enviando" else "Resultado ambiguo pendiente de reconciliacion",
+                "duplicate_prevented": True,
+                "ambiguous": status == "desconocido",
+            }
+        if status != "pendiente":
+            db.execute("COMMIT")
+            return None, {"ok": False, "status": status, "error": str(item.get("last_error") or "Envio no reintentable")}
+        attempt = int(item.get("attempts") or 0) + 1
+        claimed_at = now_iso()
+        cursor = db.execute(
+            """
+            UPDATE communication_queue
+            SET status = 'enviando', attempts = ?, last_error = '', processed_at = ?
+            WHERE id = ? AND channel = 'whatsapp' AND status = 'pendiente'
+              AND COALESCE(provider_message_id, '') = ''
+            """,
+            (attempt, claimed_at, queue_id),
+        )
+        if cursor.rowcount != 1:
+            db.execute("COMMIT")
+            return None, {"ok": False, "status": "enviando", "error": "Otra instancia reclamo el envio", "duplicate_prevented": True}
+        db.execute("COMMIT")
+        item["status"] = "enviando"
+        item["attempts"] = attempt
+        item["processed_at"] = claimed_at
+        return item, {}
+
+
+def recover_stale_whatsapp_claims() -> int:
+    stale_seconds = max(60, int(os.environ.get("WHATSAPP_SENDING_STALE_SECONDS", "300")))
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=stale_seconds)).isoformat(timespec="seconds")
+    with DB_LOCK, connect() as db:
+        cursor = db.execute(
+            """
+            UPDATE communication_queue
+            SET status = 'desconocido',
+                last_error = 'Proceso interrumpido durante un envio; requiere reconciliacion manual',
+                processed_at = ?
+            WHERE channel = 'whatsapp' AND status = 'enviando'
+              AND processed_at IS NOT NULL AND processed_at < ?
+            """,
+            (now_iso(), cutoff),
+        )
+        return int(cursor.rowcount or 0)
+
+
+def resolve_unknown_whatsapp(db, queue_id: int, resolution: str, *, provider_message_id: str = "", actor: str = "system") -> dict:
+    row = db.execute(
+        "SELECT * FROM communication_queue WHERE id = ? AND channel = 'whatsapp'",
+        (queue_id,),
+    ).fetchone()
+    if not row:
+        raise LookupError("WhatsApp en cola no encontrado")
+    if str(row["status"] or "") != "desconocido":
+        raise ValueError("Solo se pueden resolver resultados desconocidos")
+    if resolution not in {"confirmed_not_sent", "associate_provider_message", "mark_failed"}:
+        raise ValueError("Resolucion WhatsApp invalida")
+    provider_message_id = str(provider_message_id or "").strip()
+    if resolution == "associate_provider_message" and not provider_message_id:
+        raise ValueError("Falta provider_message_id")
+    next_status = "pendiente" if resolution == "confirmed_not_sent" else "enviado" if resolution == "associate_provider_message" else "error"
+    error = "" if next_status in {"pendiente", "enviado"} else "Marcado como fallo por resolucion administrativa"
+    db.execute(
+        """
+        UPDATE communication_queue
+        SET status = ?, provider_message_id = CASE WHEN ? <> '' THEN ? ELSE provider_message_id END,
+            last_error = ?, processed_at = ?
+        WHERE id = ?
+        """,
+        (next_status, provider_message_id, provider_message_id, error, now_iso(), queue_id),
+    )
+    audit(
+        db,
+        actor,
+        "communications.whatsapp_unknown_resolved",
+        "communication_queue",
+        queue_id,
+        {
+            "event_id": int(row["event_id"]),
+            "resolution": resolution,
+            "next_status": next_status,
+            "provider_message_id_present": bool(provider_message_id),
+        },
+    )
+    return {"queue_id": queue_id, "event_id": int(row["event_id"]), "status": next_status, "enqueued": resolution == "confirmed_not_sent"}
+
+
+def process_whatsapp_queue_item(queue_id: int) -> dict:
+    item, existing_result = claim_whatsapp_queue_item(queue_id)
+    if item is None:
+        return existing_result
     provider = create_whatsapp_provider()
-    attempt = int(item.get("attempts") or 0) + 1
+    attempt = int(item.get("attempts") or 0)
     max_attempts = max(1, int(item.get("max_attempts") or 3))
     config = provider.validate_configuration()
     if not isinstance(provider, DemoWhatsAppProvider) and not config.get("ok"):
-        status = "error" if attempt >= max_attempts else "pendiente"
+        status = "error"
         error = "; ".join(config.get("errors") or ["Proveedor WhatsApp no configurado"])
         with DB_LOCK, connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -5600,7 +5736,7 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
                 (status, attempt, provider.name, error, now_iso(), queue_id),
             )
             communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], error, status)
-            audit(db, item["created_by"] or "system", "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
+            audit(db, item["created_by"] or "system", "communications.whatsapp_failed", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
             db.execute("COMMIT")
         return {"ok": False, "status": status, "error": error}
     recipient = str(item["recipient"] or "")
@@ -5611,7 +5747,7 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
     forced = str(safe_mode.get("forced_recipient") or "").strip()
     if not isinstance(provider, DemoWhatsAppProvider) and safe_mode_enabled:
         if not valid_phone(forced):
-            status = "error" if attempt >= max_attempts else "pendiente"
+            status = "error"
             error = "WHATSAPP_SAFE_MODE activo pero falta WHATSAPP_FORCE_RECIPIENT valido"
             with DB_LOCK, connect() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -5620,7 +5756,7 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
                     (status, attempt, provider.name, error, now_iso(), queue_id),
                 )
                 communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], error, status)
-                audit(db, item["created_by"] or "system", "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
+                audit(db, item["created_by"] or "system", "communications.whatsapp_failed", "communication_queue", queue_id, {"event_id": item["event_id"], "provider": provider.name, "status": status, "attempt": attempt, "error": error})
                 db.execute("COMMIT")
             return {"ok": False, "status": status, "error": error}
         recipient = forced
@@ -5658,10 +5794,27 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
             template=template_name,
             variables=[values.get(name, "") for name in variable_names],
             language=os.environ.get("WHATSAPP_REGISTRATION_TEMPLATE_LANGUAGE", "es_AR").strip() or "es_AR",
+            correlation_id=whatsapp_correlation_id(item),
         )
     else:
-        result = provider.send_message(to=recipient, message=content)
-    status = result.status if result.ok else ("error" if attempt >= max_attempts else "pendiente")
+        result = provider.send_message(to=recipient, message=content, correlation_id=whatsapp_correlation_id(item))
+    if result.ok:
+        status = "enviado"
+    elif result.ambiguous:
+        status = "desconocido"
+    elif result.retryable and attempt < max_attempts:
+        status = "pendiente"
+    else:
+        status = "error"
+    audit_action = (
+        "communications.whatsapp_sent"
+        if result.ok
+        else "communications.whatsapp_unknown"
+        if result.ambiguous
+        else "communications.whatsapp_retry"
+        if result.retryable and status == "pendiente"
+        else "communications.whatsapp_failed"
+    )
     with DB_LOCK, connect() as db:
         db.execute("BEGIN IMMEDIATE")
         db.execute(
@@ -5669,9 +5822,17 @@ def process_whatsapp_queue_item(queue_id: int) -> dict:
             (status, attempt, provider.name, result.message_id, result.error, now_iso(), queue_id),
         )
         communication_log(db, int(item["event_id"]), int(item["person_id"]), item.get("accreditation_id"), "whatsapp", item["template_code"] or "manual", item["subject"], item["content"] if result.ok else result.error, "demo" if isinstance(provider, DemoWhatsAppProvider) else status)
-        audit(db, item["created_by"] or "system", "communications.whatsapp_sent" if result.ok else "communications.whatsapp_retry", "communication_queue", queue_id, {"event_id": item["event_id"], "organization_id": safe_mode.get("organization_id") or item.get("organization_id"), "integration_id": item.get("integration_id"), "provider": provider.name, "message_id": result.message_id, "status": status, "attempt": attempt, "safe_mode": safe_mode_enabled, "error": result.error})
+        audit(db, item["created_by"] or "system", audit_action, "communication_queue", queue_id, {"event_id": item["event_id"], "organization_id": safe_mode.get("organization_id") or item.get("organization_id"), "integration_id": item.get("integration_id"), "provider": provider.name, "message_id": result.message_id, "status": status, "attempt": attempt, "safe_mode": safe_mode_enabled, "error_code": result.error_code, "error": result.error})
         db.execute("COMMIT")
-    return {"ok": result.ok, "status": status, "message_id": result.message_id, "error": result.error}
+    return {
+        "ok": result.ok,
+        "status": status,
+        "message_id": result.message_id,
+        "error": result.error,
+        "error_code": result.error_code,
+        "retryable": bool(result.retryable and status == "pendiente"),
+        "ambiguous": bool(result.ambiguous),
+    }
 
 
 def verify_email_webhook(handler: SimpleHTTPRequestHandler) -> bool:
@@ -5703,7 +5864,7 @@ def verify_email_webhook(handler: SimpleHTTPRequestHandler) -> bool:
 def verify_whatsapp_webhook(handler: SimpleHTTPRequestHandler) -> bool:
     secret = os.environ.get("WHATSAPP_APP_SECRET", "").strip()
     if not secret:
-        return APP_ENV != "production"
+        return False
     raw = getattr(handler, "_raw_json_body", b"")
     return verify_meta_signature(raw, handler.headers.get("X-Hub-Signature-256", ""), secret)
 
@@ -5799,7 +5960,7 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
     changes = []
     incoming = []
     provider = create_whatsapp_provider()
-    state_rank = {"pendiente": 0, "enviado": 1, "entregado": 2, "leido": 3, "error": 4}
+    state_rank = {"pendiente": 0, "enviando": 0, "desconocido": 0, "enviado": 1, "error": 2, "entregado": 3, "leido": 4}
     for event in provider.normalize_webhook(payload):
         external_event_id = str(event.get("external_event_id") or "")
         if external_event_id:
@@ -5811,13 +5972,16 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                 if event["kind"] == "status":
                     changes.append({"message_id": event["message_id"], "status": "duplicate", "queue_id": existing_event["queue_id"]})
                 else:
-                    incoming.append({"phone": event.get("phone", ""), "message_id": event["message_id"], "duplicate": True})
+                    incoming.append({"phone": mask_phone(str(event.get("phone") or "")), "message_id": event["message_id"], "duplicate": True})
                 continue
         if event["kind"] == "status":
             message_id = str(event.get("message_id") or "")
+            correlation_id = str(event.get("correlation_id") or "")
             status = str(event.get("status") or "pendiente")
             phone_number_id = str(event.get("phone_number_id") or "")
-            row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone()
+            row = db.execute("SELECT * FROM communication_queue WHERE provider_message_id = ? ORDER BY id DESC LIMIT 1", (message_id,)).fetchone() if message_id else None
+            if not row and correlation_id:
+                row = whatsapp_queue_by_correlation(db, correlation_id)
             event_id = int(row["event_id"]) if row else 0
             queue_id = int(row["id"]) if row else None
             if row:
@@ -5835,18 +5999,19 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                     next_status = current_status
                 delivered_at = now_iso() if status == "entregado" and not row["delivered_at"] else row["delivered_at"]
                 read_at = now_iso() if status == "leido" else row["read_at"] if "read_at" in row.keys() else None
-                failed_at = now_iso() if status == "error" else row["failed_at"] if "failed_at" in row.keys() else None
-                error = json.dumps(event.get("errors") or [], ensure_ascii=False) if status == "error" else row["last_error"]
-                if status == "error" and event.get("phone"):
+                failed_at = now_iso() if next_status == "error" else row["failed_at"] if "failed_at" in row.keys() else None
+                error = json.dumps(event.get("errors") or [], ensure_ascii=False) if next_status == "error" else row["last_error"]
+                if next_status == "error" and event.get("phone"):
                     suppress_whatsapp(db, event_id, str(event.get("phone")), "provider_failed", "webhook", "event")
                 db.execute(
                     """
                     UPDATE communication_queue
-                    SET status = ?, delivered_at = ?, read_at = COALESCE(?, read_at),
+                    SET status = ?, provider_message_id = CASE WHEN provider_message_id = '' THEN ? ELSE provider_message_id END,
+                        delivered_at = ?, read_at = COALESCE(?, read_at),
                         failed_at = COALESCE(?, failed_at), last_error = ?, processed_at = ?
                     WHERE id = ?
                     """,
-                    (next_status, delivered_at, read_at, failed_at, error, now_iso(), queue_id),
+                    (next_status, message_id, delivered_at, read_at, failed_at, error, now_iso(), queue_id),
                 )
                 communication_log(db, event_id, int(row["person_id"]), int(row["accreditation_id"]) if row["accreditation_id"] else None, "whatsapp", row["template_code"] or "webhook", row["subject"], f"Estado proveedor: {status}", next_status)
                 audit(db, "webhook", "communications.whatsapp_status", "communication_queue", queue_id, {
@@ -5854,6 +6019,7 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                     "organization_id": row["organization_id"],
                     "integration_id": row["integration_id"],
                     "message_id": message_id,
+                    "correlation_id": correlation_id,
                     "phone_number_id": phone_number_id,
                     "status": status,
                     "stored_status": next_status,
@@ -5895,8 +6061,8 @@ def apply_whatsapp_webhook(db, payload: dict) -> dict:
                     """,
                     (event_id, participant["person_id"] if participant else None, participant["accreditation_id"] if participant else None, phone, text, now_iso()),
                 )
-            audit(db, "webhook", "communications.whatsapp_received", "event", event_id or None, {"phone": phone, "message_id": event.get("message_id", "")})
-            incoming.append({"phone": phone, "message_id": event.get("message_id", ""), "event_id": event_id})
+            audit(db, "webhook", "communications.whatsapp_received", "event", event_id or None, {"phone": mask_phone(phone), "message_id": event.get("message_id", "")})
+            incoming.append({"phone": mask_phone(phone), "message_id": event.get("message_id", ""), "event_id": event_id})
     return {"ok": True, "statuses": changes, "messages": incoming}
 
 
@@ -6846,7 +7012,10 @@ def handle_email_job(payload: dict) -> dict:
 
 
 def handle_whatsapp_job(payload: dict) -> dict:
-    return process_whatsapp_queue_item(int(payload["queue_id"]))
+    result = process_whatsapp_queue_item(int(payload["queue_id"]))
+    if result.get("retryable"):
+        raise RuntimeError(str(result.get("error") or "Reintento seguro de WhatsApp requerido"))
+    return result
 
 
 def handle_backup_job(payload: dict) -> dict:
@@ -6897,7 +7066,16 @@ def handle_communications_campaign_job(payload: dict) -> dict:
 
 def start_job_worker() -> JobWorker:
     global WORKER
+    recovered = recover_stale_whatsapp_claims()
+    if recovered:
+        technical_log("warning", "whatsapp", "Envios ambiguos recuperados", f"count={recovered}")
     queue = job_queue_service()
+    recovered_jobs = queue.recover_stale_processing(
+        "whatsapp.send",
+        stale_seconds=max(60, int(os.environ.get("WHATSAPP_SENDING_STALE_SECONDS", "300"))),
+    )
+    if recovered_jobs:
+        technical_log("warning", "jobs", "Trabajos WhatsApp recuperados", f"count={recovered_jobs}")
     WORKER = JobWorker(
         queue,
         {
@@ -15872,6 +16050,65 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                 result = process_email_queue_item(queue_id)
                 self.send_json(result, 200 if result["ok"] or result["status"] == "pendiente" else 502)
+                return
+
+            if path == "/api/communications/whatsapp/resolve":
+                queue_id = int(data.get("queue_id") or 0)
+                resolution = str(data.get("resolution") or "").strip().lower()
+                allowed = {"confirmed_not_sent", "associate_provider_message", "mark_failed"}
+                if not queue_id or resolution not in allowed:
+                    self.send_json({"error": "Resolucion WhatsApp invalida"}, 400)
+                    return
+                provider_message_id = str(data.get("provider_message_id") or "").strip()
+                if resolution == "associate_provider_message" and not provider_message_id:
+                    self.send_json({"error": "Falta provider_message_id"}, 400)
+                    return
+                should_enqueue = False
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    row = db.execute(
+                        "SELECT * FROM communication_queue WHERE id = ? AND channel = 'whatsapp'",
+                        (queue_id,),
+                    ).fetchone()
+                    if not row:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": "WhatsApp en cola no encontrado"}, 404)
+                        return
+                    ok, session = self.require_event_permission(
+                        db,
+                        int(row["event_id"]),
+                        "communications.retry_failed",
+                        "communications.whatsapp_resolve",
+                    )
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    try:
+                        resolved = resolve_unknown_whatsapp(
+                            db,
+                            queue_id,
+                            resolution,
+                            provider_message_id=provider_message_id,
+                            actor=session["name"],
+                        )
+                    except ValueError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json({"error": str(exc)}, 409)
+                        return
+                    db.execute("COMMIT")
+                    should_enqueue = bool(resolved["enqueued"])
+                    actor = session["name"]
+                    event_id = int(resolved["event_id"])
+                    next_status = str(resolved["status"])
+                if should_enqueue:
+                    job_queue_service().enqueue(
+                        "whatsapp.send",
+                        {"queue_id": queue_id},
+                        priority="high",
+                        actor=actor,
+                        event_id=event_id,
+                    )
+                self.send_json({"ok": True, "queue_id": queue_id, "status": next_status, "enqueued": should_enqueue})
                 return
 
             if path == "/api/communications/email/webhook":

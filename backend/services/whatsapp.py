@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import re
+import socket
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -36,6 +37,17 @@ class WhatsAppSendResult:
     status: str = "error"
     error: str = ""
     raw: dict[str, Any] | None = None
+    retryable: bool = False
+    ambiguous: bool = False
+    error_code: str = ""
+
+
+class MetaRequestError(RuntimeError):
+    def __init__(self, message: str, *, retryable: bool = False, ambiguous: bool = False, error_code: str = "") -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.ambiguous = ambiguous
+        self.error_code = error_code
 
 
 class WhatsAppProvider(ABC):
@@ -47,15 +59,15 @@ class WhatsAppProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def send_message(self, *, to: str, message: str) -> WhatsAppSendResult:
+    def send_message(self, *, to: str, message: str, correlation_id: str = "") -> WhatsAppSendResult:
         raise NotImplementedError
 
     @abstractmethod
-    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR") -> WhatsAppSendResult:
+    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR", correlation_id: str = "") -> WhatsAppSendResult:
         raise NotImplementedError
 
     @abstractmethod
-    def send_media(self, *, to: str, media_url: str, caption: str = "") -> WhatsAppSendResult:
+    def send_media(self, *, to: str, media_url: str, caption: str = "", correlation_id: str = "") -> WhatsAppSendResult:
         raise NotImplementedError
 
     @abstractmethod
@@ -76,16 +88,16 @@ class DemoWhatsAppProvider(WhatsAppProvider):
     def ready(self) -> bool:
         return False
 
-    def send_message(self, *, to: str, message: str) -> WhatsAppSendResult:
-        del to, message
+    def send_message(self, *, to: str, message: str, correlation_id: str = "") -> WhatsAppSendResult:
+        del to, message, correlation_id
         return WhatsAppSendResult(ok=True, status="enviado", raw={"mode": "demo"})
 
-    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR") -> WhatsAppSendResult:
-        del to, template, variables, language
+    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR", correlation_id: str = "") -> WhatsAppSendResult:
+        del to, template, variables, language, correlation_id
         return WhatsAppSendResult(ok=True, status="enviado", raw={"mode": "demo"})
 
-    def send_media(self, *, to: str, media_url: str, caption: str = "") -> WhatsAppSendResult:
-        del to, media_url, caption
+    def send_media(self, *, to: str, media_url: str, caption: str = "", correlation_id: str = "") -> WhatsAppSendResult:
+        del to, media_url, caption, correlation_id
         return WhatsAppSendResult(ok=True, status="enviado", raw={"mode": "demo"})
 
     def get_status(self) -> dict[str, Any]:
@@ -135,28 +147,66 @@ class MetaCloudWhatsAppProvider(WhatsAppProvider):
                 return json.loads(raw.decode("utf-8")) if raw else {}
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(sanitize_meta_error(f"Meta Cloud API HTTP {exc.code}: {raw}")) from exc
+            raise MetaRequestError(
+                sanitize_meta_error(f"Meta Cloud API HTTP {exc.code}: {raw}"),
+                retryable=exc.code == 429,
+                ambiguous=500 <= exc.code < 600,
+                error_code=f"http_{exc.code}",
+            ) from exc
         except urllib.error.URLError as exc:
-            raise RuntimeError(sanitize_meta_error(f"No se pudo conectar con Meta Cloud API: {exc.reason}")) from exc
+            pre_send = isinstance(exc.reason, (socket.gaierror, ConnectionRefusedError))
+            raise MetaRequestError(
+                sanitize_meta_error(
+                    f"Fallo previo al envio a Meta Cloud API: {exc.reason}"
+                    if pre_send
+                    else f"Resultado desconocido al conectar con Meta Cloud API: {exc.reason}"
+                ),
+                retryable=pre_send,
+                ambiguous=not pre_send,
+                error_code="network_pre_send" if pre_send else "network_unknown",
+            ) from exc
+        except TimeoutError as exc:
+            raise MetaRequestError(
+                "Resultado desconocido por timeout de Meta Cloud API",
+                ambiguous=True,
+                error_code="timeout_unknown",
+            ) from exc
 
-    def _send(self, payload: dict[str, Any]) -> WhatsAppSendResult:
+    def _send(self, payload: dict[str, Any], *, correlation_id: str = "") -> WhatsAppSendResult:
         if not self.ready:
             return WhatsAppSendResult(ok=False, error="Proveedor Meta no configurado")
+        if correlation_id:
+            payload = {**payload, "biz_opaque_callback_data": correlation_id[:512]}
         try:
             result = self._request("POST", f"/{self.phone_number_id}/messages", {"messaging_product": "whatsapp", **payload})
             messages = result.get("messages") or []
             message_id = str(messages[0].get("id") if messages else "")
-            return WhatsAppSendResult(ok=bool(message_id), message_id=message_id, status="enviado" if message_id else "error", error="" if message_id else "Meta no devolvio identificador", raw=result)
-        except RuntimeError as exc:
-            return WhatsAppSendResult(ok=False, error=str(exc))
+            return WhatsAppSendResult(
+                ok=bool(message_id),
+                message_id=message_id,
+                status="enviado" if message_id else "desconocido",
+                error="" if message_id else "Meta acepto la solicitud sin identificador recuperable",
+                raw=result,
+                ambiguous=not bool(message_id),
+                error_code="missing_message_id" if not message_id else "",
+            )
+        except MetaRequestError as exc:
+            return WhatsAppSendResult(
+                ok=False,
+                status="desconocido" if exc.ambiguous else "pendiente" if exc.retryable else "error",
+                error=str(exc),
+                retryable=exc.retryable,
+                ambiguous=exc.ambiguous,
+                error_code=exc.error_code,
+            )
 
-    def send_message(self, *, to: str, message: str) -> WhatsAppSendResult:
+    def send_message(self, *, to: str, message: str, correlation_id: str = "") -> WhatsAppSendResult:
         phone = normalize_phone(to)
         if not valid_phone(phone):
             return WhatsAppSendResult(ok=False, error="Telefono WhatsApp invalido")
-        return self._send({"to": phone, "type": "text", "text": {"preview_url": True, "body": message}})
+        return self._send({"to": phone, "type": "text", "text": {"preview_url": True, "body": message}}, correlation_id=correlation_id)
 
-    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR") -> WhatsAppSendResult:
+    def send_template(self, *, to: str, template: str, variables: list[str] | None = None, language: str = "es_AR", correlation_id: str = "") -> WhatsAppSendResult:
         phone = normalize_phone(to)
         if not valid_phone(phone):
             return WhatsAppSendResult(ok=False, error="Telefono WhatsApp invalido")
@@ -165,13 +215,13 @@ class MetaCloudWhatsAppProvider(WhatsAppProvider):
         components = []
         if variables:
             components.append({"type": "body", "parameters": [{"type": "text", "text": value} for value in variables]})
-        return self._send({"to": phone, "type": "template", "template": {"name": template, "language": {"code": language}, "components": components}})
+        return self._send({"to": phone, "type": "template", "template": {"name": template, "language": {"code": language}, "components": components}}, correlation_id=correlation_id)
 
-    def send_media(self, *, to: str, media_url: str, caption: str = "") -> WhatsAppSendResult:
+    def send_media(self, *, to: str, media_url: str, caption: str = "", correlation_id: str = "") -> WhatsAppSendResult:
         phone = normalize_phone(to)
         if not valid_phone(phone):
             return WhatsAppSendResult(ok=False, error="Telefono WhatsApp invalido")
-        return self._send({"to": phone, "type": "image", "image": {"link": media_url, "caption": caption}})
+        return self._send({"to": phone, "type": "image", "image": {"link": media_url, "caption": caption}}, correlation_id=correlation_id)
 
     def get_status(self) -> dict[str, Any]:
         if not self.ready:
@@ -212,6 +262,7 @@ def normalize_meta_webhook(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     {
                         "kind": "status",
                         "message_id": str(status_item.get("id") or ""),
+                        "correlation_id": str(status_item.get("biz_opaque_callback_data") or ""),
                         "external_event_id": webhook_event_id("status", status_item),
                         "status": {
                             "sent": "enviado",
@@ -286,7 +337,7 @@ def webhook_event_id(kind: str, payload: dict[str, Any]) -> str:
 
 def verify_meta_signature(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
     if not app_secret:
-        return True
+        return False
     if not signature_header.startswith("sha256="):
         return False
     expected = "sha256=" + hmac.new(app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
