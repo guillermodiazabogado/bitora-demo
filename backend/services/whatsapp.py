@@ -253,7 +253,9 @@ def normalize_phone(value: str) -> str:
         # Accept the local format shown by Argentine registration forms while
         # keeping the value sent to Meta in E.164 mobile form.  International
         # numbers are left untouched.
-        if phone.startswith("0") and len(phone) == 11:
+        if len(phone) == 10:
+            phone = "549" + phone
+        elif phone.startswith("0") and len(phone) == 11:
             phone = "549" + phone[1:]
         elif phone.startswith("54") and not phone.startswith("549") and len(phone) == 12:
             phone = "549" + phone[2:]

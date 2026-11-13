@@ -8,6 +8,10 @@ from backend.services.whatsapp import normalize_phone
 
 
 class WhatsAppPhoneNormalizationTest(unittest.TestCase):
+    def test_argentine_local_ten_digits_is_e164(self) -> None:
+        with patch.dict(os.environ, {"WHATSAPP_DEFAULT_REGION": "AR"}, clear=False):
+            self.assertEqual(normalize_phone("299 548-3030"), "5492995483030")
+
     def test_argentine_local_mobile_is_e164(self) -> None:
         with patch.dict(os.environ, {"WHATSAPP_DEFAULT_REGION": "AR"}, clear=False):
             self.assertEqual(normalize_phone("011 5605-7770"), "5491156057770")
