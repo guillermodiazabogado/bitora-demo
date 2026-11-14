@@ -171,6 +171,41 @@ def main() -> None:
         )
         assert legacy_status == 201 and legacy.get("token"), legacy
 
+        recovery_email = "idem-confirmation-recovery@bitora.test"
+        administrative_payload = registration_payload(event_id, recovery_email)
+        administrative_payload["actor"] = "Admin"
+        post_json(base, "/api/register", administrative_payload, expected={201})
+        public_recovery_payload = registration_payload(event_id, recovery_email)
+        public_recovery_payload.update({"acepta_email": True, "acepta_whatsapp": True})
+        recovered_confirmation_status, recovered_confirmation, _ = post_json(
+            base,
+            "/api/register",
+            public_recovery_payload,
+            idempotency_key="registration-confirmation-recovery-0001",
+            expected={200},
+        )
+        assert recovered_confirmation_status == 200 and recovered_confirmation.get("existing") is True
+        post_json(
+            base,
+            "/api/register",
+            public_recovery_payload,
+            idempotency_key="registration-confirmation-recovery-0002",
+            expected={200},
+        )
+        with server.connect() as db:
+            confirmation_rows = db.execute(
+                """
+                SELECT q.channel
+                FROM communication_queue q
+                JOIN people p ON p.id = q.person_id
+                WHERE q.event_id = ? AND lower(p.email) = lower(?)
+                  AND q.template_code = 'registration_confirmation'
+                ORDER BY q.channel
+                """,
+                (event_id, recovery_email),
+            ).fetchall()
+        assert [row["channel"] for row in confirmation_rows] == ["email", "whatsapp"], confirmation_rows
+
         isolation_key = "registration-idempotency-isolation-0001"
         event_one_status, event_one, _ = post_json(
             base,

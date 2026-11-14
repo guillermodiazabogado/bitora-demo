@@ -12136,6 +12136,11 @@ class AppHandler(SimpleHTTPRequestHandler):
             if session and path not in {"/api/auth/login", "/api/auth/logout"}:
                 if path == "/api/validate":
                     data["operator"] = session["name"]
+                elif path == "/api/register" and str(data.get("actor") or "").strip().lower() == "public":
+                    # La landing publica puede abrirse en un navegador que ya tenga
+                    # una sesion administrativa. Conservamos el contexto publico para
+                    # que consentimiento y confirmaciones no dependan de esa cookie.
+                    pass
                 else:
                     data["actor"] = session["name"]
             if self.login_required() and session and not public_api_post(path) and data.get("event_id"):
@@ -16829,15 +16834,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                             accreditation_id=registration["id"],
                             person_id=registration["person_id"],
                         )
-                        if data.get("actor") == "public":
-                            communication_result = queue_registration_confirmation(
-                                db,
-                                event_id,
-                                registration["id"],
-                                actor="public",
-                            )
-                            whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
-                            email_queue_ids = communication_result.pop("_email_queue_ids", [])
+                    if data.get("actor") == "public":
+                        # También se ejecuta para una acreditacion ya existente. Las
+                        # claves idempotentes de la cola evitan duplicados y permiten
+                        # recuperar una confirmacion que nunca llego a encolarse.
+                        communication_result = queue_registration_confirmation(
+                            db,
+                            event_id,
+                            registration["id"],
+                            actor="public",
+                        )
+                        whatsapp_queue_ids = communication_result.pop("_whatsapp_queue_ids", [])
+                        email_queue_ids = communication_result.pop("_email_queue_ids", [])
                     reservations = []
                     for activity_id in activity_ids:
                         reservation = create_reservation(db, event_id, activity_id, registration["id"], "public" if data.get("actor") == "public" else "reception")
