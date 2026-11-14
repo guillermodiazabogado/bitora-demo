@@ -54,6 +54,7 @@ from backend.services.audit import AuditService
 from backend.services.backup import BackupService, EventBackupService, EventRestoreService, PostgresBackupService, ProductionBackupManager
 from backend.services.capacity_buckets import CapacityBucketService
 from backend.services.certificates import CertificateDomainError, CertificateService
+from backend.services.certificate_delivery import CertificateDeliveryError, CertificateDeliveryService
 from backend.services.communications_automation import CommunicationsAutomationError, CommunicationsAutomationService
 from backend.services.company_delegation import CompanyDelegationError, CompanyDelegationService
 from backend.services.command_center import CommandCenterError, CommandCenterService
@@ -68,6 +69,7 @@ from backend.services.email import DemoEmailProvider, create_email_provider, val
 from backend.services.enterprise_core import EnterpriseCoreError, EnterpriseCoreService
 from backend.services.edge_sync import DeviceEdgeSyncService
 from backend.services.event_edge import EventEdgeService
+from backend.services.event_lifecycle import EventLifecycleError, EventLifecycleService, event_is_closed
 from backend.services.entitlements_vouchers import EntitlementsVouchersError, EntitlementsVouchersService
 from backend.services.integration_secrets import IntegrationSecretError, IntegrationSecretService, mask_secret
 from backend.services.lead_retrieval import LeadRetrievalError, LeadRetrievalService
@@ -470,6 +472,14 @@ def attendance_service() -> AttendanceService:
 
 def certificate_service() -> CertificateService:
     return CertificateService(audit_service=audit_service(), storage=STORAGE, now=now_iso)
+
+
+def certificate_delivery_service() -> CertificateDeliveryService:
+    return CertificateDeliveryService(audit_service=audit_service(), now=now_iso)
+
+
+def event_lifecycle_service() -> EventLifecycleService:
+    return EventLifecycleService(audit_service=audit_service(), now=now_iso)
 
 
 def speaker_service() -> SpeakerService:
@@ -1714,6 +1724,7 @@ def init_db() -> None:
         ensure_android_edge_schema(db)
         ensure_security_schema(db)
         ensure_performance_schema(db)
+        ensure_commercial_closure_schema(db)
         ensure_v6_1_email_schema(db)
         ensure_v7_whatsapp_schema(db)
         ensure_waiting_room_schema(db)
@@ -2377,6 +2388,19 @@ def ensure_performance_schema(db: sqlite3.Connection) -> None:
     for name in ("050_access_lookup_indexes.sql", "051_registration_idempotency.sql"):
         migration = ROOT / "backend" / "migrations" / name
         db.executescript(migration.read_text(encoding="utf-8"))
+
+
+def ensure_commercial_closure_schema(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+    additions = {
+        "closed_at": "TEXT",
+        "closed_by": "TEXT",
+        "closure_reason": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            db.execute(f"ALTER TABLE events ADD COLUMN {name} {definition}")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_events_status_closed_at ON events(status, closed_at)")
 
 
 def ensure_waiting_room_schema(db: sqlite3.Connection) -> None:
@@ -3520,7 +3544,7 @@ def access_event_scope(db: sqlite3.Connection, token: str) -> dict | None:
         return None
     row = db.execute(
         """
-        SELECT a.id AS accreditation_id, a.event_id, e.organization_id, ec.entity_id
+        SELECT a.id AS accreditation_id, a.event_id, e.organization_id, e.status AS event_status, ec.entity_id
         FROM accreditations a
         JOIN events e ON e.id = a.event_id
         LEFT JOIN enterprise_credentials ec
@@ -4567,6 +4591,8 @@ def create_reservation(
     accreditation_id: int,
     source: str = "reception",
 ) -> dict:
+    if event_is_closed(db, event_id):
+        return {"ok": False, "error": "El evento esta finalizado", "code": "EVENT_CLOSED", "status_code": 409}
     return reservation_service().create(
         db,
         event_id,
@@ -4755,6 +4781,8 @@ def register_accreditation(db: sqlite3.Connection, event_id: int, data: dict) ->
     event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
     if not event:
         return {"ok": False, "error": "Evento inexistente", "status_code": 404}
+    if str(event["status"] or "").strip().lower() == "closed":
+        return {"ok": False, "error": "El evento esta finalizado", "code": "EVENT_CLOSED", "status_code": 409}
     used = db.execute("SELECT COUNT(*) AS c FROM accreditations WHERE event_id = ?", (event_id,)).fetchone()["c"]
     capacity = int(event["capacity"] or 0)
     if capacity and used >= capacity:
@@ -9370,6 +9398,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             certificate_issuances_match = re.fullmatch(r"/api/events/(\d+)/certificates", path)
             certificate_issuance_detail_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)", path)
             certificate_issuance_download_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/download", path)
+            certificate_delivery_history_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/deliveries", path)
             if certificate_issuances_match:
                 event_id = int(certificate_issuances_match.group(1))
                 with connect() as db:
@@ -9421,6 +9450,22 @@ class AppHandler(SimpleHTTPRequestHandler):
                         return
                     audit(db, (session or {}).get("name", "system"), "certificates.downloaded", "certificate_issuance", issuance_id, {"organization_id": org_id, "event_id": event_id})
                 send_download(self, f"{item['certificate_number']}.pdf", "application/pdf", body)
+                return
+
+            if certificate_delivery_history_match:
+                event_id = int(certificate_delivery_history_match.group(1))
+                issuance_id = int(certificate_delivery_history_match.group(2))
+                with connect() as db:
+                    ok, _session = self.require_event_permission(db, event_id, "certificates.read", "certificates.delivery_history")
+                    if not ok:
+                        return
+                    result = certificate_delivery_service().history(
+                        db,
+                        organization_id=event_organization_id(db, event_id),
+                        event_id=event_id,
+                        issuance_id=issuance_id,
+                    )
+                self.send_json({"ok": True, **result})
                 return
 
             attendance_list_match = re.fullmatch(r"/api/events/(\d+)/attendance", path)
@@ -12224,6 +12269,59 @@ class AppHandler(SimpleHTTPRequestHandler):
             certificate_batch_match = re.fullmatch(r"/api/events/(\d+)/certificates/batches", path)
             certificate_revoke_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/revoke", path)
             certificate_reissue_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/reissue", path)
+            certificate_email_match = re.fullmatch(r"/api/events/(\d+)/certificates/(\d+)/send-email", path)
+            event_close_match = re.fullmatch(r"/api/events/(\d+)/close", path)
+            if event_close_match:
+                event_id = int(event_close_match.group(1))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "configure_event", "event.close", str(data.get("actor") or ""))
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or data.get("actor") or "Admin")
+                    try:
+                        result = event_lifecycle_service().close_event(
+                            db,
+                            event_id=event_id,
+                            actor=actor,
+                            reason=str(data.get("reason") or ""),
+                            confirmation=str(data.get("confirmation") or ""),
+                        )
+                    except EventLifecycleError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": exc.code, "error": exc.message}, exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200)
+                return
+
+            if certificate_email_match:
+                event_id = int(certificate_email_match.group(1))
+                issuance_id = int(certificate_email_match.group(2))
+                with DB_LOCK, connect() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    ok, allowed_session = self.require_event_permission(db, event_id, "certificates.issue", "certificates.send_email", str(data.get("actor") or ""))
+                    if not ok:
+                        db.execute("ROLLBACK")
+                        return
+                    actor = str((allowed_session or {}).get("name") or data.get("actor") or "certificates")
+                    try:
+                        result = certificate_delivery_service().queue_email(
+                            db,
+                            organization_id=event_organization_id(db, event_id),
+                            event_id=event_id,
+                            issuance_id=issuance_id,
+                            actor=actor,
+                            resend_key=str(data.get("resend_key") or ""),
+                        )
+                    except CertificateDeliveryError as exc:
+                        db.execute("ROLLBACK")
+                        self.send_json({"ok": False, "code": exc.code, "error": exc.message}, exc.status_code)
+                        return
+                    db.execute("COMMIT")
+                self.send_json(result, 200 if result.get("idempotent") else 202)
+                return
             if access_enforcement_match:
                 event_id = int(access_enforcement_match.group(1))
                 action = access_enforcement_match.group(2)
@@ -14289,6 +14387,9 @@ class AppHandler(SimpleHTTPRequestHandler):
                     event = db.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
                     if not event:
                         self.send_json({"error": "Evento inexistente"}, 404)
+                        return
+                    if str(event["status"] or "").strip().lower() == "closed":
+                        self.send_json({"error": "El evento esta finalizado", "code": "EVENT_CLOSED"}, 409)
                         return
                     db.execute("BEGIN IMMEDIATE")
                     if action == "delete":
@@ -16866,6 +16967,10 @@ class AppHandler(SimpleHTTPRequestHandler):
                     db.execute("BEGIN IMMEDIATE")
                     event_scope = access_event_scope(db, token)
                     if event_scope:
+                        if str(event_scope.get("event_status") or "").strip().lower() == "closed":
+                            db.execute("ROLLBACK")
+                            self.send_json({"result": "denied", "reason": "Evento finalizado", "code": "EVENT_CLOSED"}, 409)
+                            return
                         ok, allowed_session = self.require_event_permission(
                             db,
                             int(event_scope["event_id"]),

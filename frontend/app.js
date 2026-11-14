@@ -1761,6 +1761,29 @@ function renderEventConfigForm() {
   setFieldValue(form, "primary_action_label", event.primary_action_label || "");
   setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
   setFieldValue(form, "description", event.description || "");
+  const closeButton = $("#closeEventBtn");
+  if (closeButton) {
+    closeButton.disabled = String(event.status || "").toLowerCase() === "closed";
+    closeButton.textContent = closeButton.disabled ? "Evento finalizado" : "Finalizar evento";
+  }
+}
+
+async function closeCurrentEvent() {
+  const event = currentEvent();
+  if (!event) return;
+  if (!window.confirm(`Finalizar ${event.name}? Se bloquearan nuevas inscripciones y accesos.`)) return;
+  const reason = window.prompt("Motivo del cierre (opcional)", "Evento finalizado por administracion");
+  if (reason === null) return;
+  try {
+    await api(`/api/events/${event.id}/close`, {
+      method: "POST",
+      body: JSON.stringify({ actor: state.currentUser, reason, confirmation: "FINALIZAR" }),
+    });
+    $("#closeEventNotice").innerHTML = `<span class="status ok">Evento finalizado y auditado.</span>`;
+    await loadEvents();
+  } catch (err) {
+    $("#closeEventNotice").innerHTML = `<span class="status danger">${err.message}</span>`;
+  }
 }
 
 async function saveWaitingRoomConfig(event) {
@@ -3814,6 +3837,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("#operator").value = state.currentUser;
   });
   $("#eventForm").addEventListener("submit", createEvent);
+  $("#closeEventBtn")?.addEventListener("click", closeCurrentEvent);
   $("#prepareEventForm").addEventListener("submit", prepareRealEvent);
   $("#demoRealForm").addEventListener("submit", createDemoReal);
   $("#demoLive10Form")?.addEventListener("submit", createDemoLive10);

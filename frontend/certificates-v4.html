@@ -62,6 +62,8 @@
       <button id="batch" class="secondary">Emitir lote</button>
       <label>Emision ID<input id="issuanceId" type="number"></label>
       <button id="download" class="secondary">Descargar</button>
+      <button id="sendEmail">Encolar email</button>
+      <button id="deliveryHistory" class="secondary">Historial de envios</button>
       <button id="revoke" class="danger">Revocar</button>
       <button id="reissue" class="secondary">Reemitir</button>
     </section>
@@ -109,6 +111,8 @@ $("previewVersion").onclick = () => request(`/api/certificate-templates/${$("tem
 $("issue").onclick = () => request(`/api/events/${$("eventId").value}/certificates/issue`, { actor: "Admin", participant_id: Number($("participantId").value), certificate_type_id: Number($("typeId").value), template_version_id: Number($("versionId").value), eligibility_decision_id: Number($("decisionId").value), idempotency_key: `ui-issue-${$("participantId").value}-${Date.now()}` });
 $("batch").onclick = () => request(`/api/events/${$("eventId").value}/certificates/batches`, { actor: "Admin", certificate_type_id: Number($("typeId").value), template_version_id: Number($("versionId").value), idempotency_key: `ui-batch-${Date.now()}` });
 $("download").onclick = () => { window.open(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/download`, "_blank"); };
+$("sendEmail").onclick = () => request(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/send-email`, { actor: "Admin" });
+$("deliveryHistory").onclick = async () => { out.textContent = JSON.stringify(await fetch(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/deliveries`).then(r => r.json()), null, 2); };
 $("revoke").onclick = () => request(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/revoke`, { actor: "Admin", reason: "Revocacion QA" });
 $("reissue").onclick = () => request(`/api/events/${$("eventId").value}/certificates/${$("issuanceId").value}/reissue`, { actor: "Admin", reason: "Reemision QA", idempotency_key: `ui-reissue-${Date.now()}` });
 </script>

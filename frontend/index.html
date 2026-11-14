@@ -415,6 +415,10 @@
             <textarea name="description" placeholder="Descripcion breve"></textarea>
             <button id="eventFormSubmitBtn">Crear evento</button>
           </form>
+          <div class="actions producer-admin-only">
+            <button id="closeEventBtn" type="button" class="danger">Finalizar evento</button>
+            <span id="closeEventNotice" class="empty"></span>
+          </div>
           <details class="prepare-box producer-admin-only">
             <summary>Preparar evento real</summary>
             <form id="prepareEventForm" class="stack">
