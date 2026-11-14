@@ -38,6 +38,7 @@ const state = {
   appConfig: null,
   currentUser: "Admin",
   eventId: null,
+  creatingEvent: false,
   cameraStream: null,
   scanning: false,
 };
@@ -448,6 +449,7 @@ function syncEventSelectors() {
 }
 
 async function selectActiveEvent(eventId) {
+  state.creatingEvent = false;
   state.eventId = Number(eventId || 0);
   syncEventSelectors();
   await loadPermissions();
@@ -1598,7 +1600,7 @@ function renderOwnerDashboard() {
       <section class="panel owner-empty">
         <h2>Todavia no hay eventos</h2>
         <p>Crea el primer evento para comenzar a operar BITORA.</p>
-        <button type="button" data-view-target="configure">Crear evento</button>
+        <button type="button" class="owner-create-event">Crear evento</button>
       </section>
     `;
   } else {
@@ -1634,6 +1636,7 @@ function renderOwnerDashboard() {
     setView(button.dataset.viewTarget);
     history.replaceState(null, "", `#${button.dataset.viewTarget}`);
   }));
+  panel.querySelectorAll(".owner-create-event").forEach((button) => button.addEventListener("click", beginCreateEvent));
   panel.querySelectorAll(".open-owner-event").forEach((button) => button.addEventListener("click", async () => {
     await selectActiveEvent(button.dataset.id);
     setView("dashboard");
@@ -1730,13 +1733,18 @@ function renderEventConfigForm() {
   const form = $("#eventForm");
   if (!form) return;
   const event = currentEvent();
-  const producerEdit = ["Super Admin", "Administrador", "Productor"].includes(effectiveRole()) && Boolean(event);
+  const producerEdit = ["Super Admin", "Administrador", "Productor"].includes(effectiveRole()) && Boolean(event) && !state.creatingEvent;
   form.dataset.mode = producerEdit ? "edit" : "create";
   $("#eventFormSubmitBtn").textContent = producerEdit ? "Guardar cambios" : "Crear evento";
   $("#eventFormHelp").textContent = producerEdit
     ? "Estos son los datos cargados por administracion. Corregilos si algo quedo mal."
     : "Crea un evento nuevo con la configuracion inicial.";
-  if (!producerEdit || !event) return;
+  const closeButton = $("#closeEventBtn");
+  if (!producerEdit || !event) {
+    closeButton?.classList.add("hidden");
+    return;
+  }
+  closeButton?.classList.remove("hidden");
   setPortalTabCheckboxes(event.portal_visible_tabs);
   setFieldValue(form, "project_type", event.project_type || "conference");
   setFieldValue(form, "name", event.name || "");
@@ -1761,11 +1769,22 @@ function renderEventConfigForm() {
   setFieldValue(form, "primary_action_label", event.primary_action_label || "");
   setFieldValue(form, "secondary_action_label", event.secondary_action_label || "");
   setFieldValue(form, "description", event.description || "");
-  const closeButton = $("#closeEventBtn");
   if (closeButton) {
     closeButton.disabled = String(event.status || "").toLowerCase() === "closed";
     closeButton.textContent = closeButton.disabled ? "Evento finalizado" : "Finalizar evento";
   }
+}
+
+function beginCreateEvent() {
+  const form = $("#eventForm");
+  if (!form) return;
+  state.creatingEvent = true;
+  form.reset();
+  setPortalTabCheckboxes(DEFAULT_PORTAL_VISIBLE_TABS);
+  $("#closeEventNotice").innerHTML = "";
+  renderEventConfigForm();
+  setView("configure");
+  history.replaceState(null, "", "#configure");
 }
 
 async function closeCurrentEvent() {
@@ -3242,6 +3261,7 @@ async function createEvent(event) {
   data.actor = state.currentUser;
   const result = await api("/api/events", { method: "POST", body: JSON.stringify(data) });
   form.reset();
+  state.creatingEvent = false;
   state.eventId = Number(result.id || state.eventId || 0);
   await loadEvents();
   setView("dashboard");
@@ -3805,7 +3825,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (!canSeeModule(button.dataset.view)) {
       return;
     }
+    if (button.dataset.view === "configure") state.creatingEvent = false;
     setView(button.dataset.view);
+    if (button.dataset.view === "configure") renderEventConfigForm();
     if (button.dataset.view === "diagnostics") loadDiagnostics();
     if (button.dataset.view === "simulator") loadSimulator();
     if (button.dataset.view === "reports") loadVisualization();
@@ -3819,7 +3841,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (!canSeeModule(target)) {
       return;
     }
+    if (target === "configure") state.creatingEvent = false;
     setView(target);
+    if (target === "configure") renderEventConfigForm();
     history.replaceState(null, "", target === "dashboard" ? `${location.pathname}${location.search}` : `#${target}`);
   }));
   $("#eventSelect").addEventListener("change", async (event) => {
@@ -3829,6 +3853,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await selectActiveEvent(event.target.value);
   });
   $("#producerHomeRefreshBtn")?.addEventListener("click", loadEvents);
+  $("#ownerCreateEventBtn")?.addEventListener("click", beginCreateEvent);
   $("#usersEventSelect")?.addEventListener("change", async (event) => {
     await selectActiveEvent(event.target.value);
   });
